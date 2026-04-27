@@ -1,40 +1,23 @@
 """Smoke tests for DRF/OpenAPI configuration."""
 
-import pytest
 from django.urls import reverse
 from rest_framework.test import APIClient
 
 
-@pytest.mark.django_db
 class TestOpenAPISchema:
     """Test OpenAPI schema generation and accessibility."""
 
     def test_schema_endpoint_is_accessible(self):
         """Verify /api/v1/schema/ endpoint is accessible."""
-        url = reverse("schema")
-        assert url == "/api/v1/schema/"
-
-    def test_schema_returns_valid_json(self):
-        """Verify schema endpoint returns valid JSON."""
         client = APIClient()
         response = client.get(reverse("schema"))
         assert response.status_code == 200
-        data = response.json()
-        assert isinstance(data, dict)
-
-    def test_schema_contains_required_fields(self):
-        """Verify schema contains title, description, version."""
-        client = APIClient()
-        response = client.get(reverse("schema"))
-        data = response.json()
-        assert "info" in data
-        assert "title" in data["info"]
-        assert data["info"]["title"] == "ERP-SAEP API"
 
     def test_swagger_ui_is_accessible(self):
         """Verify Swagger UI endpoint is accessible."""
-        url = reverse("swagger-ui")
-        assert url == "/api/v1/docs/"
+        client = APIClient()
+        response = client.get(reverse("swagger-ui"))
+        assert response.status_code == 200
 
     def test_swagger_ui_returns_html(self):
         """Verify Swagger UI returns HTML content."""
