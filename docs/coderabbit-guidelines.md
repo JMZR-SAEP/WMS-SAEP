@@ -30,6 +30,7 @@ Ao revisar mudança de schema em dev efêmero, priorizar: correção do model, c
 ## 1. Regra de negócio centralizada
 
 - Toda regra de negócio deve estar em `services.py`
+- Autorização contextual deve estar em `policies.py` ou módulo equivalente, compartilhado por views e services
 - Isso inclui:
   - validações de domínio
   - autorização contextual (por perfil/setor)
@@ -46,49 +47,51 @@ Ao revisar mudança de schema em dev efêmero, priorizar: correção do model, c
 
 ---
 
-## 2. Imutabilidade do estoque
+## 2. Registros históricos e ledgers auditáveis
 
-- `StockMovement` é **imutável**
-- Nunca pode ser editado ou deletado
-- Correções são feitas criando um novo movimento do tipo `RETURN` (estorno)
+- Registros históricos, lançamentos de ledger e trilhas auditáveis são **imutáveis**
+- Nunca devem ser editados, deletados ou sobrescritos após criação
+- Correções devem ser feitas criando um novo lançamento compensatório, mantendo o histórico original preservado
 
-Tipos de movimento válidos: `ENTRY` (entrada), `EXIT` (saída), `ADJUSTMENT` (ajuste), `RETURN` (estorno).
+Exemplo de boa prática: se um lançamento de saída foi registrado incorretamente, criar um lançamento de estorno/correção com referência ao original, em vez de alterar o registro já auditado.
 
 ❌ Qualquer tentativa de:
 - update
 - delete
-- sobrescrita de movimento
+- sobrescrita de registro histórico
 
 ➡️ deve ser tratada como **erro crítico**
 
 ---
 
-## 3. Consistência transacional de estoque
+## 3. Consistência transacional de saldos e reservas
 
-Toda operação que altera estoque deve:
+Toda operação que altera saldo, reserva, disponibilidade ou posição contábil deve:
 
 - usar `transaction.atomic()`
-- usar locking (`select_for_update`) na linha de `Stock`
+- usar locking (`select_for_update()`) na linha agregadora que representa o saldo atual
+- adquirir locks em ordem determinística quando envolver múltiplos objetos
 - garantir consistência entre:
-  - `Stock.quantity`
-  - `StockMovement.balance_after`
+  - saldo atual persistido
+  - lançamento histórico/ledger
+  - saldo posterior registrado para auditoria
 
 ❌ Não pode existir:
-- dupla baixa
+- dupla baixa/processamento duplicado
 - saldo negativo indevido
 - race condition
-- divergência entre movimento e saldo
+- divergência entre ledger e saldo atual
 
 ---
 
 ## 4. Snapshot histórico é obrigatório
 
-- `MaterialRequest.department` é um **snapshot histórico**
-- Nunca deve ser recalculado
+- Campos de rastreabilidade usados em decisões, auditoria ou relatórios devem ser copiados como **snapshot histórico** no momento da criação
+- Snapshots nunca devem ser recalculados a partir de cadastros mutáveis
 
 ❌ Não pode:
-- usar `requester.department` dinamicamente após criação
-- atualizar o campo após persistência
+- buscar dinamicamente dados atuais de usuário, setor, perfil, centro de custo ou escopo para explicar uma decisão passada
+- atualizar snapshot histórico após persistência, salvo correção auditada e explicitamente modelada
 
 ➡️ isso quebraria rastreabilidade
 
@@ -96,51 +99,45 @@ Toda operação que altera estoque deve:
 
 ## 5. Notificações NÃO são domínio
 
-- `notifications` é **side effect**
-- nunca é fonte de verdade
+- Notificações, e-mails, webhooks e integrações externas são **side effects**
+- Side effects nunca são fonte de verdade
 
 ❌ Não pode:
 - conter regra de negócio
 - controlar fluxo do sistema
 - ser pré-condição para sucesso de operação
 
-➡️ falha de notificação não deve quebrar a operação principal
+➡️ falha de side effect não deve quebrar a operação principal
 
-➡️ Comunicação entre apps de domínio e `notifications` é feita via `core/events.py` (pub/sub in-process: `subscribe()` + `publish_on_commit()`). Imports diretos de apps de domínio para `notifications` são violação de arquitetura.
+➡️ Comunicação entre domínio e side effects deve ser feita por eventos pós-commit, por exemplo via `core/events.py` (`subscribe()` + `publish_on_commit()`). Imports diretos que acoplam domínio a notificações, e-mail, webhooks ou integrações externas são violação de arquitetura.
 
 ---
 
 ## 6. Direção de dependências entre apps
 
-A arquitetura segue:
-
-```
-core → warehouse → movements → requisitions
-                                     ↘
-                                notifications
-```
-
 Regras:
 
-- dependências são unidirecionais
-- `notifications` não deve depender diretamente de apps de domínio
-- comunicação deve ser por evento via `core/events.py`
+- dependências entre apps de domínio devem ser unidirecionais e explícitas
+- apps de side effect não devem controlar nem importar fluxos críticos de domínio
+- comunicação com side effects deve ocorrer por evento pós-commit via `core/events.py`
+- shared code deve ficar em módulos estáveis e sem dependência de domínio específico
 
 ❌ Evitar:
 - import circular
 - acoplamento cruzado
+- dependência direta de domínio para infraestrutura opcional
 
 ---
 
-## Requisições
+## Operações críticas
 
 ### Concorrência e idempotência
 
 Cenários críticos:
 
-- dupla entrega
-- retry de request
-- execução simultânea de actions
+- dupla execução da mesma transição de estado
+- retry de chamada HTTP ou job assíncrono
+- execução simultânea de actions administrativas ou endpoints
 
 ➡️ Deve existir proteção contra reprocessamento
 
