@@ -15,7 +15,19 @@ Current active stack for ERP-SAEP:
 - factory_boy as the chosen standard for test data generation.
 
 Materialization baseline:
-- Django materialization follows `docs/backlog/backlog-materializacao-django.md` tasks (`MAT-000` to `MAT-006`) before any `PIL-*` functional work begins.\n  - `MAT-000`: Align docs pre-materialization; close ambiguity about bootstrap approach.\n  - `MAT-001`: Inspect repo structure and confirm baseline.\n  - `MAT-002`: Create minimal Django bootstrap.\n  - `MAT-003`: Configure settings structure, environment, PostgreSQL via `DATABASE_URL`.\n  - `MAT-004`: Set up smoke tests and pytest.\n  - `MAT-005`: Configure DRF, OpenAPI/drf-spectacular, `apps/core/` technical infrastructure.\n  - `MAT-006`: Adjust CI (ruff, pytest, `manage.py check`) and pre-commit hooks.\n- Bootstrap is manual minimum, without external project generators.
+- **Django materialization (MAT-000 to MAT-006) COMPLETED** ✅
+All technical bootstrap tasks finished; functional piloto work (PIL-*) ready to begin.
+
+Materialization included:
+- MAT-000: Align documentation pre-materialization
+- MAT-001: Inspect repository structure and confirm baseline
+- MAT-002: Create minimal Django bootstrap (manage.py, config/, apps/)
+- MAT-003: Configure settings/base/dev/test, environment, PostgreSQL via DATABASE_URL
+- MAT-004: Set up smoke tests (pytest, conftest, test_bootstrap, test_api_schema)
+- MAT-005: Configure DRF, OpenAPI/drf-spectacular, core API app, pagination, error handler
+- MAT-006: Set up CI workflow (GitHub Actions lint + test jobs) and pre-commit hooks
+
+Current state: Django project initialized with technical infrastructure, no domain apps.\n  - `MAT-000`: Align docs pre-materialization; close ambiguity about bootstrap approach.\n  - `MAT-001`: Inspect repo structure and confirm baseline.\n  - `MAT-002`: Create minimal Django bootstrap.\n  - `MAT-003`: Configure settings structure, environment, PostgreSQL via `DATABASE_URL`.\n  - `MAT-004`: Set up smoke tests and pytest.\n  - `MAT-005`: Configure DRF, OpenAPI/drf-spectacular, `apps/core/` technical infrastructure.\n  - `MAT-006`: Adjust CI (ruff, pytest, `manage.py check`) and pre-commit hooks.\n- Bootstrap is manual minimum, without external project generators.
 - Initial settings are `config.settings.base`, `config.settings.dev`, and `config.settings.test`; do not create a separate `test_postgres` settings module.
 - `config/` owns settings, URLs, ASGI/WSGI, and project bootstrap.
 - `apps/core/` is technical API infrastructure only; it may host pagination, error envelope, schema helpers, and non-domain API utilities.
