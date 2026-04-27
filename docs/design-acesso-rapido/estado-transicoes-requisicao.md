@@ -135,4 +135,4 @@ A referência deve orientar a implementação futura em Django/DRF sem alterar a
 
 - A documentação registra que o detalhe da requisição deve incluir criação na timeline, mas o backlog do piloto diz que rascunhos nunca enviados não precisam gerar timeline operacional formal e que ela pode começar no primeiro envio. A implementação deve decidir se haverá evento técnico de criação de rascunho ou apenas evento formal no primeiro envio.
 - Não há notificação obrigatória explicitamente definida para devolução registrada ou estorno de requisição. Até decisão posterior, esses eventos devem aparecer na timeline e nas movimentações, sem assumir notificação obrigatória.
-- A documentação de CodeRabbit usa nomes genéricos de movimentação (`ENTRY`, `EXIT`, `ADJUSTMENT`, `RETURN`) enquanto o domínio usa tipos mais específicos em português, como reserva por autorização, liberação de reserva e saída por requisição. A implementação deve mapear esses conceitos sem perder a semântica de domínio.
+
