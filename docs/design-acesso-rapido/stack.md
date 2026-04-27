@@ -233,25 +233,28 @@ Diretrizes:
 
 ## 12. Organização sugerida de apps Django
 
-A organização deve favorecer fronteiras claras de domínio e aproveitar a estrutura existente do cookiecutter-django.
+A organização deve favorecer fronteiras claras de domínio e partir de um bootstrap Django manual mínimo.
 
 Diretriz estrutural:
 
 - os apps Django do projeto devem ficar sob a pasta `apps/`.
 - a pasta `config/` permanece responsável por settings, URLs, ASGI/WSGI e bootstrap do projeto.
 
-Estrutura atual relevante:
+Estrutura mínima esperada após a materialização técnica:
 
 ```text
 config/
 apps/
-  users/
+  core/
 ```
 
-Não criar um novo app de usuários enquanto o app existente `apps/users/` puder ser adaptado às regras do ERP-SAEP.
+O app `apps/core/` deve ser técnico e transversal, limitado a infraestrutura comum, como API, paginação, envelope de erro e schema OpenAPI. Ele não deve conter regra de negócio de domínio.
+
+O app de usuários oficial deve ser criado em `apps/users/` na tarefa `PIL-BE-ACE-001`. Não criar `accounts` ou outro app alternativo de usuários sem decisão registrada.
 
 Apps ou módulos de domínio podem ser criados conforme o escopo avançar:
 
+- `users`: usuário customizado, matrícula funcional, autenticação local e integração com Admin.
 - `organizational`: setores e vínculos organizacionais.
 - `materials`: grupos, subgrupos e materiais.
 - `stock`: saldos, reservas e movimentações de estoque.

@@ -8,9 +8,20 @@ Current active stack for ERP-SAEP:
 - Django ORM.
 - drf-spectacular for OpenAPI schema.
 - django-filter for typed list endpoint filters.
-- django-allauth for auth support.
+- django-allauth for auth support, with configuration deferred until access/authentication tasks.
+- python-dotenv for local `.env` loading during materialization.
+- django-cors-headers for conservative CORS configuration.
 - pytest, pytest-django, ruff, coverage, and pre-commit as the initial quality/tooling base.
 - factory_boy as the chosen standard for test data generation.
+
+Materialization baseline:
+- Django is materialized through `docs/backlog/backlog-materializacao-django.md` (`MAT-*`) before any `PIL-*` functional work.
+- Bootstrap is manual minimum, without external project generators.
+- Initial settings are `config.settings.base`, `config.settings.dev`, and `config.settings.test`; do not create a separate `test_postgres` settings module.
+- `config/` owns settings, URLs, ASGI/WSGI, and project bootstrap.
+- `apps/core/` is technical API infrastructure only; it may host pagination, error envelope, schema helpers, and non-domain API utilities.
+- `apps/users/` is not created during materialization; it is created by `PIL-BE-ACE-001`.
+- PostgreSQL is configured through `DATABASE_URL`; no Docker Compose or production settings are part of the materialization backlog.
 
 Current scope rule: frontend is not part of the active implementation scope. Work should focus on domain, persistence, authentication, authorization, APIs, technical imports, administrative/internal flows, and tests. Do not introduce server-rendered UI work, SPA frameworks, or dedicated frontend components unless a later technical decision explicitly reopens that scope.
 

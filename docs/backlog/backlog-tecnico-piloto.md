@@ -4,6 +4,10 @@ Este documento reúne apenas o escopo do piloto inicial.
 
 Para o backlog do MVP completo, consultar `docs/backlog/backlog-tecnico-mvp.md`.
 
+Antes de iniciar qualquer tarefa `PIL-*`, executar o backlog de materialização mínima em `docs/backlog/backlog-materializacao-django.md`.
+
+As tarefas `MAT-*` são pré-condição técnica para criar a base Django inicializável. Elas não fazem parte do domínio funcional do piloto. O backlog funcional do piloto começa em `PIL-BE-ACE-001`.
+
 ## 1. Estratégia de implementação
 
 A implementação do ERP-SAEP deve ser organizada em três camadas de escopo:
@@ -155,18 +159,19 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
 
 ## 4.1.1 Base mínima de acesso
 
-### PIL-BE-ACE-001 — Adaptar modelo de usuário existente
+### PIL-BE-ACE-001 — Criar modelo de usuário customizado
 
 - **Status atual:** não iniciada.
 - **Fase:** Piloto inicial
 - **Tipo:** Backend / Banco de dados
 - **Agente sugerido:** Agente backend
 - **Depende de:** nenhuma
-- **Objetivo:** adaptar o app de usuários existente do cookiecutter-django para as regras do ERP-SAEP.
+- **Objetivo:** criar o app de usuários do ERP-SAEP em `apps/users/` com usuário customizado por matrícula funcional.
 - **Contexto técnico:**
-  - Quando materializado, o projeto deve manter o app de usuários em `apps/users/`.
+  - A materialização mínima cria apenas a base Django e não cria `apps/users/`.
+  - Esta tarefa deve criar `apps/users/` como app de usuários oficial do ERP-SAEP.
   - Não criar novo app `accounts` ou outro app de usuários sem decisão registrada.
-  - Inspecionar e adaptar `apps/users/models.py`, `managers.py`, `forms.py`, `admin.py` e configurações relacionadas.
+  - Implementar `apps/users/models.py`, `managers.py`, `forms.py`, `admin.py` e configurações relacionadas.
 - **Regras de negócio:**
   - O login deve ser feito pela matrícula funcional.
   - A matrícula funcional deve ser única.
@@ -176,7 +181,8 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
   - Não implementar setores nesta tarefa, exceto se for necessário deixar referência técnica mínima ou TODO para `PIL-BE-ACE-002`.
   - Não implementar papéis completos nesta tarefa; isso pertence à tarefa `PIL-BE-ACE-003`.
 - **Entregáveis:**
-  - Modelo de usuário existente adaptado para matrícula funcional.
+  - App `apps/users/` criado como app oficial de usuários.
+  - Modelo de usuário customizado com matrícula funcional.
   - Validação de matrícula funcional única.
   - Ajustes em manager, forms, admin e autenticação quando necessário.
   - Migração correspondente.
@@ -247,7 +253,7 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
 - **Objetivo:** garantir que a autenticação local use matrícula funcional e senha.
 
 - **Contexto técnico:**
-  - Usar o app existente `apps/users/`.
+  - Usar o app `apps/users/` criado em `PIL-BE-ACE-001`.
   - Não criar novo app de autenticação.
   - Se a tarefa `PIL-BE-ACE-001` já tiver ajustado completamente o login por matrícula, esta tarefa deve apenas revisar, testar e ajustar autenticação, managers, adapters e integrações necessárias no backend.
 - **Regras de negócio:**

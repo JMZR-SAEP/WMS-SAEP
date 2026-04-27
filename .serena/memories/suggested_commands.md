@@ -15,6 +15,11 @@ Project routines from `Makefile`:
 - `rtk make run` - run Django development server with `config.settings.dev`.
 - `rtk make resetdb` - migrate the current database to zero and back without deleting local migration files.
 
+Materialization workflow guidance:
+- Complete `docs/backlog/backlog-materializacao-django.md` (`MAT-*`) before starting `PIL-*` pilot tasks.
+- Use `config.settings.dev` for development and `config.settings.test` for tests; there is no separate `config.settings.test_postgres` module in the current plan.
+- Materialization must not create `apps/users/` or any ERP-SAEP domain app; `apps/core/` is technical API infrastructure only.
+
 Ephemeral workflow guidance:
 - For non-structural tasks, prefer incremental local work plus focused tests.
 - For schema/model changes, reset the database and rebuild local migrations before final validation.

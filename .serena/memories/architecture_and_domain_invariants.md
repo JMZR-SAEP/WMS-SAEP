@@ -4,7 +4,7 @@ Core architectural rule: business rules belong in `services.py` / service-use-ca
 
 Authorization must be explicit and consistent. Contextual authorization should be centralized in `policies.py` or equivalent and used by both views and services. Always validate object scope/profile in services for writes.
 
-Every API endpoint must follow `docs/design/api-contracts.md`: session authentication with CSRF by default, general authorization through `permission_classes`, contextual authorization through shared policies, explicit input/output serializers, explicit status codes, the standard error envelope, pagination/filtering/ordering when applicable, and OpenAPI schema coverage. Changes to API contracts require tests and schema updates.
+Every API endpoint must follow `docs/design-acesso-rapido/api-contracts.md`: session authentication with CSRF by default, general authorization through `permission_classes`, contextual authorization through shared policies, explicit input/output serializers, explicit status codes, the standard error envelope, pagination/filtering/ordering when applicable, and OpenAPI schema coverage. Changes to API contracts require tests and schema updates.
 
 API response invariant:
 - Successful detail/action responses return the resource or result directly, without a global success envelope.
@@ -34,7 +34,7 @@ Audit/rastreability:
 - Relevant actions must be auditable: creation, approval, rejection, return to draft, cancellation, delivery, adjustment, reversal.
 - Audit/history is expected through `django-simple-history` (`HistoricalRecords`) for domain models, not manual logging/signals.
 
-Dependency direction from CodeRabbit guidelines:
-`core -> warehouse -> movements -> requisitions`, with notifications reached by event side effects. Avoid circular/cross-app coupling.
+Dependency direction:
+`apps/core/` is technical infrastructure only and must not depend on domain apps. Domain app dependencies should remain explicit and acyclic as apps are introduced by the backlog. Notifications and other side effects must be reached by post-commit events instead of direct domain coupling.
 
 Development environment rule: local DB and app migrations are ephemeral during this early phase. Do not commit generated app migrations. For schema/model changes, rebuild local migrations and validate against a clean local database. Generated migrations are temporary materialization artifacts, not normal deliverables.

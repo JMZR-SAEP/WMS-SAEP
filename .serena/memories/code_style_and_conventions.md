@@ -6,11 +6,11 @@ General style:
 - Prefer services/use cases for business logic and policies for contextual authorization.
 - Keep views, serializers, templates, admin actions, signals, and management commands thin.
 - Use explicit contracts for APIs and update OpenAPI/tests when contracts change.
-- Follow `docs/design/api-contracts.md` as the canonical API contract standard.
+- Follow `docs/design-acesso-rapido/api-contracts.md` as the canonical API contract standard.
 - Add regression tests for every bug fix.
 
 Django/DRF conventions:
-- Use a custom user model from the start; functional registration/matricula is the login identifier.
+- The materialization may enable Django auth provisionally for bootstrap/Admin/DRF, but `apps/users/` and the custom user model are created in `PIL-BE-ACE-001`; functional registration/matricula is the login identifier before any real pilot/domain use.
 - Use DRF serializers for input validation, local payload coherence, typing, and output representation.
 - Use thin ViewSets/APIViews and explicit permissions/querysets to prevent IDOR and cross-department access.
 - Version formal API endpoints under `/api/v1/`.

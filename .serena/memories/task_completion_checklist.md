@@ -1,10 +1,11 @@
 # Task completion checklist
 
 Before considering implementation work complete:
+- If working on Django materialization, use `docs/backlog/backlog-materializacao-django.md` and stop before any `PIL-*` functional domain work.
 - Re-read the relevant design/backlog docs for the touched domain area.
 - Ensure rules of business/domain are in services/use cases, not views/serializers/models/signals/templates/admin actions.
 - Ensure contextual authorization is centralized and applied consistently in views and services.
-- For API work, confirm compliance with `docs/design/api-contracts.md`: session auth default or justified override, permissions, policies, serializers, status codes, standard error envelope, filters/pagination/ordering where applicable, OpenAPI schema, and contract tests.
+- For API work, confirm compliance with `docs/design-acesso-rapido/api-contracts.md`: session auth default or justified override, permissions, policies, serializers, status codes, standard error envelope, filters/pagination/ordering where applicable, OpenAPI schema, and contract tests.
 - For stock/ledger/requisition state changes, confirm `transaction.atomic()`, deterministic locking with `select_for_update()` where needed, and tests for critical invariants.
 - For bug fixes, add a regression test that would fail before the fix.
 - For schema/model changes in the ephemeral dev phase, recreate local migrations and rebuild the local database before validation; do not treat generated app migrations as deliverables or commit them unless project policy changes.
