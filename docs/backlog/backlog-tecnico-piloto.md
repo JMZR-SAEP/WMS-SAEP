@@ -1,12 +1,23 @@
 # Backlog Técnico — Piloto Inicial
 
-Este documento reúne apenas o escopo do piloto inicial.
+Este documento reúne apenas o escopo funcional do piloto inicial.
 
 Para o backlog do MVP completo, consultar `docs/backlog/backlog-tecnico-mvp.md`.
 
-Antes de iniciar qualquer tarefa `PIL-*`, executar o backlog de materialização mínima em `docs/backlog/backlog-materializacao-django.md`.
+## Pré-condição técnica obrigatória
 
-As tarefas `MAT-*` são pré-condição técnica para criar a base Django inicializável. Elas não fazem parte do domínio funcional do piloto. O backlog funcional do piloto começa em `PIL-BE-ACE-001`.
+Antes de iniciar qualquer tarefa `PIL-*`, executar completamente o backlog de materialização técnica em `docs/backlog/backlog-materializacao-django.md` (tarefas `MAT-000` a `MAT-006`).
+
+As tarefas `MAT-*` são responsáveis por:
+- Alinhar documentação pré-materialização (`MAT-000`)
+- Inspecionar estrutura existente (`MAT-001`)
+- Criar bootstrap Django mínimo (`MAT-002`)
+- Configurar settings, ambiente e PostgreSQL (`MAT-003`)
+- Configurar testes de smoke (`MAT-004`)
+- Configurar DRF/OpenAPI/core API sem domínio (`MAT-005`)
+- Ajustar CI genérica de bootstrap (`MAT-006`)
+
+As tarefas `MAT-*` não fazem parte do domínio funcional do piloto. O backlog funcional do piloto começa em `PIL-BE-ACE-001`, que deve ser iniciado apenas após a materialização estar completa.
 
 ## 1. Estratégia de implementação
 
@@ -165,10 +176,11 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
 - **Fase:** Piloto inicial
 - **Tipo:** Backend / Banco de dados
 - **Agente sugerido:** Agente backend
-- **Depende de:** nenhuma
+- **Depende de:** Backlog de materialização completo (`MAT-000` a `MAT-006`)
 - **Objetivo:** criar o app de usuários do ERP-SAEP em `apps/users/` com usuário customizado por matrícula funcional.
 - **Contexto técnico:**
-  - A materialização mínima cria apenas a base Django e não cria `apps/users/`.
+  - A materialização mínima (`docs/backlog/backlog-materializacao-django.md`) cria apenas a base Django e não cria `apps/users/`.
+  - Esta tarefa é a primeira do backlog funcional, após a base técnica estar pronta.
   - Esta tarefa deve criar `apps/users/` como app de usuários oficial do ERP-SAEP.
   - Não criar novo app `accounts` ou outro app de usuários sem decisão registrada.
   - Implementar `apps/users/models.py`, `managers.py`, `forms.py`, `admin.py` e configurações relacionadas.

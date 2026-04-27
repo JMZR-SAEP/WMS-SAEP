@@ -233,24 +233,67 @@ Diretrizes:
 
 ## 12. Organização sugerida de apps Django
 
-A organização deve favorecer fronteiras claras de domínio e partir de um bootstrap Django manual mínimo.
+A organização deve favorecer fronteiras claras de domínio e parte de um **bootstrap Django manual mínimo** descrito em `docs/backlog/backlog-materializacao-django.md`.
 
-Diretriz estrutural:
+### Estrutura antes da materialização
 
-- os apps Django do projeto devem ficar sob a pasta `apps/`.
-- a pasta `config/` permanece responsável por settings, URLs, ASGI/WSGI e bootstrap do projeto.
+Antes de executar as tarefas `MAT-*`, o repositório contém apenas:
 
-Estrutura mínima esperada após a materialização técnica:
+```text
+.github/
+docs/
+tests/ (opcional, criado em MAT-004)
+Makefile
+requirements.txt
+pyproject.toml
+.env.example
+```
+
+Não há `manage.py`, `config/` ou `apps/` ainda.
+
+### Estrutura após a materialização técnica (MAT-000 a MAT-006)
+
+Após executar o backlog `docs/backlog/backlog-materializacao-django.md`, a estrutura mínima será:
 
 ```text
 config/
+  __init__.py
+  settings/
+    __init__.py
+    base.py
+    dev.py
+    test.py
+  urls.py
+  asgi.py
+  wsgi.py
 apps/
+  __init__.py
   core/
+    (app técnico, preenchido em MAT-005)
+manage.py
 ```
 
-O app `apps/core/` deve ser técnico e transversal, limitado a infraestrutura comum, como API, paginação, envelope de erro e schema OpenAPI. Ele não deve conter regra de negócio de domínio.
+### Estrutura após o piloto (PIL-001 em diante)
 
-O app de usuários oficial deve ser criado em `apps/users/` na tarefa `PIL-BE-ACE-001`. Não criar `accounts` ou outro app alternativo de usuários sem decisão registrada.
+Após materializar a base, adicionar apps de domínio conforme o escopo avançar:
+
+```text
+apps/
+  core/       (infraestrutura comum: API, paginação, envelope de erro, OpenAPI)
+  users/      (usuário customizado, criado em PIL-BE-ACE-001)
+  organizational/ (setores, departamentos)
+  materials/  (grupos, subgrupos, materiais)
+  stock/      (saldos, reservas, movimentações)
+  requisitions/ (cabeçalho, itens, ciclo de requisição)
+  ...
+```
+
+### Diretriz estrutural
+
+- Os apps Django devem ficar sob a pasta `apps/`.
+- A pasta `config/` permanece responsável por settings, URLs, ASGI/WSGI e bootstrap do projeto.
+- O app `apps/core/` deve ser **técnico e transversal**, limitado a infraestrutura comum como API, paginação, envelope de erro e schema OpenAPI. Ele não deve conter regra de negócio de domínio.
+- O app de usuários oficial deve ser criado em `apps/users/` na tarefa `PIL-BE-ACE-001`. Não criar `accounts` ou outro app alternativo de usuários sem decisão registrada.
 
 Apps ou módulos de domínio podem ser criados conforme o escopo avançar:
 

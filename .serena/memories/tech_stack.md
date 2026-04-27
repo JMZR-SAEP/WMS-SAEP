@@ -15,8 +15,7 @@ Current active stack for ERP-SAEP:
 - factory_boy as the chosen standard for test data generation.
 
 Materialization baseline:
-- Django is materialized through `docs/backlog/backlog-materializacao-django.md` (`MAT-*`) before any `PIL-*` functional work.
-- Bootstrap is manual minimum, without external project generators.
+- Django materialization follows `docs/backlog/backlog-materializacao-django.md` tasks (`MAT-000` to `MAT-006`) before any `PIL-*` functional work begins.\n  - `MAT-000`: Align docs pre-materialization; close ambiguity about bootstrap approach.\n  - `MAT-001`: Inspect repo structure and confirm baseline.\n  - `MAT-002`: Create minimal Django bootstrap.\n  - `MAT-003`: Configure settings structure, environment, PostgreSQL via `DATABASE_URL`.\n  - `MAT-004`: Set up smoke tests and pytest.\n  - `MAT-005`: Configure DRF, OpenAPI/drf-spectacular, `apps/core/` technical infrastructure.\n  - `MAT-006`: Adjust CI (ruff, pytest, `manage.py check`) and pre-commit hooks.\n- Bootstrap is manual minimum, without external project generators.
 - Initial settings are `config.settings.base`, `config.settings.dev`, and `config.settings.test`; do not create a separate `test_postgres` settings module.
 - `config/` owns settings, URLs, ASGI/WSGI, and project bootstrap.
 - `apps/core/` is technical API infrastructure only; it may host pagination, error envelope, schema helpers, and non-domain API utilities.
