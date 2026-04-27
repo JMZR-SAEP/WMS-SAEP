@@ -1,0 +1,13 @@
+Django
+djangorestframework
+drf-spectacular
+django-filter
+django-allauth
+psycopg[binary]
+
+pytest
+pytest-django
+coverage
+ruff
+pre-commit
+factory_boy

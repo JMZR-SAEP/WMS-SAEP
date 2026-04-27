@@ -1,0 +1,91 @@
+name: CI
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+          cache: 'pip'
+      - run: pip install ruff
+      - run: ruff check .
+      - run: ruff format --check .
+
+  test-light:
+    name: Light Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+          cache: 'pip'
+
+      - name: Instalar dependências
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Rodar testes leves
+        run: python -m pytest -m "not postgres"
+
+  test-postgres-critical:
+    name: PostgreSQL Critical Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: saep
+          POSTGRES_PASSWORD: saep
+          POSTGRES_DB: erp_saep_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+          cache: 'pip'
+
+      - name: Instalar dependências
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Gerar migrations efêmeras
+        env:
+          SECRET_KEY: ci-only-secret-key-not-for-production
+          DATABASE_URL: postgres://saep:saep@localhost:5432/erp_saep_test
+          DJANGO_SETTINGS_MODULE: config.settings.test_postgres
+        run: python manage.py makemigrations --noinput core warehouse movements requisitions notifications
+
+      - name: Rodar testes PostgreSQL críticos
+        env:
+          SECRET_KEY: ci-only-secret-key-not-for-production
+          DATABASE_URL: postgres://saep:saep@localhost:5432/erp_saep_test
+          DJANGO_SETTINGS_MODULE: config.settings.test_postgres
+        run: python -m pytest -m postgres --ds=config.settings.test_postgres

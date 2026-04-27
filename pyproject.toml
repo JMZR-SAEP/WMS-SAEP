@@ -1,0 +1,29 @@
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings.test"
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+markers = [
+    "postgres: marks tests that require PostgreSQL-specific behavior",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "DJ"]
+ignore = ["DJ001", "E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"*/migrations/*.py" = ["E501", "N806"]
+"*/tests/*.py" = ["N802", "N806"]
+"*/settings/*.py" = ["F403", "F401"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+docstring-code-format = true
+exclude = ["*/migrations/*.py"]
