@@ -818,7 +818,7 @@ Objetivo: completar a primeira versão operacional mínima após validação do 
   - Tarefas novas ou alteradas no backlog.
 - **Testes esperados:**
   - Validar critérios de sucesso antes da expansão.
-- **Critérios de aceite relacionados:** critérios de sucesso do MVP em `docs/design/mvp-plano-implantacao.md`
+- **Critérios de aceite relacionados:** critérios de sucesso do MVP em `docs/design-acesso-ocasional/mvp-plano-implantacao.md`
 
 ### MVP-DOC-IMP-002 — Planejar expansão gradual de materiais e setores
 
@@ -836,7 +836,7 @@ Objetivo: completar a primeira versão operacional mínima após validação do 
   - Critérios de liberação por etapa.
 - **Testes esperados:**
   - Checklist de prontidão por etapa.
-- **Critérios de aceite relacionados:** critérios de sucesso do MVP em `docs/design/mvp-plano-implantacao.md`
+- **Critérios de aceite relacionados:** critérios de sucesso do MVP em `docs/design-acesso-ocasional/mvp-plano-implantacao.md`
 
 ## 4.3 Pós-MVP
 

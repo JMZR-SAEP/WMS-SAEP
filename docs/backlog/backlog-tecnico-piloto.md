@@ -38,12 +38,12 @@ Princípios:
 
 Referências principais:
 
-- `docs/design/processos-almoxarifado.md`
-- `docs/design/modelo-dominio-regras.md`
-- `docs/design/importacao-scpi-csv.md`
-- `docs/design/mvp-plano-implantacao.md`
-- `docs/design/criterios-aceite.md`
-- `docs/design/stack.md`
+- `docs/design-acesso-ocasional/processos-almoxarifado.md`
+- `docs/design-acesso-ocasional/modelo-dominio-regras.md`
+- `docs/design-acesso-ocasional/importacao-scpi-csv.md`
+- `docs/design-acesso-ocasional/mvp-plano-implantacao.md`
+- `docs/design-acesso-ocasional/criterios-aceite.md`
+- `docs/design-acesso-rapido/stack.md`
 
 ## 2. Convenção de tarefas para agentes de IA
 
@@ -60,17 +60,17 @@ Formato recomendado de execução:
 - **Regras de negócio:** regras que não podem ser violadas.
 - **Entregáveis:** arquivos, endpoints, modelos, serviços, testes ou documentação esperados.
 - **Testes esperados:** cenários mínimos que devem ser cobertos.
-- **Critérios de aceite relacionados:** referência aos itens de `docs/design/criterios-aceite.md`.
+- **Critérios de aceite relacionados:** referência aos itens de `docs/design-acesso-ocasional/criterios-aceite.md`.
 
 Orientações para agentes:
 
 - Antes de implementar, ler os documentos de referência citados na tarefa.
 - Não alterar regra de negócio sem atualizar também os critérios de aceite e os documentos de domínio/processo relacionados.
-- Quando uma tarefa envolver status de requisição, preservar o ciclo de vida definido em `docs/design/processos-almoxarifado.md`.
+- Quando uma tarefa envolver status de requisição, preservar o ciclo de vida definido em `docs/design-acesso-ocasional/processos-almoxarifado.md`.
 - Quando uma tarefa envolver estoque, preservar a separação entre saldo físico, saldo reservado e saldo disponível.
 - Quando uma tarefa envolver material importado do SCPI, não permitir edição manual de dados cadastrais oficiais no ERP-SAEP.
 - Toda implementação que altere estoque, status de requisição ou permissões deve possuir testes automatizados ou, no mínimo, cenários de validação documentados.
-- Seguir as decisões técnicas registradas em `docs/design/stack.md`.
+- Seguir as decisões técnicas registradas em `docs/design-acesso-rapido/stack.md`.
 - Usar Django REST Framework para endpoints de API e manter views/serializers finos.
 - Não abrir frente de implementação de frontend enquanto o foco do projeto permanecer em backend/API.
 
@@ -1113,7 +1113,7 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
   - Lista de categorias excluídas.
 - **Testes esperados:**
   - Conferência manual com chefe de almoxarifado.
-- **Critérios de aceite relacionados:** critérios de sucesso do MVP em `docs/design/mvp-plano-implantacao.md`
+- **Critérios de aceite relacionados:** critérios de sucesso do MVP em `docs/design-acesso-ocasional/mvp-plano-implantacao.md`
 
 ### PIL-DOC-IMP-002 — Preparar operação paralela em papel
 
@@ -1132,7 +1132,7 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
   - Critério de comparação entre sistema e papel.
 - **Testes esperados:**
   - Conferência de saídas registradas no sistema versus controle paralelo.
-- **Critérios de aceite relacionados:** critérios de sucesso do MVP em `docs/design/mvp-plano-implantacao.md`
+- **Critérios de aceite relacionados:** critérios de sucesso do MVP em `docs/design-acesso-ocasional/mvp-plano-implantacao.md`
 
 ### PIL-DOC-IMP-003 — Treinar usuários do piloto
 
@@ -1151,7 +1151,7 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
   - Guia rápido por perfil.
 - **Testes esperados:**
   - Usuário piloto executa fluxo básico assistido.
-- **Critérios de aceite relacionados:** critérios de sucesso do MVP em `docs/design/mvp-plano-implantacao.md`
+- **Critérios de aceite relacionados:** critérios de sucesso do MVP em `docs/design-acesso-ocasional/mvp-plano-implantacao.md`
 
 ## 5. Ordem sugerida de implementação para agentes
 

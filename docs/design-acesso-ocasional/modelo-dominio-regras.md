@@ -268,7 +268,7 @@ Campos previstos para versões futuras:
 
 Grupo e subgrupo devem ser cadastros próprios, mas as informações de grupo, subgrupo, sequencial do produto e código completo não serão geradas livremente pelo ERP-SAEP. Esses dados têm origem no SCPI e devem ser importados a partir de relatório CSV emitido pelo SCPI.
 
-As regras detalhadas de importação, normalização, reimportação, atualização de saldo via `QUAN3`, divergências críticas e erros técnicos ficam documentadas em `docs/design/importacao-scpi-csv.md`.
+As regras detalhadas de importação, normalização, reimportação, atualização de saldo via `QUAN3`, divergências críticas e erros técnicos ficam documentadas em `docs/design-acesso-ocasional/importacao-scpi-csv.md`.
 
 Após importado, o ERP-SAEP não deve permitir edição direta dos dados cadastrais provenientes do SCPI, como nome, descrição, grupo, subgrupo e sequencial do produto. Em caso de divergência, o SCPI deve ser considerado a fonte correta para dados cadastrais do material.
 
@@ -514,7 +514,7 @@ Origens possíveis da movimentação:
 
 ### Entradas de estoque
 
-No MVP, o ERP-SAEP não deve registrar entrada por compra diretamente. Entradas de compra e correções de saldo físico devem ser registradas no SCPI e refletidas no ERP-SAEP por importação CSV, conforme `docs/design/importacao-scpi-csv.md`.
+No MVP, o ERP-SAEP não deve registrar entrada por compra diretamente. Entradas de compra e correções de saldo físico devem ser registradas no SCPI e refletidas no ERP-SAEP por importação CSV, conforme `docs/design-acesso-ocasional/importacao-scpi-csv.md`.
 
 O ERP-SAEP deve lidar com dois tipos de entrada:
 
@@ -598,7 +598,7 @@ O superusuário deve atuar principalmente na administração técnica e estrutur
 
 Ficam reservados ao superusuário:
 
-- Importação de materiais via CSV com base no SCPI, conforme regras de `docs/design/importacao-scpi-csv.md`.
+- Importação de materiais via CSV com base no SCPI, conforme regras de `docs/design-acesso-ocasional/importacao-scpi-csv.md`.
 - Gestão de usuários.
 - Gestão de setores.
 - Definição de chefes de setor.

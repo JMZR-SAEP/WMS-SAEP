@@ -6,11 +6,11 @@ ERP auxiliar para o **SAEP — Serviço de Água e Esgoto de Pirassununga**, aut
 
 Quando o projeto Django for materializado, os apps Django deverão ficar sob a pasta `apps/`.
 
-> Informações relevantes sobre o projeto estão em `.serena/memories`. Se você tiver acesso às ferramentas MCP do Serena, pode lê-las usando o comando `read_memory`.
+> Informações relevantes sobre o projeto estão em `.serena/memories`. Se você tiver acesso às ferramentas MCP do Serena, pode lê-las usando o comando `read_memory`. Caso não possua acesso às ferramentas, **pare e explique** por que não conseguiu acessá-las.
 
 > Para revisão de código, considerar também `docs/coderabbit-guidelines.md`, que define invariantes obrigatórios do sistema e orienta o comportamento do CodeRabbit.
 
-> Para contratos de API DRF, seguir `docs/design/api-contracts.md`, que define o padrão obrigatório para autenticação, autorização, serializers de entrada/saída, status HTTP, envelope de erro, paginação/filtros e schema OpenAPI.
+> Para contratos de API DRF, seguir `docs/design-acesso-rapido/api-contracts.md`, que define o padrão obrigatório para autenticação, autorização, serializers de entrada/saída, status HTTP, envelope de erro, paginação/filtros e schema OpenAPI.
 
 ## Ambiente de desenvolvimento efêmero
 
@@ -47,7 +47,7 @@ Rotinas principais do projeto via `rtk make`:
 
 - Configure autenticação, CORS, OpenAPI, handler global de erros, paginação e filtros antes dos primeiros endpoints reais.
 - Declare em todo endpoint: autenticação, autorização, entrada, saída, status HTTP, envelope de erro, paginação/filtros e schema OpenAPI.
-- Siga `docs/design/api-contracts.md` como contrato canônico para endpoints DRF.
+- Siga `docs/design-acesso-rapido/api-contracts.md` como contrato canônico para endpoints DRF.
 - Centralize regras de autorização contextual em `policies.py` ou equivalente.
 - Faça views e services chamarem a mesma política de autorização.
 - Valide perfil e escopo do objeto no service para toda escrita.

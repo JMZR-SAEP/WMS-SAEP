@@ -57,7 +57,7 @@ Diretrizes:
 
 Nenhum endpoint novo ou alterado deve ser considerado completo sem definição clara de autenticação, autorização, serializer de entrada, serializer de saída, permissões por papel e escopo, códigos de status esperados, formato de erro, paginação, filtros e ordenação quando aplicáveis.
 
-O padrão canônico de contratos HTTP, respostas de sucesso, envelope de erro, paginação, filtros, autenticação e OpenAPI está em `docs/design/api-contracts.md`.
+O padrão canônico de contratos HTTP, respostas de sucesso, envelope de erro, paginação, filtros, autenticação e OpenAPI está em `docs/design-acesso-rapido/api-contracts.md`.
 
 ## 5. Banco de dados
 
@@ -101,7 +101,7 @@ Diretriz recomendada:
 - não manter telefone como campo cadastral permanente;
 - usar os mecanismos de senha, sessão e permissões do Django sempre que possível.
 
-O modelo de usuário deve estar alinhado às regras de `docs/design/modelo-dominio-regras.md` e aos critérios de aceite de permissões.
+O modelo de usuário deve estar alinhado às regras de `docs/design-acesso-ocasional/modelo-dominio-regras.md` e aos critérios de aceite de permissões.
 
 ## 7. Importação SCPI CSV
 

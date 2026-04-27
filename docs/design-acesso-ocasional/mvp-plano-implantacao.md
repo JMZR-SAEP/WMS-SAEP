@@ -28,16 +28,16 @@ O objetivo do piloto é validar se o fluxo de requisição, autorização e reti
 
 O MVP completo representa a primeira versão operacional mínima do módulo de Almoxarifado, após validação do piloto inicial.
 
-O MVP completo deve incluir importação de materiais por arquivo CSV, usando como base os dados provenientes do SCPI. As regras detalhadas dessa importação ficam documentadas em `docs/design/importacao-scpi-csv.md`.
+O MVP completo deve incluir importação de materiais por arquivo CSV, usando como base os dados provenientes do SCPI. As regras detalhadas dessa importação ficam documentadas em `docs/design-acesso-ocasional/importacao-scpi-csv.md`.
 
 No MVP completo, o ERP-SAEP deve tratar o SCPI como fonte oficial dos dados cadastrais dos materiais e como fonte para correções de saldo físico via importação CSV. O ERP-SAEP utilizará esses dados para operação interna do Almoxarifado, mas não substituirá o cadastro oficial mantido no SCPI.
 
 O MVP completo deve incluir apenas as seguintes entradas de estoque no ERP-SAEP:
 
-- Saldo inicial via importação CSV do SCPI, conforme `docs/design/importacao-scpi-csv.md`
+- Saldo inicial via importação CSV do SCPI, conforme `docs/design-acesso-ocasional/importacao-scpi-csv.md`
 - Entrada por devolução vinculada a requisição
 
-Entradas por compra devem ser feitas no SCPI e refletidas no ERP-SAEP por importação CSV, conforme `docs/design/importacao-scpi-csv.md`.
+Entradas por compra devem ser feitas no SCPI e refletidas no ERP-SAEP por importação CSV, conforme `docs/design-acesso-ocasional/importacao-scpi-csv.md`.
 
 O MVP completo deve incluir inicialmente os seguintes alertas operacionais:
 

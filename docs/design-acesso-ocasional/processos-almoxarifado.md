@@ -117,4 +117,4 @@ Regras iniciais:
 - O estorno deve devolver automaticamente ao estoque a quantidade estornada.
 - O sistema deve permitir estorno parcial.
 - Uma requisição estornada não pode ser corrigida e atendida novamente; o estorno encerra definitivamente aquela requisição.
-- Regras detalhadas de devolução, saída excepcional e estornos operacionais ficam consolidadas em `docs/design/modelo-dominio-regras.md`.
+- Regras detalhadas de devolução, saída excepcional e estornos operacionais ficam consolidadas em `docs/design-acesso-ocasional/modelo-dominio-regras.md`.
