@@ -1,10 +1,21 @@
 # AGENTS.md
 
-Esta pasta contém sínteses operacionais para leitura rápida por agentes de IA.
+Esta pasta contém sínteses operacionais enxutas para leitura rápida por agentes de IA.
 
-- Leia estes documentos antes de consultar a documentação completa.
-- Use `stack.md` para decisões técnicas e stack.
-- Use `api-contracts.md` para contratos DRF.
-- Use `estado-transicoes-requisicao.md` para ciclo de vida de requisições.
-- Se a síntese não resolver a dúvida, consulte `../design-acesso-ocasional/` apenas no ponto específico necessário.
+Use esta pasta como primeira parada antes de consultar a documentação completa.
+
+## Rotas rápidas
+
+- `stack.md`: decisões técnicas, stack, apps esperados e fronteiras de domínio.
+- `api-contracts.md`: contratos DRF, autenticação, autorização, serializers, erros, paginação e OpenAPI.
+- `matriz-invariantes.md`: invariantes críticos, camada esperada, reforços e testes mínimos.
+- `matriz-permissoes.md`: papéis, escopos, permissões, visibilidade e testes de autorização.
+- `estado-transicoes-requisicao.md`: estados, eventos, transições, bloqueios e efeitos de estoque/reserva.
+
+## Regras de uso
+
+- Não leia todos os documentos por padrão; escolha o arquivo pela dúvida.
+- Use as matrizes como referência operacional, não como substitutas da documentação completa.
+- Se a síntese não resolver a dúvida, consulte `../design-acesso-ocasional/` apenas no ponto necessário.
 - Em caso de conflito com a documentação completa, prevalece `../design-acesso-ocasional/`, salvo decisão posterior registrada.
+- Ao alterar regra de negócio, atualize a síntese afetada e o documento completo correspondente.

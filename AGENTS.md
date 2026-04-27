@@ -12,6 +12,10 @@ Quando o projeto Django for materializado, os apps Django deverão ficar sob a p
 
 > Para contratos de API DRF, seguir `docs/design-acesso-rapido/api-contracts.md`, que define o padrão obrigatório para autenticação, autorização, serializers de entrada/saída, status HTTP, envelope de erro, paginação/filtros e schema OpenAPI.
 
+> Para invariantes críticos de domínio, seguir `docs/design-acesso-rapido/matriz-invariantes.md`, que consolida regra de negócio, camada de implementação esperada, reforços e testes obrigatórios.
+
+> Para permissões, escopos e papéis, seguir `docs/design-acesso-rapido/matriz-permissoes.md`, que consolida a referência canônica para `policies.py`, services, endpoints DRF e testes de autorização.
+
 ## Estratégia de leitura da documentação
 
 Para economizar tokens e manter os agentes focados, a documentação está dividida por frequência de uso:
@@ -23,9 +27,11 @@ Leitura padrão antes de implementar:
 
 - `docs/design-acesso-rapido/stack.md`, para decisões técnicas e stack;
 - `docs/design-acesso-rapido/api-contracts.md`, para contratos DRF;
+- `docs/design-acesso-rapido/matriz-invariantes.md`, para invariantes críticos de domínio, camada esperada e testes obrigatórios;
+- `docs/design-acesso-rapido/matriz-permissoes.md`, para papéis, escopos, permissões e testes de autorização;
 - `docs/design-acesso-rapido/estado-transicoes-requisicao.md`, para ciclo de vida de requisições.
 
-Consultar `docs/design-acesso-ocasional/` quando a tarefa envolver regra detalhada de domínio, permissões, estoque, requisições, importação SCPI, critérios de aceite, conflito documental ou decisão que precise ser explicada em PR.
+Consultar `docs/design-acesso-ocasional/` quando as matrizes de invariantes/permissões e as demais sínteses rápidas não resolverem a dúvida, ou quando a tarefa envolver regra detalhada de domínio, permissões, estoque, requisições, importação SCPI, critérios de aceite, conflito documental ou decisão que precise ser explicada em PR.
 
 Em caso de conflito entre síntese e documentação completa, prevalece `docs/design-acesso-ocasional/`, salvo decisão posterior registrada. Mudanças de regra de negócio devem atualizar a documentação rápida e a documentação completa quando ambas forem afetadas.
 
