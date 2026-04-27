@@ -1,13 +1,15 @@
-Django
-djangorestframework
-drf-spectacular
-django-filter
-django-allauth
-psycopg[binary]
+Django>=6,<7
+djangorestframework>=3,<4
+drf-spectacular>=0.27,<1
+django-filter>=23,<24
+django-allauth>=0.57,<1
+django-cors-headers>=4,<5
+psycopg[binary]>=3,<4
+python-dotenv>=1,<2
 
-pytest
-pytest-django
-coverage
-ruff
-pre-commit
-factory_boy
+pytest>=7,<8
+pytest-django>=4,<5
+coverage>=7,<8
+ruff>=0.1,<1
+pre-commit>=3,<4
+factory_boy>=3,<4
