@@ -262,5 +262,3 @@ Apps ou módulos de domínio podem ser criados conforme o escopo avançar:
 - `reports`: relatórios e exportações CSV.
 - `audit`: linha do tempo e eventos auditáveis.
 - `imports`: importação SCPI CSV.
-
-Essa divisão pode ser ajustada conforme o cookiecutter-django e o domínio real evoluírem, mas as fronteiras de domínio devem permanecer claras.
