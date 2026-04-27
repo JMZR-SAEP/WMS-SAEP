@@ -4,12 +4,10 @@ from urllib.parse import urlparse
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
-SECRET_KEY = os.environ.get("SECRET_KEY")
-if not SECRET_KEY:
-    raise ValueError(
-        "SECRET_KEY must be set in environment. "
-        "Use 'rtk make prepare' to set up .env from .env.example"
-    )
+SECRET_KEY = os.environ.get(
+    "SECRET_KEY",
+    "insecure-default-key-for-development-only-change-in-production",
+)
 
 ALLOWED_HOSTS = []
 
@@ -59,22 +57,19 @@ TEMPLATES = [
 WSGI_APPLICATION = "config.wsgi.application"
 
 DATABASES = {}
-DATABASE_URL = os.environ.get("DATABASE_URL")
-if DATABASE_URL:
-    parsed_url = urlparse(DATABASE_URL)
-    DATABASES["default"] = {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": parsed_url.path.lstrip("/"),
-        "USER": parsed_url.username,
-        "PASSWORD": parsed_url.password,
-        "HOST": parsed_url.hostname,
-        "PORT": parsed_url.port or 5432,
-    }
-else:
-    raise ValueError(
-        "DATABASE_URL must be set in environment. "
-        "Use 'rtk make prepare' to set up .env from .env.example"
-    )
+DATABASE_URL = os.environ.get(
+    "DATABASE_URL",
+    "postgres://saep:saep@localhost:5432/erp_saep",
+)
+parsed_url = urlparse(DATABASE_URL)
+DATABASES["default"] = {
+    "ENGINE": "django.db.backends.postgresql",
+    "NAME": parsed_url.path.lstrip("/"),
+    "USER": parsed_url.username,
+    "PASSWORD": parsed_url.password,
+    "HOST": parsed_url.hostname,
+    "PORT": parsed_url.port or 5432,
+}
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
