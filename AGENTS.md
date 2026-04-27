@@ -12,6 +12,23 @@ Quando o projeto Django for materializado, os apps Django deverão ficar sob a p
 
 > Para contratos de API DRF, seguir `docs/design-acesso-rapido/api-contracts.md`, que define o padrão obrigatório para autenticação, autorização, serializers de entrada/saída, status HTTP, envelope de erro, paginação/filtros e schema OpenAPI.
 
+## Estratégia de leitura da documentação
+
+Para economizar tokens e manter os agentes focados, a documentação está dividida por frequência de uso:
+
+- `docs/design-acesso-rapido/`: sínteses operacionais. Deve ser a primeira fonte consultada por agentes de IA.
+- `docs/design-acesso-ocasional/`: documentação completa. Deve ser consultada apenas quando a síntese rápida não resolver a dúvida, quando houver ambiguidade ou quando a tarefa depender de detalhe de domínio.
+
+Leitura padrão antes de implementar:
+
+- `docs/design-acesso-rapido/stack.md`, para decisões técnicas e stack;
+- `docs/design-acesso-rapido/api-contracts.md`, para contratos DRF;
+- `docs/design-acesso-rapido/estado-transicoes-requisicao.md`, para ciclo de vida de requisições.
+
+Consultar `docs/design-acesso-ocasional/` quando a tarefa envolver regra detalhada de domínio, permissões, estoque, requisições, importação SCPI, critérios de aceite, conflito documental ou decisão que precise ser explicada em PR.
+
+Em caso de conflito entre síntese e documentação completa, prevalece `docs/design-acesso-ocasional/`, salvo decisão posterior registrada. Mudanças de regra de negócio devem atualizar a documentação rápida e a documentação completa quando ambas forem afetadas.
+
 ## Ambiente de desenvolvimento efêmero
 
 Durante a fase inicial, o ambiente local é descartável.
