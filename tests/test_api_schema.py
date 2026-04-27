@@ -1,5 +1,4 @@
 """Smoke tests for DRF/OpenAPI configuration."""
-import json
 
 import pytest
 from django.urls import reverse
@@ -12,7 +11,6 @@ class TestOpenAPISchema:
 
     def test_schema_endpoint_is_accessible(self):
         """Verify /api/v1/schema/ endpoint is accessible."""
-        client = APIClient()
         url = reverse("schema")
         assert url == "/api/v1/schema/"
 
@@ -35,7 +33,6 @@ class TestOpenAPISchema:
 
     def test_swagger_ui_is_accessible(self):
         """Verify Swagger UI endpoint is accessible."""
-        client = APIClient()
         url = reverse("swagger-ui")
         assert url == "/api/v1/docs/"
 

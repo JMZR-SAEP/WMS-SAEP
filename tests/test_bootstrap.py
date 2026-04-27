@@ -1,8 +1,7 @@
 """Smoke tests for Django bootstrap and basic configuration."""
-import pytest
+
 from django.apps import apps
 from django.conf import settings
-from django.test import Client
 from django.urls import reverse
 
 
@@ -64,7 +63,6 @@ class TestURLLoading:
 
     def test_admin_url_is_accessible(self):
         """Verify admin URL is accessible."""
-        client = Client()
         admin_url = reverse("admin:index")
         assert admin_url == "/admin/"
 
