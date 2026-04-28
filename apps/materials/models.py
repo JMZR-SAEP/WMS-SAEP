@@ -126,9 +126,7 @@ class Material(models.Model):
         ou ORM direto (.create(), .update()). Operações críticas devem usar
         apps.materials.services.criar_material() para garantir validação obrigatória.
 
-        Validação ocorre apenas se ambos (subgrupo e sequencial) estão presentes.
-        Atualizações parciais que temporariamente deixam um desses campos null
-        não acionam validação.
+        Validação ocorre quando subgrupo_id e sequencial estão presentes (ambos required).
         """
         from django.core.exceptions import ValidationError
 

@@ -86,6 +86,7 @@ class TestMaterialModel:
         subgrupo = self._criar_subgrupo()
         material = self._criar_material(
             subgrupo,
+            codigo_completo="013.001.099",
             sequencial="099",
             unidade_medida="KG",
         )
