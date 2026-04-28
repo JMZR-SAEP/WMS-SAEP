@@ -42,6 +42,9 @@ Durante a fase inicial, o ambiente local é descartável.
 - o banco local pode ser apagado e recriado;
 - o fluxo padrão é resetar banco -> aplicar migrations -> carregar dados mínimos (quando existirem);
 - migrations locais são não versionadas e ignoradas pelo `.gitignore`.
+- `rtk make init` deve ser usado no setup inicial do projeto para criar `.venv` e instalar dependências.
+- `rtk make setup` é o comando principal do ciclo efêmero: apaga migrations locais e recria tudo do zero.
+- neste momento do projeto, toda edição de `models`/schema deve ser seguida de `rtk make setup`, para não depender de gestão manual de migrations.
 - migrations de apps devem ser tratadas como artefato efêmero: antes de testar ou concluir uma implementação que altere schema, apagar e recriar as migrations locais do zero, simulando uma primeira execução limpa do app.
 - confeccionar novos arquivos de migration não faz parte da entrega normal do trabalho neste contexto efêmero.
 - a fonte de verdade para mudanças estruturais são `models`, constraints, índices, regras de domínio e testes; migrations locais servem apenas para materializar o banco local.
@@ -54,8 +57,8 @@ Rotinas principais do projeto via `rtk make`:
 
 - `rtk make help`: lista as rotinas disponíveis;
 - `rtk make prepare`: materializa `.env` a partir de `.env.example`;
-- `rtk make init`: recria o ambiente Python e instala dependências com `uv sync`;
-- `rtk make setup`: limpa o ambiente, recria schema/migrations locais e coleta estáticos;
+- `rtk make init`: bootstrap inicial (uma vez por ambiente) para criar/recriar o ambiente Python e instalar dependências com `uv sync`;
+- `rtk make setup`: comando principal do desenvolvimento efêmero; limpa o ambiente, apaga/recria schema+migrations locais e coleta estáticos; usar sempre após editar `models`/schema;
 - `rtk make clean`: remove caches e artefatos locais sem afetar o banco;
 - `rtk make cleanall`: executa limpeza local e reseta o schema `public` do PostgreSQL;
 - `rtk make veryclean`: remove `.venv`, caches e migrations locais geradas;
