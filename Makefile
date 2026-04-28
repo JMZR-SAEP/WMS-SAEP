@@ -60,7 +60,7 @@ help: ## Mostrar rotinas disponíveis
 # Bootstrap
 # ------------------------------------------------------------------------------
 
-prepare: ## Materializar .env a partir do exemplo e instalar dependencias
+prepare: ## Materializar .env a partir do exemplo
 	@test -f $(ENV_FILE) || cp $(ENV_EXAMPLE_FILE) $(ENV_FILE)
 
 init: veryclean prepare ## Recriar ambiente Python e instalar dependências	
