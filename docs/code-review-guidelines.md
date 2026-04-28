@@ -11,6 +11,8 @@ O objetivo é orientar o CodeRabbit a fazer revisões alinhadas com o contexto r
 ## Ambiente efêmero (dev local)
 
 O banco de dados local é descartável — o fluxo padrão é resetar e reaplicar migrations do zero.
+`rtk make init` é reservado para o setup inicial do ambiente (venv + dependências).
+`rtk make setup` é o comando principal do ciclo efêmero e deve ser executado sempre que houver edição de `models`/schema.
 
 ### Implicações para review
 
