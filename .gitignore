@@ -44,6 +44,3 @@ Thumbs.db
 
 # Local Claude worktree artifacts
 .claude/worktrees/
-
-# Serena local memories
-.serena/memories/
