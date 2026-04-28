@@ -57,10 +57,10 @@ jobs:
       - name: Install PostgreSQL client
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
       - name: Bootstrap environment
-        run: make init
+        run: make init DATABASE_URL="$DATABASE_URL" DJANGO_SETTINGS_MODULE="$DJANGO_SETTINGS_MODULE" TEST_SETTINGS_MODULE="$TEST_SETTINGS_MODULE" SECRET_KEY="$SECRET_KEY"
       - name: Rebuild ephemeral schema/migrations
-        run: make setup
+        run: make setup DATABASE_URL="$DATABASE_URL" DJANGO_SETTINGS_MODULE="$DJANGO_SETTINGS_MODULE" TEST_SETTINGS_MODULE="$TEST_SETTINGS_MODULE" SECRET_KEY="$SECRET_KEY"
       - name: Django check
         run: uv run python manage.py check
       - name: Run pytest
-        run: make test
+        run: make test DATABASE_URL="$DATABASE_URL" DJANGO_SETTINGS_MODULE="$DJANGO_SETTINGS_MODULE" TEST_SETTINGS_MODULE="$TEST_SETTINGS_MODULE" SECRET_KEY="$SECRET_KEY"
