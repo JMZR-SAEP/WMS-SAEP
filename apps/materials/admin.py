@@ -69,18 +69,6 @@ class MaterialAdmin(admin.ModelAdmin):
     list_select_related = ("subgrupo", "subgrupo__grupo")
     search_fields = ("codigo_completo", "nome", "subgrupo__nome")
     ordering = ("codigo_completo",)
-    readonly_fields = (
-        "subgrupo",
-        "codigo_completo",
-        "sequencial",
-        "nome",
-        "descricao",
-        "unidade_medida",
-        "is_active",
-        "observacoes_internas",
-        "created_at",
-        "updated_at",
-    )
 
     fieldsets = (
         ("Identificação", {"fields": ("codigo_completo", "sequencial", "subgrupo")}),
@@ -89,11 +77,25 @@ class MaterialAdmin(admin.ModelAdmin):
         ("Datas", {"fields": ("created_at", "updated_at"), "classes": ("collapse",)}),
     )
 
+    def get_readonly_fields(self, request, obj=None):
+        if obj:
+            return (
+                "subgrupo",
+                "codigo_completo",
+                "sequencial",
+                "nome",
+                "descricao",
+                "unidade_medida",
+                "created_at",
+                "updated_at",
+            )
+        return ("created_at", "updated_at")
+
     def has_add_permission(self, request):
-        return False
+        return request.user.is_active and request.user.is_staff
 
     def has_change_permission(self, request, obj=None):
-        return False
+        return request.user.is_active and request.user.is_staff
 
     def has_delete_permission(self, request, obj=None):
         return False

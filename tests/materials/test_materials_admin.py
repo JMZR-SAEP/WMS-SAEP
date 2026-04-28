@@ -49,3 +49,43 @@ class TestMaterialsAdmin:
             "created_at",
             "updated_at",
         )
+
+    def test_material_admin_permite_criacao_bloqueia_edicao_campos_scpi(self):
+        from apps.materials.admin import MaterialAdmin
+        from apps.materials.models import GrupoMaterial, Material, SubgrupoMaterial
+
+        request = self._staff_request()
+        model_admin = MaterialAdmin(Material, admin.site)
+
+        grupo = GrupoMaterial.objects.create(codigo_grupo="013", nome="Grupo Test")
+        subgrupo = SubgrupoMaterial.objects.create(
+            grupo=grupo, codigo_subgrupo="001", nome="Subgrupo Test"
+        )
+        material = Material.objects.create(
+            subgrupo=subgrupo,
+            codigo_completo="013.001.001",
+            sequencial="001",
+            nome="Material Test",
+            unidade_medida="UN",
+        )
+
+        assert model_admin.has_view_permission(request) is True
+        assert model_admin.has_add_permission(request) is True
+        assert model_admin.has_change_permission(request) is True
+        assert model_admin.has_delete_permission(request) is False
+
+        assert model_admin.get_readonly_fields(request, None) == (
+            "created_at",
+            "updated_at",
+        )
+
+        assert model_admin.get_readonly_fields(request, material) == (
+            "subgrupo",
+            "codigo_completo",
+            "sequencial",
+            "nome",
+            "descricao",
+            "unidade_medida",
+            "created_at",
+            "updated_at",
+        )

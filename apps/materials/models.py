@@ -63,6 +63,19 @@ class SubgrupoMaterial(models.Model):
 
 
 class Material(models.Model):
+    """Representa um material controlado pelo Almoxarifado.
+
+    Código completo segue o padrão SCPI: xxx.yyy.zzz onde:
+    - xxx: código do grupo (GrupoMaterial.codigo_grupo)
+    - yyy: código do subgrupo (SubgrupoMaterial.codigo_subgrupo)
+    - zzz: sequencial do material (campo sequencial)
+
+    Nota arquitetural: Validação de coerência SCPI ocorre via clean() durante
+    full_clean() e via serviço criar_material() em operações críticas.
+    Operações de ORM direto (.create(), .update()) não acionam validação.
+    Importação SCPI e admin devem usar criar_material() para garantir coerência.
+    """
+
     subgrupo = models.ForeignKey(
         SubgrupoMaterial,
         on_delete=models.PROTECT,
@@ -107,6 +120,16 @@ class Material(models.Model):
         return f"{self.codigo_completo} — {self.nome}"
 
     def clean(self):
+        """Valida coerência do código completo com subgrupo + sequencial (SCPI-02).
+
+        Nota: Este método é chamado apenas por full_clean() e admin, não por save() direto
+        ou ORM direto (.create(), .update()). Operações críticas devem usar
+        apps.materials.services.criar_material() para garantir validação obrigatória.
+
+        Validação ocorre apenas se ambos (subgrupo e sequencial) estão presentes.
+        Atualizações parciais que temporariamente deixam um desses campos null
+        não acionam validação.
+        """
         from django.core.exceptions import ValidationError
 
         if self.subgrupo_id and self.sequencial:
