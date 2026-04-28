@@ -32,10 +32,11 @@ class TestSettingsLoading:
     def test_no_domain_apps_installed(self):
         """Verify no unauthorized domain apps are installed."""
         installed = [app.name for app in apps.get_app_configs()]
-        # users is expected after PIL-BE-ACE-001; organizational added after PIL-BE-ACE-002, etc.
+        # users is installed after PIL-BE-ACE-001 (complete)
+        # materials is installed after PIL-BE-MAT-001 (current)
+        # Other domain apps should not be installed yet
         domain_apps = [
             "organizational",
-            "materials",
             "stock",
             "requisitions",
             "approvals",
