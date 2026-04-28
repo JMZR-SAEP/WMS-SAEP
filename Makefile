@@ -60,40 +60,39 @@ help: ## Mostrar rotinas disponíveis
 # Bootstrap
 # ------------------------------------------------------------------------------
 
-prepare: ## Materializar .env a partir do exemplo
+prepare: ## Materializar .env a partir do exemplo e instalar dependencias
 	@test -f $(ENV_FILE) || cp $(ENV_EXAMPLE_FILE) $(ENV_FILE)
 
-init: veryclean prepare ## Recriar ambiente Python e instalar dependências
+init: veryclean prepare ## Recriar ambiente Python e instalar dependências	
 	$(UV) sync
+
+compile:: ## Treat file generation
+	DJANGO_SETTINGS_MODULE=$(DJANGO_SETTINGS_MODULE) $(DJANGO_ADMIN) collectstatic --noinput --clear
 
 # ------------------------------------------------------------------------------
 # Project setup
 # ------------------------------------------------------------------------------
 
-setup: cleanall ## Preparar projeto do zero para desenvolvimento
+setup: clean compile ## Preparar projeto do zero para desenvolvimento
 	DJANGO_SETTINGS_MODULE=$(DJANGO_SETTINGS_MODULE) $(DJANGO_ADMIN) makemigrations
-	DJANGO_SETTINGS_MODULE=$(DJANGO_SETTINGS_MODULE) $(DJANGO_ADMIN) migrate
-	DJANGO_SETTINGS_MODULE=$(DJANGO_SETTINGS_MODULE) $(DJANGO_ADMIN) collectstatic --noinput --clear
+	DJANGO_SETTINGS_MODULE=$(DJANGO_SETTINGS_MODULE) $(DJANGO_ADMIN) migrate --run-syncdb
 
 # ------------------------------------------------------------------------------
 # Cleaning
 # ------------------------------------------------------------------------------
 
-clean: ## Limpar artefatos locais e caches (sem afetar o banco)
+clean: resetpostgres ## Limpar artefatos locais e caches (sem afetar o banco)
 	-rm -rf $(EPHEMERAL_DIRS)
 	-rm -f $(PID_FILE)
-	-find . -type d -name "__pycache__" -exec rm -rf {} +
-	-find . -type f \( -name "*.pyc" -o -name "*.pyo" \) -delete
-
-cleanall: clean resetpostgres ## Limpar tudo incluindo o banco PostgreSQL
-	@:
-
-veryclean: clean cleanall ## Voltar o workspace para um estado quase "do zero"
-	-rm -rf $(VENV_DIR)
-	-find . -path "*/migrations/*.py" \
+		-find . -path "*/migrations/*.py" \
 		-not -name "__init__.py" \
+		-not -path "./$(VENV_DIR)/*" \
 		-delete
-	-find . -path "*/migrations/*.pyc" -delete
+
+veryclean: clean ## Voltar o workspace para um estado "do zero".
+	-rm -rf $(VENV_DIR)
+	find . -iname "*.pyc" -iname "*.pyo" -delete
+	find . -type f \( -name "*.pyc" -o -name "*.pyo" \) -delete
 
 # Reset agressivo do PostgreSQL para simular o efeito de apagar um db.sqlite3
 # Requer DATABASE_URL disponível no ambiente/.env e o cliente psql instalado.
@@ -108,15 +107,15 @@ resetpostgres: ## Apagar schema public do PostgreSQL e recriá-lo do zero
 # Extra úteis
 # ------------------------------------------------------------------------------
 
+finish:: ## Stop application execution
+	-test -r $(PID_FILE) && pkill --echo --pidfile $(PID_FILE)
+
 test: ## Rodar testes com settings de teste
+	-rm -fr .pytest_cache/
 	DJANGO_SETTINGS_MODULE=$(TEST_SETTINGS_MODULE) $(UV) run pytest
 
 run: ## Subir servidor de desenvolvimento
 	DJANGO_SETTINGS_MODULE=$(DJANGO_SETTINGS_MODULE) $(DJANGO_ADMIN) runserver
-
-resetdb: ## Reaplicar migrations do banco atual (sem apagar arquivos de migration)
-	DJANGO_SETTINGS_MODULE=$(DJANGO_SETTINGS_MODULE) $(DJANGO_ADMIN) migrate zero --noinput
-	DJANGO_SETTINGS_MODULE=$(DJANGO_SETTINGS_MODULE) $(DJANGO_ADMIN) migrate
 
 .PHONY: help prepare init setup clean cleanall veryclean test run resetdb resetpostgres
 .EXPORT_ALL_VARIABLES:
