@@ -1,9 +1,18 @@
+from django.core.validators import RegexValidator
 from django.db import models
+
+codigo_scpi_validator = RegexValidator(
+    regex=r"^\d{3}$",
+    message="O código SCPI deve conter exatamente 3 dígitos numéricos.",
+)
 
 
 class GrupoMaterial(models.Model):
     codigo_grupo = models.CharField(
-        max_length=10, unique=True, help_text="Código xxx do grupo no SCPI"
+        max_length=3,
+        unique=True,
+        validators=[codigo_scpi_validator],
+        help_text="Código xxx do grupo no SCPI",
     )
     nome = models.CharField(max_length=200, help_text="Nome descritivo vindo do SCPI")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -25,7 +34,11 @@ class SubgrupoMaterial(models.Model):
         related_name="subgrupos",
         help_text="Grupo de material pai",
     )
-    codigo_subgrupo = models.CharField(max_length=10, help_text="Código yyy do subgrupo no SCPI")
+    codigo_subgrupo = models.CharField(
+        max_length=3,
+        validators=[codigo_scpi_validator],
+        help_text="Código yyy do subgrupo no SCPI",
+    )
     nome = models.CharField(max_length=200, help_text="Nome descritivo vindo do SCPI")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

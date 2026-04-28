@@ -1,4 +1,5 @@
 import pytest
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError
 from django.db.models import ProtectedError
 
@@ -84,3 +85,15 @@ class TestSubgrupoMaterial:
 
         assert grupo.subgrupos.count() == 2
         assert set(grupo.subgrupos.all()) == {sub1, sub2}
+
+    @pytest.mark.parametrize("codigo_invalido", ["24", "0240", "A24", "02A", "ABC"])
+    def test_codigo_subgrupo_deve_ter_exatamente_tres_digitos(self, codigo_invalido):
+        grupo = self._criar_grupo()
+        subgrupo = SubgrupoMaterial(
+            grupo=grupo,
+            codigo_subgrupo=codigo_invalido,
+            nome="Tubos e Conexões",
+        )
+
+        with pytest.raises(ValidationError):
+            subgrupo.full_clean()

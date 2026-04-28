@@ -1,4 +1,5 @@
 import pytest
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError
 
 from apps.materials.models import GrupoMaterial
@@ -29,3 +30,10 @@ class TestGrupoMaterial:
 
         grupos = list(GrupoMaterial.objects.all())
         assert [g.codigo_grupo for g in grupos] == ["013", "014", "015"]
+
+    @pytest.mark.parametrize("codigo_invalido", ["13", "0134", "A13", "01A", "ABC"])
+    def test_codigo_grupo_deve_ter_exatamente_tres_digitos(self, codigo_invalido):
+        grupo = GrupoMaterial(codigo_grupo=codigo_invalido, nome="Material Hidráulico")
+
+        with pytest.raises(ValidationError):
+            grupo.full_clean()
