@@ -94,9 +94,11 @@ class TestMaterialModel:
 
     def test_ordering_por_codigo_completo(self):
         subgrupo = self._criar_subgrupo()
-        mat2 = self._criar_material(subgrupo, codigo_completo="013.001.002")
-        mat1 = self._criar_material(subgrupo, codigo_completo="013.001.001", nome="Outro")
-        mat3 = self._criar_material(subgrupo, codigo_completo="013.001.003")
+        mat2 = self._criar_material(subgrupo, codigo_completo="013.001.002", sequencial="002")
+        mat1 = self._criar_material(
+            subgrupo, codigo_completo="013.001.001", nome="Outro", sequencial="001"
+        )
+        mat3 = self._criar_material(subgrupo, codigo_completo="013.001.003", sequencial="003")
         assert list(Material.objects.all()) == [mat1, mat2, mat3]
 
     def test_related_name_materiais_funciona(self):
@@ -112,3 +114,23 @@ class TestMaterialModel:
         assert material.is_active is False
         reloaded = Material.objects.get(id=material.id)
         assert reloaded.is_active is False
+
+    def test_subgrupo_sequencial_deve_ser_unico(self):
+        subgrupo = self._criar_subgrupo()
+        self._criar_material(subgrupo, codigo_completo="013.001.001", sequencial="001")
+        with pytest.raises(IntegrityError):
+            with transaction.atomic():
+                self._criar_material(subgrupo, codigo_completo="013.001.002", sequencial="001")
+
+    def test_codigo_completo_deve_ser_coerente_com_subgrupo_e_sequencial(self):
+        subgrupo = self._criar_subgrupo()
+        material = Material(
+            subgrupo=subgrupo,
+            codigo_completo="999.999.999",
+            sequencial="001",
+            nome="Teste",
+            unidade_medida="UN",
+        )
+        with pytest.raises(ValidationError) as exc_info:
+            material.full_clean()
+        assert "codigo_completo" in exc_info.value.error_dict

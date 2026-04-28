@@ -96,6 +96,33 @@ class Material(models.Model):
         verbose_name = "Material"
         verbose_name_plural = "Materiais"
         ordering = ["codigo_completo"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["subgrupo", "sequencial"],
+                name="unique_material_por_subgrupo_sequencial",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.codigo_completo} — {self.nome}"
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+
+        if self.subgrupo_id and self.sequencial:
+            expected_codigo_completo = (
+                f"{self.subgrupo.grupo.codigo_grupo}"
+                f".{self.subgrupo.codigo_subgrupo}"
+                f".{self.sequencial}"
+            )
+            if self.codigo_completo != expected_codigo_completo:
+                raise ValidationError(
+                    {
+                        "codigo_completo": (
+                            f"Código completo deve ser '{expected_codigo_completo}' "
+                            f"(baseado em subgrupo={self.subgrupo.grupo.codigo_grupo}"
+                            f".{self.subgrupo.codigo_subgrupo} e sequencial={self.sequencial}), "
+                            f"mas foi fornecido '{self.codigo_completo}'."
+                        ),
+                    }
+                )
