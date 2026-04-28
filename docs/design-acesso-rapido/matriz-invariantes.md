@@ -4,7 +4,7 @@
 
 Referência rápida dos invariantes que não podem ser violados por `models`, `services`, `policies`, endpoints, comandos, admin actions, importações ou interfaces futuras.
 
-Fontes completas: `docs/design-acesso-ocasional/modelo-dominio-regras.md`, `processos-almoxarifado.md`, `criterios-aceite.md`, `importacao-scpi-csv.md`, `docs/design-acesso-rapido/api-contracts.md` e `docs/coderabbit-guidelines.md`.
+Fontes completas: `docs/design-acesso-ocasional/modelo-dominio-regras.md`, `processos-almoxarifado.md`, `criterios-aceite.md`, `importacao-scpi-csv.md`, `docs/design-acesso-rapido/api-contracts.md` e `docs/code-review-guidelines.md`.
 
 ## 2. Como usar
 

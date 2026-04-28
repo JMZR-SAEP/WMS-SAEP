@@ -9,7 +9,7 @@ Antes de implementar, revisar ou propor mudança:
 1. Comece por `design-acesso-rapido/`.
 2. Consulte `design-acesso-ocasional/` apenas quando a síntese rápida não resolver a dúvida, houver ambiguidade ou a tarefa depender de detalhe de domínio.
 3. Consulte `backlog/` para entender fase, escopo, dependências e critérios de entrega.
-4. Consulte `coderabbit-guidelines.md` quando a tarefa envolver revisão de código, invariantes arquiteturais, auditoria, transações, side effects ou padrões que o CodeRabbit deve respeitar.
+4. Consulte `code-review-guidelines.md` quando a tarefa envolver revisão de código, invariantes arquiteturais, auditoria, transações, side effects ou padrões que o reviewer deve respeitar.
 
 Em caso de conflito entre síntese rápida e documentação completa, prevalece `design-acesso-ocasional/`, salvo decisão posterior registrada. Mudanças de regra de negócio devem atualizar a documentação rápida e a documentação completa quando ambas forem afetadas.
 
@@ -28,14 +28,14 @@ Em caso de conflito entre síntese rápida e documentação completa, prevalece 
 | Importação SCPI CSV | `design-acesso-ocasional/importacao-scpi-csv.md` | Usar para normalização, prévia, regra tudo ou nada, `QUAN3`, ausentes e divergência crítica. |
 | Planejamento do piloto | `backlog/backlog-tecnico-piloto.md` | Usar para saber o que entra no piloto inicial e o que está fora. |
 | Planejamento do MVP | `backlog/backlog-tecnico-mvp.md` | Usar para rotinas complementares, relatórios, devoluções, saídas excepcionais, estornos e gestão. |
-| Revisão automatizada e guardrails | `coderabbit-guidelines.md` | Usar antes de review, PR ou mudança que toque invariantes críticos. |
+| Revisão automatizada e guardrails | `code-review-guidelines.md` | Usar antes de review, PR ou mudança que toque invariantes críticos. |
 
 ## Diretórios
 
 - `design-acesso-rapido/`: sínteses operacionais. Deve ser a primeira fonte consultada por agentes.
 - `design-acesso-ocasional/`: documentação completa. Deve ser consultada sob demanda, não como leitura padrão integral.
 - `backlog/`: escopo, fases, dependências e entregáveis planejados.
-- `coderabbit-guidelines.md`: invariantes arquiteturais e orientação para revisão.
+- `code-review-guidelines.md`: invariantes arquiteturais e orientação para revisão.
 
 ## Regras de navegação
 

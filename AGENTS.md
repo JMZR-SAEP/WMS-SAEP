@@ -8,7 +8,7 @@ Quando o projeto Django for materializado, os apps Django deverão ficar sob a p
 
 > Informações relevantes sobre o projeto estão em `.serena/memories`. Se você tiver acesso às ferramentas MCP do Serena, pode lê-las usando o comando `read_memory`. Caso não possua acesso às ferramentas, **pare e explique** por que não conseguiu acessá-las.
 
-> Para revisão de código, considerar também `docs/coderabbit-guidelines.md`, que define invariantes obrigatórios do sistema e orienta o comportamento do CodeRabbit.
+> Para revisão de código, considerar também `docs/code-review-guidelines.md`, que define invariantes obrigatórios do sistema e orienta o comportamento de reviews.
 
 > Para contratos de API DRF, seguir `docs/design-acesso-rapido/api-contracts.md`, que define o padrão obrigatório para autenticação, autorização, serializers de entrada/saída, status HTTP, envelope de erro, paginação/filtros e schema OpenAPI.
 
@@ -116,7 +116,7 @@ Rotinas principais do projeto via `rtk make`:
 - TODO de bootstrap Django/CI: quando o projeto Django e os apps reais forem materializados, revisar `.github/workflows/ci.yml` para que o rebuild efêmero do schema não dependa de lista fixa de apps e reflita todo o código-fonte vigente
 - Commits no padrão Conventional Commits (`feat:`, `fix:`, `test:`, `refactor:`, `chore:`, `docs:`)
 
-## CodeRabbit
+## Code Review
 
-- Revisões automáticas devem seguir `.coderabbit.yaml` e `docs/coderabbit-guidelines.md`.
+- Revisões (automáticas ou manuais) devem seguir `.coderabbit.yaml` e `docs/code-review-guidelines.md`.
 - Em caso de conflito com sugestões genéricas, prevalecem os invariantes arquiteturais e de domínio documentados no projeto.
