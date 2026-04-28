@@ -26,6 +26,11 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    env:
+      SECRET_KEY: test-secret-key-for-ci
+      DATABASE_URL: postgres://saep:saep@localhost:5432/test_erp_saep
+      DJANGO_SETTINGS_MODULE: config.settings.test
+      TEST_SETTINGS_MODULE: config.settings.test
     services:
       postgres:
         image: postgres:16
@@ -49,26 +54,13 @@ jobs:
       - uses: astral-sh/setup-uv@v8.1.0
         with:
           enable-cache: true
-      - name: Install dependencies
-        run: uv sync --locked
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Bootstrap environment
+        run: make init
+      - name: Rebuild ephemeral schema/migrations
+        run: make setup
       - name: Django check
-        env:
-          SECRET_KEY: test-secret-key-for-ci
-          DATABASE_URL: postgres://saep:saep@localhost:5432/test_erp_saep
-          DJANGO_SETTINGS_MODULE: config.settings.test
-        run: |
-          uv run python manage.py check
-      - name: Create ephemeral migrations
-        env:
-          SECRET_KEY: test-secret-key-for-ci
-          DATABASE_URL: postgres://saep:saep@localhost:5432/test_erp_saep
-          DJANGO_SETTINGS_MODULE: config.settings.test
-        run: |
-          uv run python manage.py makemigrations
+        run: uv run python manage.py check
       - name: Run pytest
-        env:
-          SECRET_KEY: test-secret-key-for-ci
-          DATABASE_URL: postgres://saep:saep@localhost:5432/test_erp_saep
-          DJANGO_SETTINGS_MODULE: config.settings.test
-        run: |
-          uv run pytest
+        run: make test
