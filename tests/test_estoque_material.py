@@ -1,12 +1,12 @@
 from decimal import Decimal
 
 import pytest
-from apps.stock.models import EstoqueMaterial
 from django.db import transaction
 from django.db.models.deletion import ProtectedError
 from django.db.utils import IntegrityError
 
 from apps.materials.models import GrupoMaterial, Material, SubgrupoMaterial
+from apps.stock.models import EstoqueMaterial
 
 
 @pytest.mark.django_db
