@@ -71,7 +71,7 @@ class TestMaterialsAdmin:
 
         assert model_admin.has_view_permission(request) is True
         assert model_admin.has_add_permission(request) is True
-        assert model_admin.has_change_permission(request) is True
+        assert model_admin.has_change_permission(request) is False
         assert model_admin.has_delete_permission(request) is False
 
         assert model_admin.get_readonly_fields(request, None) == (
