@@ -1,5 +1,5 @@
 from django.db import models
-from django.db.models import Q
+from django.db.models import F, Q
 
 
 class StatusRequisicao(models.TextChoices):
@@ -130,4 +130,91 @@ class Requisicao(models.Model):
         return (
             f"REQ {self.numero_publico or f'(rascunho {self.id})'}"
             f" — {self.beneficiario.nome_completo}"
+        )
+
+
+class ItemRequisicao(models.Model):
+    requisicao = models.ForeignKey(
+        Requisicao,
+        on_delete=models.PROTECT,
+        related_name="itens",
+        help_text="Requisição pai",
+    )
+    material = models.ForeignKey(
+        "materials.Material",
+        on_delete=models.PROTECT,
+        related_name="itens_requisicao",
+        help_text="Material solicitado",
+    )
+    unidade_medida = models.CharField(
+        max_length=20,
+        help_text="Unidade de medida (snapshot do material no momento da criação)",
+    )
+    quantidade_solicitada = models.DecimalField(
+        max_digits=12,
+        decimal_places=3,
+        help_text="Quantidade solicitada",
+    )
+    quantidade_autorizada = models.DecimalField(
+        max_digits=12,
+        decimal_places=3,
+        default=0,
+        null=True,
+        blank=True,
+        help_text="Quantidade autorizada",
+    )
+    justificativa_autorizacao_parcial = models.TextField(
+        blank=True,
+        default="",
+        help_text="Justificativa se autorizado em quantidade menor que solicitado",
+    )
+    quantidade_entregue = models.DecimalField(
+        max_digits=12,
+        decimal_places=3,
+        default=0,
+        help_text="Quantidade efetivamente entregue",
+    )
+    justificativa_atendimento_parcial = models.TextField(
+        blank=True,
+        default="",
+        help_text="Justificativa se entregue em quantidade menor que autorizado",
+    )
+    observacao = models.TextField(
+        blank=True,
+        default="",
+        help_text="Observações sobre o item",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Item de Requisição"
+        verbose_name_plural = "Itens de Requisição"
+        ordering = ["requisicao", "id"]
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(quantidade_solicitada__gt=0),
+                name="item_req_quantidade_solicitada_positiva",
+            ),
+            models.CheckConstraint(
+                condition=Q(quantidade_autorizada__gte=0),
+                name="item_req_quantidade_autorizada_nao_negativa",
+            ),
+            models.CheckConstraint(
+                condition=Q(quantidade_entregue__gte=0),
+                name="item_req_quantidade_entregue_nao_negativa",
+            ),
+            models.CheckConstraint(
+                condition=Q(quantidade_autorizada__lte=F("quantidade_solicitada")),
+                name="item_req_autorizada_lte_solicitada",
+            ),
+            models.CheckConstraint(
+                condition=Q(quantidade_entregue__lte=F("quantidade_autorizada")),
+                name="item_req_entregue_lte_autorizada",
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.material.codigo_completo} — {self.quantidade_solicitada} {self.unidade_medida}"
         )
