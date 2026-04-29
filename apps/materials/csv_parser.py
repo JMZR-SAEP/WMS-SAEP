@@ -71,7 +71,10 @@ def parse_scpi_csv(conteudo_bytes: bytes) -> list[ProdutoLogico]:
 
         codigo_completo = row.get("CADPRO", "").strip()
 
-        if CODIGO_SCPI_RE.match(codigo_completo):
+        if codigo_completo:
+            if not CODIGO_SCPI_RE.match(codigo_completo):
+                raise ScpiCsvParserError(f"Linha {idx}: código CADPRO inválido '{codigo_completo}'")
+
             if linha_logica_atual:
                 try:
                     produtos.append(_montar_produto_logico(linha_logica_atual))

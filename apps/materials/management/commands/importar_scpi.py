@@ -1,4 +1,4 @@
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 
 from apps.materials.csv_parser import ScpiCsvParserError
 from apps.materials.services import importar_csv_scpi
@@ -20,21 +20,17 @@ class Command(BaseCommand):
         try:
             with open(csv_path, "rb") as f:
                 conteudo = f.read()
-        except FileNotFoundError:
-            self.stderr.write(self.style.ERROR(f"Arquivo não encontrado: {csv_path}"))
-            return
+        except FileNotFoundError as e:
+            raise CommandError(f"Arquivo não encontrado: {csv_path}") from e
         except Exception as e:
-            self.stderr.write(self.style.ERROR(f"Erro ao abrir arquivo: {e}"))
-            return
+            raise CommandError(f"Erro ao abrir arquivo: {e}") from e
 
         try:
             resultado = importar_csv_scpi(conteudo)
         except ScpiCsvParserError as e:
-            self.stderr.write(self.style.ERROR(f"Erro técnico: {e}"))
-            return
+            raise CommandError(f"Erro técnico: {e}") from e
         except Exception as e:
-            self.stderr.write(self.style.ERROR(f"Erro ao processar importação: {e}"))
-            return
+            raise CommandError(f"Erro ao processar importação: {e}") from e
 
         self.stdout.write(
             self.style.SUCCESS(

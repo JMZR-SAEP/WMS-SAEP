@@ -102,7 +102,17 @@ class TestScpiCsvParser:
             b"001-002-003;Material Teste;UN;100;001;002;Grupo A;Subgrupo A;Desc\n"
         )
 
-        with pytest.raises(ScpiCsvParserError, match="continuação"):
+        with pytest.raises(ScpiCsvParserError, match="CADPRO inválido"):
+            parse_scpi_csv(csv)
+
+    def test_codigo_invalido_no_meio_levanta_erro(self):
+        csv = (
+            b"CADPRO;DISC1;UNID1;QUAN3;GRUPO;SUBGRUPO;NOMEGRUPO;NOMESUBGRUPO;DISCR1\n"
+            b"001.002.003;Material Teste;UN;100;001;002;Grupo A;Subgrupo A;Desc\n"
+            b"001-002-004;Material Invalido;UN;50;001;002;Grupo A;Subgrupo A;Desc\n"
+        )
+
+        with pytest.raises(ScpiCsvParserError, match="CADPRO inválido"):
             parse_scpi_csv(csv)
 
     def test_campo_obrigatorio_vazio_levanta_erro(self):
