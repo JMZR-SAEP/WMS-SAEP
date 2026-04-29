@@ -4,11 +4,9 @@
 
 >ERP auxiliar para o **SAEP — Serviço de Água e Esgoto de Pirassununga**, autarquia municipal. O foco inicial é um backend robusto em **Django 6 + Django REST Framework (DRF)**.
 
-Use as ferramentas MCP do Serena para **TODAS** operações de código neste repositório — exploração, leitura e edição. Leia e siga as `initial_instructions`, as instruções do próprio Serena.
-
-Library IDs para que não tenha que pesquisar quando estiver usando Context7:
-- Django 6: `/django/django/6.0a1`
-- DRF: `/websites/django-rest-framework`
+## IDs do Context7 para consulta rápida:
+- Django 6: `/django/django`
+- DRF: `/encode/django-rest-framework`
 
 ## Estratégia de leitura da documentação
 

@@ -15,7 +15,13 @@ class StatusRequisicao(models.TextChoices):
 
     @classmethod
     def estados_finais(cls):
-        return [cls.ATENDIDA_PARCIALMENTE, cls.ATENDIDA, cls.CANCELADA, cls.ESTORNADA]
+        return [
+            cls.ATENDIDA_PARCIALMENTE,
+            cls.ATENDIDA,
+            cls.CANCELADA,
+            cls.ESTORNADA,
+            cls.RECUSADA,
+        ]
 
 
 class TipoEvento(models.TextChoices):
@@ -140,6 +146,12 @@ class Requisicao(models.Model):
                 | Q(numero_publico="")
                 | Q(numero_publico__regex=r"^REQ-\d{4}-\d{6}$"),
                 name="req_numero_publico_formato_valido_ou_vazio",
+            ),
+            models.CheckConstraint(
+                condition=Q(numero_publico__isnull=True)
+                | Q(numero_publico="")
+                | ~Q(status=StatusRequisicao.RASCUNHO),
+                name="req_numero_publico_nao_pode_ser_preenchido_em_rascunho",
             ),
             models.CheckConstraint(
                 condition=~Q(status=StatusRequisicao.RECUSADA) | Q(motivo_recusa__gt=""),

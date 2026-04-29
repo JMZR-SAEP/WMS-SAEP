@@ -4,6 +4,7 @@ import pytest
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
 from django.db.models.deletion import ProtectedError
+from django.utils import timezone
 
 from apps.materials.models import GrupoMaterial, Material, SubgrupoMaterial
 from apps.requisitions.models import (
@@ -77,6 +78,13 @@ class TestRequisicaoModel:
             setor_beneficiario=setor_beneficiario,
         )
 
+    @staticmethod
+    def _marcar_primeiro_envio(req):
+        req.status = StatusRequisicao.AGUARDANDO_AUTORIZACAO
+        req.data_envio_autorizacao = timezone.now()
+        req.save(update_fields=["status", "data_envio_autorizacao"])
+        return req
+
     def test_rascunho_sem_numero_publico(self):
         """REQ-01, REQ-02 — status padrão é rascunho, numero_publico é null"""
         req = self._criar_requisicao()
@@ -134,10 +142,12 @@ class TestRequisicaoModel:
     def test_numero_publico_unico_quando_preenchido(self):
         """REQ-04 — numero_publico é único quando preenchido (não-null)"""
         req1 = self._criar_requisicao()
+        self._marcar_primeiro_envio(req1)
         req1.numero_publico = "REQ-2026-000001"
         req1.save()
 
         req2 = self._criar_requisicao()
+        self._marcar_primeiro_envio(req2)
         req2.numero_publico = "REQ-2026-000001"
         with pytest.raises(IntegrityError):
             req2.save()
@@ -145,6 +155,7 @@ class TestRequisicaoModel:
     def test_numero_publico_formato_invalido_falha_no_validator(self):
         """REQ-03 — validator rejeita numero_publico fora do formato canônico"""
         req = self._criar_requisicao()
+        self._marcar_primeiro_envio(req)
         req.numero_publico = "REQ-26-1"
 
         with pytest.raises(ValidationError):
@@ -153,7 +164,24 @@ class TestRequisicaoModel:
     def test_numero_publico_formato_invalido_falha_no_banco(self):
         """REQ-03 — constraint rejeita numero_publico inválido persistido via ORM"""
         req = self._criar_requisicao()
+        self._marcar_primeiro_envio(req)
         req.numero_publico = "qualquer-coisa"
+
+        with pytest.raises(IntegrityError):
+            req.save()
+
+    def test_numero_publico_em_rascunho_falha_no_validator(self):
+        """REQ-02 — draft não pode receber número público antes do primeiro envio"""
+        req = self._criar_requisicao()
+        req.numero_publico = "REQ-2026-000001"
+
+        with pytest.raises(ValidationError):
+            req.full_clean()
+
+    def test_numero_publico_em_rascunho_falha_no_banco(self):
+        """REQ-02 — constraint rejeita número público em rascunho"""
+        req = self._criar_requisicao()
+        req.numero_publico = "REQ-2026-000001"
 
         with pytest.raises(IntegrityError):
             req.save()
@@ -182,6 +210,7 @@ class TestRequisicaoModel:
         req = self._criar_requisicao()
         assert str(req) == f"REQ (rascunho {req.id}) — {req.beneficiario.nome_completo}"
 
+        self._marcar_primeiro_envio(req)
         req.numero_publico = "REQ-2026-000001"
         req.save()
         assert str(req) == f"REQ REQ-2026-000001 — {req.beneficiario.nome_completo}"
