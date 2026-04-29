@@ -65,14 +65,14 @@ Para cada mudança, localizar o invariante aplicável, implementar na camada ind
 | AUD-04 | Auditoria | Timeline expõe eventos a usuários autorizados. | API/policy. | Autorizado vê; fora de escopo não vê. | Modelo 2.1 |
 | AUD-05 | Auditoria | Side effects ocorrem após commit quando aplicável. | Eventos/`publish_on_commit()`. | Falha de notificação não desfaz operação; só após commit. | CodeRabbit |
 | AUD-06 | Auditoria | Notificações não decidem sucesso da transação principal. | Side effect desacoplado. | Operação conclui sem depender de notificação. | CodeRabbit |
-| SCPI-01 | SCPI CSV | SCPI é fonte oficial de cadastro de materiais e correção de físico. | Import service/model. | Criar/atualizar material e físico pelo CSV. | Importação 1 |
+| SCPI-01 | SCPI CSV | SCPI é a fonte oficial para a carga inicial técnica de catálogo e saldo físico. | Import service/model. | Criar grupo, subgrupo, material e saldo inicial pelo CSV. | Importação 1 |
 | SCPI-02 | SCPI CSV | ERP-SAEP não edita cadastro oficial vindo do SCPI. | Campos oficiais read-only. | Bloquear edição de nome, descrição, grupo, subgrupo, sequencial e unidade. | Modelo 2.1 |
 | SCPI-03 | SCPI CSV | CSV aceito: UTF-8 com BOM e separador `;`. | Leitor configurado. | Arquivo válido lido corretamente. | Crit. 8.1 |
-| SCPI-04 | SCPI CSV | Linha sem código continua descrição anterior. | Normalizer de produto lógico. | Descrição quebrada vira um material lógico. | Crit. 8.1 |
+| SCPI-04 | SCPI CSV | Linha sem código continua o registro lógico anterior. | Normalizer de produto lógico. | Nome/descrição quebrados em múltiplas linhas viram um único material lógico. | Crit. 8.1 |
 | SCPI-05 | SCPI CSV | Erro técnico impeditivo aplica tudo ou nada. | Transação na aplicação. | Falha técnica não persiste nada. | Crit. 8.3 |
-| SCPI-06 | SCPI CSV | Alertas/divergências não impedem importação. | Prévia separa erros de alertas. | Aplicar com confirmação e status com alertas. | Crit. 8.4 |
-| SCPI-07 | SCPI CSV | Material ausente no CSV não é inativado automaticamente. | Lista de ausentes sem ação automática. | Ausente listado e status preservado. | Crit. 8.7 |
-| SCPI-08 | SCPI CSV | `QUAN3` atualiza saldo físico. | Movimentação de atualização via SCPI. | Registrar anterior, novo, diferença, data e usuário. | Crit. 8.5 |
+| SCPI-06 | SCPI CSV | Parser deve normalizar entradas reais do SCPI antes de persistir. | Parser/service. | BOM, `;`, multiline e quantidade com vírgula decimal cobertos por teste. | PR #21 |
+| SCPI-07 | SCPI CSV | Material duplicado na carga inicial não deve ser sobrescrito silenciosamente. | Service/model. | Duplicidade falha e aborta a transação. | PR #21 |
+| SCPI-08 | SCPI CSV | `QUAN3` da carga inicial gera `SALDO_INICIAL` imutável. | Service + ledger. | Registrar estoque inicial e movimentação coerente. | PR #21 |
 | SCPI-09 | SCPI CSV | Divergência por importação não cancela reservas. | Bloqueio futuro sem apagar reservas. | Físico < reservado mantém reservas e bloqueia novas ações. | Importação 8 |
 | API-01 | API | Endpoints formais ficam em `/api/v1/`. | URLs versionadas. | Rotas formais sob `/api/v1/`. | API |
 | API-02 | API | Endpoint declara auth, autorização, I/O, status, erros, paginação/filtros e OpenAPI. | View/schema/serializers. | Teste de contrato e schema. | API |

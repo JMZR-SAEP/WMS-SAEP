@@ -146,9 +146,9 @@ Todo endpoint deve usar `@extend_schema` com:
 
 As respostas de erro comuns devem ser reutilizadas por helpers de schema, evitando duplicação manual em cada endpoint.
 
-## 7. Bootstrap DRF esperado
+## 7. Bootstrap DRF de referência
 
-Quando o projeto Django for materializado, a configuração base deve seguir esta forma:
+A configuração base atual deve seguir esta forma:
 
 ```python
 INSTALLED_APPS = [

@@ -19,10 +19,11 @@ API response invariant:
 - Domain conflicts use HTTP 409 with code `domain_conflict`.
 
 Stock invariants:
-- `StockMovement` is immutable. Do not update/delete/overwrite movements; corrections are new `RETURN` movements.
-- Any operation altering stock uses `transaction.atomic()` and row locking such as `select_for_update()` on `Stock`.
-- Keep `Stock.quantity` and `StockMovement.balance_after` consistent.
-- Avoid double decrement, unauthorized negative stock, race conditions, and movement/balance divergence.
+- `MovimentacaoEstoque` is immutable. Do not update/delete/overwrite movements; corrections must be modeled as new movements when new movement types are introduced.
+- The currently implemented movement type is `SALDO_INICIAL` for SCPI bootstrap load.
+- Any operation altering stock uses `transaction.atomic()` and row locking such as `select_for_update()` on stock rows.
+- Keep `EstoqueMaterial.saldo_fisico`, `saldo_reservado`, `saldo_disponivel`, and movement balances consistent.
+- Avoid double increment/decrement, unauthorized negative stock, race conditions, and movement/balance divergence.
 
 Request/requisition invariants:
 - `MaterialRequest.department` is a historical snapshot and must not be recalculated from `requester.department` after creation.
@@ -46,5 +47,10 @@ Materials/SCPI invariants:
 - `GrupoMaterial` and `SubgrupoMaterial` are structural catalogs backed by SCPI data, not freeform ERP-maintained master data.
 - SCPI code fragments for group/subgroup must remain exactly 3 numeric digits and should be enforced both in model validation and with DB-level constraints.
 - Manual operational mutation of SCPI-official fields such as group/subgroup codes and names should not be exposed through normal admin add/change/delete surfaces.
+- Material search/list selection for requisition flows must return only active materials and include current `saldo_disponivel`.
+- The SCPI import pipeline is parser/normalizer first, service orchestration second, persistence third; do not collapse critical normalization into ad hoc command logic.
+- SCPI CSV parsing must tolerate UTF-8 BOM, semicolon-separated input, logical records with multiline continuation, and quantity normalization such as decimal comma.
+- SCPI import persistence is all-or-nothing: parsing, material creation, stock creation, and initial-balance movement registration must commit atomically.
+- Imported material names should be normalized to a single line / single-space representation before persistence.
 
 Development environment rule: local DB and app migrations are ephemeral during this early phase. Do not commit generated app migrations. For schema/model changes, rebuild local migrations and validate against a clean local database. Generated migrations are temporary materialization artifacts, not normal deliverables.

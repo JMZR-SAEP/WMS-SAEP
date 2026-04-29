@@ -6,6 +6,12 @@ Definir como o ERP-SAEP importa, normaliza e aplica dados de materiais e saldos 
 
 O SCPI é a fonte oficial dos dados cadastrais dos materiais e da correção de saldo físico. O ERP-SAEP usa esses dados como base operacional, mas não substitui o cadastro oficial do SCPI.
 
+Status atual de implementação:
+
+- o baseline já entregue cobre a **carga inicial técnica** de grupos, subgrupos, materiais e saldo inicial;
+- o baseline atual também já cobre parser/normalização do CSV real do SCPI e aplicação transacional de `SALDO_INICIAL`;
+- reimportações operacionais, pré-visualização e histórico de importações continuam como escopo de **MVP completo futuro**, não como capacidade já entregue.
+
 ---
 
 ## 2. Arquivo de origem
@@ -106,6 +112,8 @@ Na carga inicial:
 - Deve ser registrada movimentação de **entrada por saldo inicial**.
 - Essa carga pode ser executada por modo técnico/script administrativo durante o piloto, se isso acelerar a validação.
 
+No baseline atual, esta é a única etapa de importação já implementada como capacidade funcional do sistema.
+
 ---
 
 ## 6. Reimportações futuras
@@ -133,6 +141,8 @@ Se um material novo aparecer pela primeira vez:
 - Deve gerar movimentação de entrada por saldo inicial.
 - Não precisa de confirmação prévia do superusuário.
 - Não deve aparecer como erro, pois é caso esperado.
+
+Estas regras descrevem o comportamento-alvo de reimportação. Elas ainda não significam que o sistema atual já oferece fluxo completo de reimportação operacional.
 
 ---
 
@@ -216,6 +226,8 @@ Se não houver erro técnico impeditivo, a importação pode ser aplicada mesmo 
 
 Quando a pré-visualização apresentar alertas ou divergências, o sistema deve destacá-los antes da confirmação e exigir confirmação explícita do superusuário, como: “Estou ciente dos alertas e desejo aplicar a importação.”
 
+Esta seção continua normativa para o MVP completo, mas a pré-visualização ainda não faz parte do baseline já entregue.
+
 ---
 
 ## 10. Histórico de importações
@@ -248,6 +260,8 @@ Acesso:
 
 - Superusuário pode acessar o histórico completo.
 - Chefe de almoxarifado pode consultar o histórico.
+
+Esta seção descreve capacidade futura. O baseline atual não mantém ainda um histórico funcional completo de importações.
 
 ---
 

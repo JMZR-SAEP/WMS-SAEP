@@ -105,34 +105,35 @@ O modelo de usuário deve estar alinhado às regras de `docs/design-acesso-ocasi
 
 ## 7. Importação SCPI CSV
 
-A importação SCPI CSV deve ser implementada como serviço de domínio reutilizável.
+A importação SCPI CSV já faz parte do baseline atual como serviço de domínio reutilizável.
 
-Estrutura recomendada:
+Implementação atual:
 
-```text
-imports/
-  services/
-    normalize_scpi_csv.py
-    preview_import.py
-    apply_import.py
-```
+- `apps/materials/csv_parser.py`: parser/normalização do CSV SCPI;
+- `apps/materials/services.py`: orquestração da carga inicial;
+- `apps/stock/services.py`: registro de saldo inicial;
+- `apps/materials/management/commands/importar_scpi.py`: superfície técnica via comando de management.
 
-O mesmo núcleo de importação deve poder ser chamado por:
+O mesmo núcleo de importação deve continuar reutilizável por:
 
 - comando de management;
-- endpoint técnico/autenticado, se necessário;
+- endpoint técnico/autenticado, se necessário no futuro;
 - task assíncrona futura, se necessário.
 
-No piloto, a carga inicial pode ser feita por comando de management ou fluxo técnico controlado.
+Escopo atual entregue:
 
-Se no futuro houver uma interface operacional para importação, ela deve possuir:
+- leitura de CSV SCPI em UTF-8 com BOM e separador `;`;
+- reconstrução de registros lógicos com continuação em múltiplas linhas;
+- criação de grupo, subgrupo e material a partir da carga inicial;
+- criação de `EstoqueMaterial`;
+- registro transacional de `MovimentacaoEstoque` do tipo `SALDO_INICIAL`.
 
-- upload do CSV;
-- normalização;
-- pré-visualização;
-- confirmação explícita quando houver alertas;
-- aplicação transacional;
-- histórico de importação.
+Escopo ainda futuro, se o produto realmente precisar:
+
+- pré-visualização de importação;
+- confirmação explícita de alertas;
+- histórico operacional de importações;
+- reimportação com atualização controlada de saldo/catálogo.
 
 ## 8. Tarefas assíncronas
 
@@ -234,33 +235,13 @@ Diretrizes:
 
 ## 12. Organização sugerida de apps Django
 
-A organização deve favorecer fronteiras claras de domínio e parte de um **bootstrap Django manual mínimo** descrito em `docs/backlog/backlog-materializacao-django.md`.
+A organização deve favorecer fronteiras claras de domínio e já parte de um **bootstrap Django manual mínimo materializado**.
 
-### Estrutura antes da materialização
-
-Antes de executar as tarefas `MAT-*`, o repositório contém apenas:
-
-```text
-.github/
-docs/
-tests/ (opcional, criado em MAT-004)
-Makefile
-pyproject.toml
-uv.lock
-.env.example
-```
-
-Não há `manage.py`, `config/` ou `apps/` ainda.
-
-### Estrutura após a materialização técnica (MAT-000 a MAT-006)
-
-Após executar o backlog `docs/backlog/backlog-materializacao-django.md`, a estrutura mínima será:
+### Estrutura atual consolidada
 
 ```text
 config/
-  __init__.py
   settings/
-    __init__.py
     base.py
     dev.py
     test.py
@@ -268,44 +249,24 @@ config/
   asgi.py
   wsgi.py
 apps/
-  __init__.py
-  core/
-    (app técnico, preenchido em MAT-005)
-manage.py
-```
-
-### Estrutura após o piloto (PIL-001 em diante)
-
-Após materializar a base, adicionar apps de domínio conforme o escopo avançar:
-
-```text
-apps/
   core/       (infraestrutura comum: API, paginação, envelope de erro, OpenAPI)
-  users/      (usuário customizado, criado em PIL-BE-ACE-001)
-  organizational/ (setores, departamentos)
-  materials/  (grupos, subgrupos, materiais)
-  stock/      (saldos, reservas, movimentações)
-  requisitions/ (cabeçalho, itens, ciclo de requisição)
-  ...
+  users/      (usuário customizado, matrícula, setores, papéis, policies)
+  materials/  (grupos, subgrupos, materiais, busca, parser/importação SCPI)
+  stock/      (estoque, saldo disponível, movimentações, saldo inicial)
+manage.py
+tests/
 ```
 
-### Diretriz estrutural
+### Diretriz estrutural atual
 
 - Os apps Django devem ficar sob a pasta `apps/`.
 - A pasta `config/` permanece responsável por settings, URLs, ASGI/WSGI e bootstrap do projeto.
 - O app `apps/core/` deve ser **técnico e transversal**, limitado a infraestrutura comum como API, paginação, envelope de erro e schema OpenAPI. Ele não deve conter regra de negócio de domínio.
-- O app de usuários oficial deve ser criado em `apps/users/` na tarefa `PIL-BE-ACE-001`. Não criar `accounts` ou outro app alternativo de usuários sem decisão registrada.
+- O app de usuários oficial é `apps/users/`. Não criar `accounts` ou outro app alternativo de usuários sem decisão registrada.
 
 Apps ou módulos de domínio podem ser criados conforme o escopo avançar:
 
-- `users`: usuário customizado, matrícula funcional, autenticação local e integração com Admin.
-- `organizational`: setores e vínculos organizacionais.
-- `materials`: grupos, subgrupos e materiais.
-- `stock`: saldos, reservas e movimentações de estoque.
 - `requisitions`: cabeçalho, itens e ciclo geral da requisição.
-- `approvals`: autorização, recusa e regras de reserva.
-- `warehouse`: atendimento, retirada, devolução, saída excepcional e estorno.
 - `notifications`: notificações internas.
 - `reports`: relatórios e exportações CSV.
-- `audit`: linha do tempo e eventos auditáveis.
-- `imports`: importação SCPI CSV.
+- módulos adicionais só devem ser criados quando houver ganho real de fronteira de domínio, não por antecipação.
