@@ -2,15 +2,19 @@
 
 ## Projeto
 
-ERP auxiliar para o **SAEP — Serviço de Água e Esgoto de Pirassununga**, autarquia municipal. O foco inicial é um backend robusto em **Django + Django REST Framework (DRF)**.
-
-## Estratégia de leitura da documentação
+>ERP auxiliar para o **SAEP — Serviço de Água e Esgoto de Pirassununga**, autarquia municipal. O foco inicial é um backend robusto em **Django + Django REST Framework (DRF)**.
 
 Use as ferramentas MCP do Serena para **TODAS** operações de código neste repositório — exploração, leitura e edição. Leia e siga as `initial_instructions`, as instruções do próprio Serena.
 
-Para revisão de código, considerar também `docs/code-review-guidelines.md`, que define invariantes obrigatórios do sistema e orienta o comportamento de reviews.
+Use as ferramentas MCP do Context7 para **TODOS** planejamentos e implementações de código. Procure pela documentação específica relacionada à sua implementação e registre mentalmente quais decisões foram baseadas nela.
 
-Use as ferramentas MCP do Context7 para **TODAS** implementações de código. Procure pela documentação específica relacionada à sua implementação e registre mentalmente quais decisões foram baseadas nela.
+## Estratégia de leitura da documentação
+
+Para economizar tokens e manter os agentes focados, a documentação de design do projeto está dividida por frequência de uso:
+
+- `docs/design-acesso-rapido/`: sínteses operacionais. Deve ser a primeira fonte consultada por agentes de IA.
+- `docs/design-acesso-ocasional/`: documentação completa. Deve ser consultada apenas quando a síntese rápida não resolver a dúvida, quando houver ambiguidade ou quando a tarefa depender de detalhe de domínio.
+- `docs/code-review-guidelines.md` e `.coderabbit.yaml`: orientam o comportamento de revisões de código.
 
 ### Exemplos positivos do que fazer:
 
@@ -37,11 +41,6 @@ Use as ferramentas MCP do Context7 para **TODAS** implementações de código. P
 - Não fazer uma implementação ampla e só consultar documentação depois que os testes falharem; consulte a documentação antes de definir a solução.
 - Não ignorar documentação de segurança, autenticação, autorização, transações, validação ou concorrência quando a mudança tocar esses temas.
 - Não misturar conceitos de versões diferentes do Django, DRF ou bibliotecas relacionadas sem validar a versão usada pelo projeto.
-
-Para economizar tokens e manter os agentes focados, a documentação de design do projeto está dividida por frequência de uso:
-
-- `docs/design-acesso-rapido/`: sínteses operacionais. Deve ser a primeira fonte consultada por agentes de IA.
-- `docs/design-acesso-ocasional/`: documentação completa. Deve ser consultada apenas quando a síntese rápida não resolver a dúvida, quando houver ambiguidade ou quando a tarefa depender de detalhe de domínio.
 
 ## Ambiente de desenvolvimento efêmero
 
