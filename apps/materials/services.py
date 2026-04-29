@@ -1,3 +1,4 @@
+import re
 from dataclasses import dataclass, field
 from decimal import Decimal
 
@@ -26,9 +27,11 @@ def criar_material(
     Levanta ValidationError se houver inconsistência de código/subgrupo/sequencial.
     NÃO cria EstoqueMaterial — responsabilidade do chamador.
     """
+    nome_normalizado = re.sub(r"\s+", " ", nome.replace("\r", " ").replace("\n", " ")).strip()
+
     material = Material(
         codigo_completo=codigo_completo,
-        nome=nome,
+        nome=nome_normalizado,
         unidade_medida=unidade_medida,
         subgrupo=subgrupo,
         sequencial=sequencial,
@@ -46,6 +49,11 @@ class ResultadoImportacao:
     materiais_criados: int = 0
     estoques_criados: int = 0
     erros: list[str] = field(default_factory=list)
+
+
+def _parse_decimal_scpi(valor: str) -> Decimal:
+    valor_normalizado = valor.strip().replace(".", "").replace(",", ".")
+    return Decimal(valor_normalizado)
 
 
 def importar_csv_scpi(conteudo_bytes: bytes) -> ResultadoImportacao:
@@ -102,7 +110,7 @@ def importar_csv_scpi(conteudo_bytes: bytes) -> ResultadoImportacao:
                 )
                 resultado.materiais_criados += 1
 
-                quantidade = Decimal(produto.saldo_fisico_inicial)
+                quantidade = _parse_decimal_scpi(produto.saldo_fisico_inicial)
                 registrar_saldo_inicial(
                     material=material,
                     quantidade=quantidade,

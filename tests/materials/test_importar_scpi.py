@@ -85,6 +85,35 @@ class TestImportarScpi:
         assert mov.saldo_anterior == Decimal("0")
         assert mov.saldo_posterior == Decimal("100")
 
+    def test_importar_csv_aceita_quantidade_com_virgula_decimal(self):
+        csv = (
+            "CADPRO;DISC1;UNID1;QUAN3;GRUPO;SUBGRUPO;NOMEGRUPO;NOMESUBGRUPO;DISCR1\n"
+            "001.002.003;Material Teste;UN;10,25;001;002;Grupo A;Subgrupo A;Descrição\n"
+        ).encode()
+
+        resultado = importar_csv_scpi(csv)
+
+        assert resultado.materiais_criados == 1
+        estoque = EstoqueMaterial.objects.get(material__codigo_completo="001.002.003")
+        assert estoque.saldo_fisico == Decimal("10.25")
+
+    def test_importar_csv_remove_newlines_do_nome_do_material(self):
+        csv = (
+            "CADPRO;DISC1;UNID1;QUAN3;GRUPO;SUBGRUPO;NOMEGRUPO;NOMESUBGRUPO;DISCR1\n"
+            "004.001.002;VÁLVULA DE ESFERA\n"
+            "HIDRÁULICA ALTA PRESSÃO 3/4\n"
+            " NPT T VH3V;UN;3;004;001;MATERIAL HIDRAULICO;REGISTROS E VÁLVULAS;Descrição\n"
+        ).encode()
+
+        resultado = importar_csv_scpi(csv)
+
+        assert resultado.materiais_criados == 1
+
+        material = Material.objects.get(codigo_completo="004.001.002")
+        assert material.nome == "VÁLVULA DE ESFERA HIDRÁULICA ALTA PRESSÃO 3/4 NPT T VH3V"
+        assert "\n" not in material.nome
+        assert "\r" not in material.nome
+
     def test_importar_csv_multiplos_produtos(self):
         csv = (
             b"CADPRO;DISC1;UNID1;QUAN3;GRUPO;SUBGRUPO;NOMEGRUPO;NOMESUBGRUPO;DISCR1\n"

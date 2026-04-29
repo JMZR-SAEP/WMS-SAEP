@@ -1,8 +1,8 @@
-import csv
 import re
 from dataclasses import dataclass
 
 CODIGO_SCPI_RE = re.compile(r"^\d{3}\.\d{3}\.\d{3}$")
+CODIGO_SCPI_PARECIDO_RE = re.compile(r"^[\d.\-/ ]+$")
 
 CAMPOS_OBRIGATORIOS = [
     "CADPRO",
@@ -44,19 +44,15 @@ def parse_scpi_csv(conteudo_bytes: bytes) -> list[ProdutoLogico]:
     except UnicodeDecodeError as e:
         raise ScpiCsvParserError(f"Erro ao decodificar CSV como UTF-8: {e}")
 
-    linhas = conteudo_str.splitlines()
+    linhas = conteudo_str.splitlines(keepends=True)
     if not linhas:
         raise ScpiCsvParserError("Arquivo CSV vazio")
 
-    reader = csv.DictReader(
-        linhas,
-        delimiter=";",
-    )
-
-    if not reader.fieldnames:
+    cabecalho = _normalizar_cabecalho(linhas[0])
+    if not cabecalho:
         raise ScpiCsvParserError("Cabeçalho não encontrado no CSV")
 
-    campos_faltantes = set(CAMPOS_OBRIGATORIOS) - set(reader.fieldnames or [])
+    campos_faltantes = set(CAMPOS_OBRIGATORIOS) - set(cabecalho)
     if campos_faltantes:
         raise ScpiCsvParserError(
             f"Cabeçalho incompleto. Campos faltantes: {', '.join(sorted(campos_faltantes))}"
@@ -64,44 +60,129 @@ def parse_scpi_csv(conteudo_bytes: bytes) -> list[ProdutoLogico]:
 
     produtos = []
     linha_logica_atual = None
+    linha_logica_inicio = None
+    indice_campo_aberto = None
 
-    for idx, row in enumerate(reader, start=2):
-        if not row or all(not v or not v.strip() for v in row.values()):
+    for idx, linha in enumerate(linhas[1:], start=2):
+        if not linha.strip():
             continue
 
-        codigo_completo = row.get("CADPRO", "").strip()
-
-        if codigo_completo:
-            if not CODIGO_SCPI_RE.match(codigo_completo):
-                raise ScpiCsvParserError(f"Linha {idx}: código CADPRO inválido '{codigo_completo}'")
-
-            if linha_logica_atual:
-                try:
-                    produtos.append(_montar_produto_logico(linha_logica_atual))
-                except Exception as e:
-                    raise ScpiCsvParserError(f"Erro ao processar produto na linha {idx}: {e}")
-
-            linha_logica_atual = dict(row)
-        else:
-            if linha_logica_atual is None:
-                raise ScpiCsvParserError(
-                    f"Linha {idx}: continuação de descrição encontrada antes do primeiro produto"
+        codigo_completo = linha.split(";", 1)[0].strip()
+        if CODIGO_SCPI_RE.match(codigo_completo):
+            if linha_logica_atual is not None:
+                produtos.append(
+                    _finalizar_registro_logico(linha_logica_atual, linha_logica_inicio, cabecalho)
                 )
+            linha_logica_atual = _partes_para_dict(
+                cabecalho, [parte.rstrip("\r") for parte in linha.split(";")]
+            )
+            indice_campo_aberto = _indice_ultimo_campo_preenchido(linha_logica_atual, cabecalho)
+            linha_logica_inicio = idx
+            continue
 
-            descricao_anterior = linha_logica_atual.get("DISCR1", "")
-            descricao_nova = row.get("DISCR1", "")
-            if descricao_anterior and descricao_nova:
-                linha_logica_atual["DISCR1"] = (descricao_anterior + " " + descricao_nova).strip()
-            elif descricao_nova:
-                linha_logica_atual["DISCR1"] = descricao_nova.strip()
+        if linha_logica_atual is None:
+            if codigo_completo:
+                raise ScpiCsvParserError(f"Linha {idx}: código CADPRO inválido '{codigo_completo}'")
+            raise ScpiCsvParserError(
+                f"Linha {idx}: continuação de descrição encontrada antes do primeiro produto"
+            )
 
-    if linha_logica_atual:
-        try:
-            produtos.append(_montar_produto_logico(linha_logica_atual))
-        except Exception as e:
-            raise ScpiCsvParserError(f"Erro ao processar último produto: {e}")
+        if codigo_completo and CODIGO_SCPI_PARECIDO_RE.match(codigo_completo):
+            raise ScpiCsvParserError(f"Linha {idx}: código CADPRO inválido '{codigo_completo}'")
+
+        _mesclar_linha_continuacao(
+            linha_logica_atual,
+            cabecalho,
+            indice_campo_aberto,
+            linha,
+        )
+
+    if linha_logica_atual is not None:
+        produtos.append(
+            _finalizar_registro_logico(linha_logica_atual, linha_logica_inicio, cabecalho)
+        )
 
     return produtos
+
+
+def _normalizar_cabecalho(linha: str) -> list[str]:
+    cabecalho = [campo.strip() for campo in linha.split(";")]
+    while cabecalho and cabecalho[-1] == "":
+        cabecalho.pop()
+    return cabecalho
+
+
+def _partes_para_dict(cabecalho: list[str], partes: list[str]) -> dict[str, str]:
+    row = {}
+    for indice, campo in enumerate(cabecalho):
+        row[campo] = partes[indice].strip() if indice < len(partes) else ""
+    return row
+
+
+def _indice_ultimo_campo_preenchido(row: dict[str, str], cabecalho: list[str]) -> int | None:
+    for indice in range(len(cabecalho) - 1, -1, -1):
+        if row.get(cabecalho[indice], "").strip():
+            return indice
+    return None
+
+
+def _mesclar_linha_continuacao(
+    row: dict[str, str],
+    cabecalho: list[str],
+    indice_campo_aberto: int | None,
+    linha: str,
+) -> None:
+    if indice_campo_aberto is None:
+        return
+
+    partes = [parte.rstrip("\r") for parte in linha.split(";")]
+    indice_fragmento = next((i for i, valor in enumerate(partes) if valor.strip()), None)
+    if indice_fragmento is None:
+        return
+
+    fragmento = partes[indice_fragmento].strip()
+    if fragmento:
+        campo_aberto = cabecalho[indice_campo_aberto]
+        valor_atual = row.get(campo_aberto, "")
+        row[campo_aberto] = f"{valor_atual}\n{fragmento}".strip() if valor_atual else fragmento
+
+    for offset, campo in enumerate(cabecalho[indice_campo_aberto + 1 :], start=1):
+        indice_parte = indice_fragmento + offset
+        if indice_parte >= len(partes):
+            break
+        valor = partes[indice_parte].strip()
+        if valor:
+            row[campo] = valor
+
+
+def _finalizar_registro_logico(
+    linha_logica: dict[str, str] | str, linha_inicio: int | None, cabecalho: list[str]
+) -> ProdutoLogico:
+    if isinstance(linha_logica, dict):
+        row = dict(linha_logica)
+    else:
+        partes = [parte.rstrip("\r") for parte in linha_logica.split(";")]
+        if len(partes) < len(cabecalho):
+            partes.extend([""] * (len(cabecalho) - len(partes)))
+        elif len(partes) > len(cabecalho):
+            partes = partes[: len(cabecalho)]
+        row = _partes_para_dict(cabecalho, partes)
+
+    codigo_completo = row.get("CADPRO", "").strip()
+    if not codigo_completo:
+        raise ScpiCsvParserError(
+            f"Linha {linha_inicio}: continuação de descrição encontrada antes do primeiro produto"
+        )
+
+    if not CODIGO_SCPI_RE.match(codigo_completo):
+        raise ScpiCsvParserError(
+            f"Linha {linha_inicio}: código CADPRO inválido '{codigo_completo}'"
+        )
+
+    try:
+        return _montar_produto_logico(row)
+    except Exception as e:
+        raise ScpiCsvParserError(f"Erro ao processar produto na linha {linha_inicio}: {e}")
 
 
 def _montar_produto_logico(row: dict) -> ProdutoLogico:
@@ -115,19 +196,26 @@ def _montar_produto_logico(row: dict) -> ProdutoLogico:
     subgrupo_nome = row.get("NOMESUBGRUPO", "").strip()
     descricao = row.get("DISCR1", "").strip()
 
-    if not all(
-        [
-            codigo_completo,
-            nome,
-            unidade_medida,
-            saldo_fisico_inicial,
-            grupo_codigo,
-            subgrupo_codigo,
-            grupo_nome,
-            subgrupo_nome,
-        ]
-    ):
-        raise ScpiCsvParserError(f"Produto {codigo_completo}: campos obrigatórios faltam")
+    campos_obrigatorios = {
+        "CADPRO": codigo_completo,
+        "DISC1": nome,
+        "UNID1": unidade_medida,
+        "QUAN3": saldo_fisico_inicial,
+        "GRUPO": grupo_codigo,
+        "SUBGRUPO": subgrupo_codigo,
+        "NOMEGRUPO": grupo_nome,
+        "NOMESUBGRUPO": subgrupo_nome,
+    }
+    campos_faltantes = [campo for campo, valor in campos_obrigatorios.items() if not valor]
+    if campos_faltantes:
+        sufixo = (
+            "campo obrigatório faltando"
+            if len(campos_faltantes) == 1
+            else "campos obrigatórios faltando"
+        )
+        raise ScpiCsvParserError(
+            f"Produto {codigo_completo}: {sufixo}: {', '.join(campos_faltantes)}"
+        )
 
     if not CODIGO_SCPI_RE.match(codigo_completo):
         raise ScpiCsvParserError(
