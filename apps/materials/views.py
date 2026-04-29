@@ -8,7 +8,10 @@ from rest_framework.viewsets import ReadOnlyModelViewSet
 from apps.core.api.serializers import ErrorResponseSerializer
 from apps.materials.filters import MaterialFilter
 from apps.materials.models import Material
-from apps.materials.serializers import MaterialListOutputSerializer
+from apps.materials.serializers import (
+    MaterialListOutputSerializer,
+    MaterialListPaginatedSerializer,
+)
 
 
 class MaterialViewSet(ReadOnlyModelViewSet):
@@ -74,7 +77,7 @@ class MaterialViewSet(ReadOnlyModelViewSet):
             ),
         ],
         responses={
-            200: MaterialListOutputSerializer(many=True),
+            200: MaterialListPaginatedSerializer(),
             403: ErrorResponseSerializer(),
         },
     )

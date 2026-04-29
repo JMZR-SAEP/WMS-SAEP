@@ -1,5 +1,7 @@
 """Tests for material list API endpoint."""
 
+from decimal import Decimal
+
 import pytest
 from django.urls import reverse
 from rest_framework.test import APIClient
@@ -193,7 +195,7 @@ class TestMaterialListAPI:
 
         assert response.status_code == 200
         assert len(response.data["results"]) == 1
-        assert response.data["results"][0]["saldo_disponivel"] == 70.0
+        assert Decimal(response.data["results"][0]["saldo_disponivel"]) == Decimal("70")
 
     def test_saldo_disponivel_none_quando_sem_estoque(self):
         """Material sem EstoqueMaterial deve retornar saldo_disponivel como None."""

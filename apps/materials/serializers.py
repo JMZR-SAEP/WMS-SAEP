@@ -31,3 +31,15 @@ class MaterialListOutputSerializer(serializers.ModelSerializer):
         if hasattr(obj, "estoque") and obj.estoque:
             return obj.estoque.saldo_disponivel
         return None
+
+
+class MaterialListPaginatedSerializer(serializers.Serializer):
+    """Envelope paginado padrão para listagem de materiais."""
+
+    count = serializers.IntegerField(read_only=True)
+    page = serializers.IntegerField(read_only=True)
+    page_size = serializers.IntegerField(read_only=True)
+    total_pages = serializers.IntegerField(read_only=True)
+    next = serializers.URLField(allow_null=True, read_only=True)
+    previous = serializers.URLField(allow_null=True, read_only=True)
+    results = MaterialListOutputSerializer(many=True, read_only=True)
