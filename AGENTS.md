@@ -4,34 +4,44 @@
 
 ERP auxiliar para o **SAEP — Serviço de Água e Esgoto de Pirassununga**, autarquia municipal. O foco inicial é um backend robusto em **Django + Django REST Framework (DRF)**.
 
+## Estratégia de leitura da documentação
+
 Use as ferramentas MCP do Serena para **TODAS** operações de código neste repositório — exploração, leitura e edição. Leia e siga as `initial_instructions`, as instruções do próprio Serena.
 
 Para revisão de código, considerar também `docs/code-review-guidelines.md`, que define invariantes obrigatórios do sistema e orienta o comportamento de reviews.
 
-Para contratos de API DRF, seguir `docs/design-acesso-rapido/api-contracts.md`, que define o padrão obrigatório para autenticação, autorização, serializers de entrada/saída, status HTTP, envelope de erro, paginação/filtros e schema OpenAPI.
+Use as ferramentas MCP do Context7 para **TODAS** implementações de código. Procure pela documentação específica relacionada à sua implementação e registre mentalmente quais decisões foram baseadas nela.
 
-Para invariantes críticos de domínio, seguir `docs/design-acesso-rapido/matriz-invariantes.md`, que consolida regra de negócio, camada de implementação esperada, reforços e testes obrigatórios.
+### Exemplos positivos do que fazer:
 
-Para permissões, escopos e papéis, seguir `docs/design-acesso-rapido/matriz-permissoes.md`, que consolida a referência canônica para `policies.py`, services, endpoints DRF e testes de autorização.
+- Implementando ou alterando um `Model`: consultar documentação de Django Models, Fields, Meta options, constraints, indexes, managers e validação de modelos conforme a mudança.
+- Implementando relacionamento entre entidades: consultar documentação de `ForeignKey`, `OneToOneField`, `ManyToManyField`, `on_delete`, `related_name`, constraints e comportamento de queries relacionadas.
+- Implementando constraints ou índices: consultar documentação de `UniqueConstraint`, `CheckConstraint`, `Index`, índices condicionais/parciais quando aplicável e limitações do banco usado pelo projeto.
+- Implementando transações ou mutações críticas de saldo/estoque: consultar documentação de `transaction.atomic()`, `select_for_update()`, comportamento transacional e locking no Django.
+- Implementando DRF Serializer: consultar documentação de Serializers, ModelSerializer, validação por campo, validação de objeto, campos read-only/write-only e representação de erros.
+- Implementando ViewSet/APIView: consultar documentação de DRF ViewSets, Generic Views, Mixins, Routers, status codes, permissions, authentication e paginação/filtros quando aplicável.
+- Implementando autorização: consultar documentação de DRF Permissions e autenticação, além das políticas internas do projeto em `policies.py` ou equivalente.
+- Implementando filtros, busca ou ordenação: consultar documentação de DRF Filtering, Django QuerySet API, lookup expressions e performance de queries.
+- Implementando endpoint com upload/download, arquivos ou campos especiais: consultar documentação específica de parsers, renderers, FileField/ImageField e tratamento de request/response no DRF.
+- Implementando testes: consultar documentação de Django TestCase/TransactionTestCase, pytest quando usado no projeto, DRF APIClient/APIRequestFactory e ferramentas adequadas para o tipo de comportamento testado.
+- Alterando comandos de management, signals, admin ou settings: consultar a documentação específica da área alterada antes de editar.
+- Antes de concluir, conferir se a implementação continua alinhada com a documentação consultada, com `docs/design-acesso-rapido/` e com os guardrails deste arquivo.
 
-## Estratégia de leitura da documentação
+### Exemplos negativos do que **não** fazer:
 
-Para economizar tokens e manter os agentes focados, a documentação está dividida por frequência de uso:
+- Não implementar ou alterar código Django/DRF usando apenas memória, conhecimento prévio ou tentativa e erro sem consultar o Context7.
+- Não procurar documentação genérica quando a tarefa exige documentação específica. Exemplo: ao alterar um `ModelViewSet`, não consultar apenas documentação geral de Django; consulte DRF ViewSets, Routers, Serializers e Permissions conforme o caso.
+- Não assumir APIs, parâmetros ou comportamentos de bibliotecas sem confirmar na documentação atual. Exemplo: não inventar argumentos de `Serializer`, `QuerySet`, `transaction.atomic()` ou `select_for_update()`.
+- Não copiar padrões de código existente se houver dúvida sobre compatibilidade com a versão atual das bibliotecas; confirme com Context7 antes.
+- Não usar posts de blog, respostas antigas, snippets aleatórios ou conhecimento desatualizado como fonte principal quando houver documentação oficial disponível via Context7.
+- Não fazer uma implementação ampla e só consultar documentação depois que os testes falharem; consulte a documentação antes de definir a solução.
+- Não ignorar documentação de segurança, autenticação, autorização, transações, validação ou concorrência quando a mudança tocar esses temas.
+- Não misturar conceitos de versões diferentes do Django, DRF ou bibliotecas relacionadas sem validar a versão usada pelo projeto.
+
+Para economizar tokens e manter os agentes focados, a documentação de design do projeto está dividida por frequência de uso:
 
 - `docs/design-acesso-rapido/`: sínteses operacionais. Deve ser a primeira fonte consultada por agentes de IA.
 - `docs/design-acesso-ocasional/`: documentação completa. Deve ser consultada apenas quando a síntese rápida não resolver a dúvida, quando houver ambiguidade ou quando a tarefa depender de detalhe de domínio.
-
-Leitura padrão antes de implementar:
-
-- `docs/design-acesso-rapido/stack.md`, para decisões técnicas e stack;
-- `docs/design-acesso-rapido/api-contracts.md`, para contratos DRF;
-- `docs/design-acesso-rapido/matriz-invariantes.md`, para invariantes críticos de domínio, camada esperada e testes obrigatórios;
-- `docs/design-acesso-rapido/matriz-permissoes.md`, para papéis, escopos, permissões e testes de autorização;
-- `docs/design-acesso-rapido/estado-transicoes-requisicao.md`, para ciclo de vida de requisições.
-
-Consultar `docs/design-acesso-ocasional/` quando as matrizes de invariantes/permissões e as demais sínteses rápidas não resolverem a dúvida, ou quando a tarefa envolver regra detalhada de domínio, permissões, estoque, requisições, importação SCPI, critérios de aceite, conflito documental ou decisão que precise ser explicada em PR.
-
-Em caso de conflito entre síntese e documentação completa, prevalece `docs/design-acesso-ocasional/`, salvo decisão posterior registrada. Mudanças de regra de negócio devem atualizar a documentação rápida e a documentação completa quando ambas forem afetadas.
 
 ## Ambiente de desenvolvimento efêmero
 
@@ -42,28 +52,13 @@ Durante a fase inicial, o ambiente local é descartável.
 - migrations locais são não versionadas e ignoradas pelo `.gitignore`.
 - `rtk make init` deve ser usado no setup inicial do projeto para criar `.venv` e instalar dependências.
 - `rtk make setup` é o comando principal do ciclo efêmero: apaga migrations locais e recria tudo do zero.
+- `rtk make test` executa a suíte com `config.settings.test`;
 - neste momento do projeto, toda edição de `models`/schema deve ser seguida de `rtk make setup`, para não depender de gestão manual de migrations.
 - migrations de apps devem ser tratadas como artefato efêmero: antes de testar ou concluir uma implementação que altere schema, apagar e recriar as migrations locais do zero, simulando uma primeira execução limpa do app.
 - confeccionar novos arquivos de migration não faz parte da entrega normal do trabalho neste contexto efêmero.
 - a fonte de verdade para mudanças estruturais são `models`, constraints, índices, regras de domínio e testes; migrations locais servem apenas para materializar o banco local.
 - tarefas sem mudança estrutural podem seguir fluxo incremental; reset completo é obrigatório apenas para mudanças de schema/model ou quando o ambiente local estiver inconsistente.
 - todos os comandos shell e `make` devem ser chamados com prefixo `rtk`, usando `rtk proxy` apenas quando `rtk` não suportar a forma necessária.
-
-## Comandos gerais
-
-Rotinas principais do projeto via `rtk make`:
-
-- `rtk make help`: lista as rotinas disponíveis;
-- `rtk make prepare`: materializa `.env` a partir de `.env.example`;
-- `rtk make init`: bootstrap inicial (uma vez por ambiente) para criar/recriar o ambiente Python e instalar dependências com `uv sync`;
-- `rtk make setup`: comando principal do desenvolvimento efêmero; limpa o ambiente, apaga/recria schema+migrations locais e coleta estáticos; usar sempre após editar `models`/schema;
-- `rtk make clean`: remove caches e artefatos locais sem afetar o banco;
-- `rtk make cleanall`: executa limpeza local e reseta o schema `public` do PostgreSQL;
-- `rtk make veryclean`: remove `.venv`, caches e migrations locais geradas;
-- `rtk make resetpostgres`: apaga e recria o schema `public` usando `DATABASE_URL`;
-- `rtk make test`: executa a suíte com `config.settings.test`;
-- `rtk make run`: sobe o servidor Django com `config.settings.dev`;
-- `rtk make resetdb`: reaplica migrations no banco atual sem apagar arquivos de migration.
 
 ## Guardrails Para o Projeto
 
