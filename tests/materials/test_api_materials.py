@@ -238,3 +238,25 @@ class TestMaterialListAPI:
         assert response.data["page_size"] == 20
         assert response.data["total_pages"] == 2
         assert len(response.data["results"]) == 20
+
+    def test_paginacao_envelope_reflete_page_size_solicitado(self):
+        """Campo page_size deve refletir o tamanho efetivo da página."""
+        usuario = self._criar_usuario()
+        subgrupo = self._criar_subgrupo()
+        for i in range(7):
+            Material.objects.create(
+                subgrupo=subgrupo,
+                codigo_completo=f"014.001.{i:03d}",
+                sequencial=f"{i:03d}",
+                nome=f"Material {i}",
+                unidade_medida="UN",
+            )
+
+        client = APIClient()
+        client.force_authenticate(user=usuario)
+        response = client.get(reverse("material-list"), {"page_size": 5})
+
+        assert response.status_code == 200
+        assert response.data["page_size"] == 5
+        assert response.data["total_pages"] == 2
+        assert len(response.data["results"]) == 5
