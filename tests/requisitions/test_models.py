@@ -1,7 +1,9 @@
 from decimal import Decimal
 
 import pytest
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError
+from django.db.models.deletion import ProtectedError
 
 from apps.materials.models import GrupoMaterial, Material, SubgrupoMaterial
 from apps.requisitions.models import (
@@ -139,6 +141,22 @@ class TestRequisicaoModel:
         req2.numero_publico = "REQ-2026-000001"
         with pytest.raises(IntegrityError):
             req2.save()
+
+    def test_numero_publico_formato_invalido_falha_no_validator(self):
+        """REQ-03 — validator rejeita numero_publico fora do formato canônico"""
+        req = self._criar_requisicao()
+        req.numero_publico = "REQ-26-1"
+
+        with pytest.raises(ValidationError):
+            req.full_clean()
+
+    def test_numero_publico_formato_invalido_falha_no_banco(self):
+        """REQ-03 — constraint rejeita numero_publico inválido persistido via ORM"""
+        req = self._criar_requisicao()
+        req.numero_publico = "qualquer-coisa"
+
+        with pytest.raises(IntegrityError):
+            req.save()
 
     def test_numero_publico_null_nao_e_unico(self):
         """REQ-02 — multiplas requisições podem ter numero_publico=None"""
@@ -304,6 +322,20 @@ class TestItemRequisicaoModel:
         item = self._criar_item()
         assert item.quantidade_autorizada == Decimal("0")
 
+    def test_quantidade_autorizada_null_invalida(self):
+        """ITEM-domain — quantidade_autorizada não aceita NULL"""
+        req = self._criar_requisicao()
+        material = self._criar_material()
+
+        with pytest.raises(IntegrityError):
+            ItemRequisicao.objects.create(
+                requisicao=req,
+                material=material,
+                unidade_medida=material.unidade_medida,
+                quantidade_solicitada=Decimal("10.000"),
+                quantidade_autorizada=None,
+            )
+
     def test_str_representation(self):
         """Representação em string do item"""
         item = self._criar_item()
@@ -420,6 +452,13 @@ class TestEventoTimelineImutavel:
 
         with pytest.raises(ValueError, match="Eventos de timeline são imutáveis"):
             EventoTimeline.objects.bulk_update([evento], ["observacao"])
+
+    def test_delete_requisicao_with_eventos_protected(self):
+        """EventoTimeline protege a requisição contra remoção em cascata"""
+        evento = self._criar_evento()
+
+        with pytest.raises(ProtectedError):
+            evento.requisicao.delete()
 
     def test_str_representation(self):
         """Representação em string do evento"""

@@ -14,7 +14,14 @@ class RequisicaoAdmin(admin.ModelAdmin):
     ]
     list_filter = ["status", "setor_beneficiario", "data_criacao"]
     search_fields = ["numero_publico", "beneficiario__nome_completo"]
-    readonly_fields = ["data_criacao", "created_at", "updated_at"]
+    readonly_fields = [
+        "criador",
+        "beneficiario",
+        "setor_beneficiario",
+        "data_criacao",
+        "created_at",
+        "updated_at",
+    ]
     raw_id_fields = [
         "criador",
         "beneficiario",
@@ -77,6 +84,15 @@ class RequisicaoAdmin(admin.ModelAdmin):
         ),
     )
 
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
 
 @admin.register(ItemRequisicao)
 class ItemRequisicaoAdmin(admin.ModelAdmin):
@@ -126,6 +142,15 @@ class ItemRequisicaoAdmin(admin.ModelAdmin):
             },
         ),
     )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(EventoTimeline)

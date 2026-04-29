@@ -32,6 +32,16 @@ class TestSettingsLoading:
     def test_only_released_domain_apps_are_installed(self):
         """Verify only the domain apps already released in the current milestone are installed."""
         installed = [app.name for app in apps.get_app_configs()]
+        released_domain_apps = [
+            "users",
+            "materials",
+            "stock",
+            "requisitions",
+        ]
+        for app in released_domain_apps:
+            assert any(app in name for name in installed), (
+                f"Released domain app '{app}' should already be installed"
+            )
         # users is installed after PIL-BE-ACE-001 (complete)
         # materials is installed after PIL-BE-MAT-001 (complete)
         # stock is installed after PIL-BE-EST-001 (complete)

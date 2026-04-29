@@ -1,3 +1,4 @@
+from django.core.validators import RegexValidator
 from django.db import models
 from django.db.models import F, Q
 
@@ -34,6 +35,12 @@ class Requisicao(models.Model):
         max_length=20,
         null=True,
         blank=True,
+        validators=[
+            RegexValidator(
+                regex=r"^REQ-\d{4}-\d{6}$",
+                message="numero_publico deve seguir o formato REQ-AAAA-NNNNNN.",
+            )
+        ],
         help_text="Número público da requisição (formato REQ-AAAA-NNNNNN), atribuído no primeiro envio",
     )
     criador = models.ForeignKey(
@@ -129,6 +136,12 @@ class Requisicao(models.Model):
                 name="req_numero_publico_unico_quando_preenchido",
             ),
             models.CheckConstraint(
+                condition=Q(numero_publico__isnull=True)
+                | Q(numero_publico="")
+                | Q(numero_publico__regex=r"^REQ-\d{4}-\d{6}$"),
+                name="req_numero_publico_formato_valido_ou_vazio",
+            ),
+            models.CheckConstraint(
                 condition=~Q(status=StatusRequisicao.RECUSADA) | Q(motivo_recusa__gt=""),
                 name="req_motivo_recusa_obrigatorio_quando_recusada",
             ),
@@ -171,7 +184,6 @@ class ItemRequisicao(models.Model):
         max_digits=12,
         decimal_places=3,
         default=0,
-        null=True,
         blank=True,
         help_text="Quantidade autorizada",
     )
@@ -248,7 +260,7 @@ class EventoTimelineManager(models.Manager.from_queryset(EventoTimelineQuerySet)
 class EventoTimeline(models.Model):
     requisicao = models.ForeignKey(
         Requisicao,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name="eventos",
         help_text="Requisição associada",
     )
