@@ -6,6 +6,12 @@ from apps.materials.models import Material
 
 
 class MaterialListOutputSerializer(serializers.ModelSerializer):
+    """Serializer para listagem de materiais disponíveis.
+
+    Campo saldo_disponivel é calculado dinamicamente (saldo_fisico - saldo_reservado).
+    Bloqueios por saldo insuficiente ou divergência crítica são validados na criação da requisição.
+    """
+
     saldo_disponivel = serializers.SerializerMethodField()
 
     class Meta:
