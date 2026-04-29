@@ -48,6 +48,23 @@ class TestImportarScpi:
         assert GrupoMaterial.objects.count() == 0
         assert SubgrupoMaterial.objects.count() == 0
         assert EstoqueMaterial.objects.count() == 0
+        assert MovimentacaoEstoque.objects.count() == 0
+
+    def test_importar_csv_tudo_ou_nada_erro_de_dominio_apos_escrita_parcial(self):
+        csv = (
+            b"CADPRO;DISC1;UNID1;QUAN3;GRUPO;SUBGRUPO;NOMEGRUPO;NOMESUBGRUPO;DISCR1\n"
+            b"001.002.003;Produto 1;UN;100;001;002;Grupo A;Subgrupo A;Desc 1\n"
+            b"001.002.003;Produto Duplicado;UN;50;001;002;Grupo A;Subgrupo A;Desc 2\n"
+        )
+
+        with pytest.raises(ValueError, match="já existe"):
+            importar_csv_scpi(csv)
+
+        assert GrupoMaterial.objects.count() == 0
+        assert SubgrupoMaterial.objects.count() == 0
+        assert Material.objects.count() == 0
+        assert EstoqueMaterial.objects.count() == 0
+        assert MovimentacaoEstoque.objects.count() == 0
 
     def test_importar_csv_cria_movimentacao_saldo_inicial_para_cada_material(self):
         csv = (
