@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import EstoqueMaterial
+from .models import EstoqueMaterial, MovimentacaoEstoque
 
 
 @admin.register(EstoqueMaterial)
@@ -28,3 +28,33 @@ class EstoqueMaterialAdmin(admin.ModelAdmin):
 
     def has_view_permission(self, request, obj=None):
         return request.user.is_active and request.user.is_staff
+
+
+@admin.register(MovimentacaoEstoque)
+class MovimentacaoEstoqueAdmin(admin.ModelAdmin):
+    list_display = (
+        "material",
+        "tipo",
+        "quantidade",
+        "saldo_anterior",
+        "saldo_posterior",
+        "created_at",
+    )
+    readonly_fields = (
+        "material",
+        "tipo",
+        "quantidade",
+        "saldo_anterior",
+        "saldo_posterior",
+        "observacao",
+        "created_at",
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
