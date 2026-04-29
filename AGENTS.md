@@ -4,17 +4,15 @@
 
 ERP auxiliar para o **SAEP — Serviço de Água e Esgoto de Pirassununga**, autarquia municipal. O foco inicial é um backend robusto em **Django + Django REST Framework (DRF)**.
 
-Quando o projeto Django for materializado, os apps Django deverão ficar sob a pasta `apps/`.
+Informações relevantes sobre o projeto estão em `.serena/memories`. Use Serena para TODAS operações de código neste repositório — exploração, leitura e edição.
 
-> Informações relevantes sobre o projeto estão em `.serena/memories`. Se você tiver acesso às ferramentas MCP do Serena, pode lê-las usando o comando `read_memory`. Caso não possua acesso às ferramentas, **pare e explique** por que não conseguiu acessá-las.
+Para revisão de código, considerar também `docs/code-review-guidelines.md`, que define invariantes obrigatórios do sistema e orienta o comportamento de reviews.
 
-> Para revisão de código, considerar também `docs/code-review-guidelines.md`, que define invariantes obrigatórios do sistema e orienta o comportamento de reviews.
+Para contratos de API DRF, seguir `docs/design-acesso-rapido/api-contracts.md`, que define o padrão obrigatório para autenticação, autorização, serializers de entrada/saída, status HTTP, envelope de erro, paginação/filtros e schema OpenAPI.
 
-> Para contratos de API DRF, seguir `docs/design-acesso-rapido/api-contracts.md`, que define o padrão obrigatório para autenticação, autorização, serializers de entrada/saída, status HTTP, envelope de erro, paginação/filtros e schema OpenAPI.
+Para invariantes críticos de domínio, seguir `docs/design-acesso-rapido/matriz-invariantes.md`, que consolida regra de negócio, camada de implementação esperada, reforços e testes obrigatórios.
 
-> Para invariantes críticos de domínio, seguir `docs/design-acesso-rapido/matriz-invariantes.md`, que consolida regra de negócio, camada de implementação esperada, reforços e testes obrigatórios.
-
-> Para permissões, escopos e papéis, seguir `docs/design-acesso-rapido/matriz-permissoes.md`, que consolida a referência canônica para `policies.py`, services, endpoints DRF e testes de autorização.
+Para permissões, escopos e papéis, seguir `docs/design-acesso-rapido/matriz-permissoes.md`, que consolida a referência canônica para `policies.py`, services, endpoints DRF e testes de autorização.
 
 ## Estratégia de leitura da documentação
 
@@ -71,7 +69,6 @@ Rotinas principais do projeto via `rtk make`:
 
 ### Faça
 
-- Configure autenticação, CORS, OpenAPI, handler global de erros, paginação e filtros antes dos primeiros endpoints reais.
 - Declare em todo endpoint: autenticação, autorização, entrada, saída, status HTTP, envelope de erro, paginação/filtros e schema OpenAPI.
 - Siga `docs/design-acesso-rapido/api-contracts.md` como contrato canônico para endpoints DRF.
 - Centralize regras de autorização contextual em `policies.py` ou equivalente.
@@ -110,16 +107,35 @@ Rotinas principais do projeto via `rtk make`:
 ## GitHub Flow
 
 - `main` sempre estável — nenhum commit direto
-- Branches: `feat/{descricao-curta}`, `fix/{descricao-curta}`, `chore/{descricao-curta}`, `docs/{descricao-curta}`, `refactor/{descricao-curta}`, `test/{descricao-curta}`
+- Antes de implementar crie branches: `feat/{descricao-curta}`, `fix/{descricao-curta}`, `chore/{descricao-curta}`, `docs/{descricao-curta}`, `refactor/{descricao-curta}`, `test/{descricao-curta}`
 - nomes de branch devem ser curtos, sem acentos, sem espaços e refletir uma única unidade de mudança
 - evitar branches e PRs com escopo amplo demais; dividir trabalho extenso em fatias auditáveis
-- Todo PR deve usar `.github/pull_request_template.md` como base
+- Sempre que publicar um PR, preencha o `.github/pull_request_template.md` detalhadamente
 - Quando houver divergência com `.serena/memories` ou ambiguidade de contrato, o PR deve explicitar a decisão tomada
-- Mudanças de schema em dev seguem o modelo de ambiente efêmero: não editar, rastrear ou commitar migrations
-- TODO de bootstrap Django/CI: quando o projeto Django e os apps reais forem materializados, revisar `.github/workflows/ci.yml` para que o rebuild efêmero do schema não dependa de lista fixa de apps e reflita todo o código-fonte vigente
+
+### Commits pequenos e incrementais
+
+Ao implementar uma tarefa, prefira fazer **commits pequenos, coesos e revisáveis** em vez de um único commit grande no final.
+
+Diretrizes:
+
+- Faça commits por unidade lógica de mudança.
+- Cada commit deve deixar o projeto em um estado consistente.
+- Evite misturar refactors, mudanças de modelo, migrations, testes e ajustes de documentação no mesmo commit quando puder separá-los.
+- Rode os checks relevantes antes de cada commit ou, no mínimo, antes de finalizar a sequência.
+- Use mensagens de commit descritivas, explicando o que mudou.
 - Commits no padrão Conventional Commits (`feat:`, `fix:`, `test:`, `refactor:`, `chore:`, `docs:`)
+
+Exemplos de bons commits:
+
+feat(materials): add Material model
+feat(stock): add EstoqueMaterial model
+test(materials): cover Material validation
+test(stock): cover available quantity calculation
+docs: update pilot data modeling notes
+
 
 ## Code Review
 
-- Revisões (automáticas ou manuais) devem seguir `.coderabbit.yaml` e `docs/code-review-guidelines.md`.
+- Revisões (automáticas ou manuais) devem seguir `docs/code-review-guidelines.md`.
 - Em caso de conflito com sugestões genéricas, prevalecem os invariantes arquiteturais e de domínio documentados no projeto.
