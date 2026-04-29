@@ -17,6 +17,18 @@ class StatusRequisicao(models.TextChoices):
         return [cls.ATENDIDA_PARCIALMENTE, cls.ATENDIDA, cls.CANCELADA, cls.ESTORNADA]
 
 
+class TipoEvento(models.TextChoices):
+    CRIACAO = "criacao", "Criação"
+    ENVIO_AUTORIZACAO = "envio_autorizacao", "Envio para Autorização"
+    REENVIO_AUTORIZACAO = "reenvio_autorizacao", "Reenvio para Autorização"
+    AUTORIZACAO = "autorizacao", "Autorização"
+    RECUSA = "recusa", "Recusa"
+    ATENDIMENTO_PARCIAL = "atendimento_parcial", "Atendimento Parcial"
+    ATENDIMENTO = "atendimento", "Atendimento"
+    CANCELAMENTO = "cancelamento", "Cancelamento"
+    ESTORNO = "estorno", "Estorno"
+
+
 class Requisicao(models.Model):
     numero_publico = models.CharField(
         max_length=20,
@@ -218,3 +230,66 @@ class ItemRequisicao(models.Model):
         return (
             f"{self.material.codigo_completo} — {self.quantidade_solicitada} {self.unidade_medida}"
         )
+
+
+class EventoTimelineQuerySet(models.QuerySet):
+    def delete(self):
+        raise ValueError("Eventos de timeline não podem ser removidos em lote")
+
+    def update(self, **kwargs):
+        raise ValueError("Eventos de timeline são imutáveis")
+
+
+class EventoTimelineManager(models.Manager.from_queryset(EventoTimelineQuerySet)):
+    def bulk_update(self, objs, fields, batch_size=None):
+        raise ValueError("Eventos de timeline são imutáveis")
+
+
+class EventoTimeline(models.Model):
+    requisicao = models.ForeignKey(
+        Requisicao,
+        on_delete=models.CASCADE,
+        related_name="eventos",
+        help_text="Requisição associada",
+    )
+    tipo_evento = models.CharField(
+        max_length=30,
+        choices=TipoEvento.choices,
+        help_text="Tipo de evento registrado",
+    )
+    usuario = models.ForeignKey(
+        "users.User",
+        on_delete=models.PROTECT,
+        related_name="eventos_timeline",
+        help_text="Usuário que causou o evento",
+    )
+    data_hora = models.DateTimeField(
+        auto_now_add=True,
+        help_text="Data e hora do evento",
+    )
+    observacao = models.TextField(
+        blank=True,
+        default="",
+        help_text="Observações sobre o evento",
+    )
+
+    objects = EventoTimelineManager()
+
+    class Meta:
+        verbose_name = "Evento de Timeline"
+        verbose_name_plural = "Eventos de Timeline"
+        ordering = ["requisicao", "data_hora"]
+
+    def __str__(self):
+        return (
+            f"REQ {self.requisicao.numero_publico or f'(rascunho {self.requisicao.id})'}"
+            f" — {self.get_tipo_evento_display()} em {self.data_hora.strftime('%d/%m/%Y %H:%M')}"
+        )
+
+    def save(self, *args, **kwargs):
+        if self.pk and EventoTimeline.objects.filter(pk=self.pk).exists():
+            raise ValueError("Eventos de timeline são imutáveis")
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValueError("Eventos de timeline não podem ser removidos")
