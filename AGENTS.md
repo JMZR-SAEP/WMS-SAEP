@@ -4,7 +4,7 @@
 
 ERP auxiliar para o **SAEP — Serviço de Água e Esgoto de Pirassununga**, autarquia municipal. O foco inicial é um backend robusto em **Django + Django REST Framework (DRF)**.
 
-Informações relevantes sobre o projeto estão em `.serena/memories`. Use Serena para TODAS operações de código neste repositório — exploração, leitura e edição.
+Use as ferramentas MCP do Serena para **TODAS** operações de código neste repositório — exploração, leitura e edição. Leia e siga as `initial_instructions`, as instruções do próprio Serena.
 
 Para revisão de código, considerar também `docs/code-review-guidelines.md`, que define invariantes obrigatórios do sistema e orienta o comportamento de reviews.
 
