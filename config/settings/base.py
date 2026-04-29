@@ -25,6 +25,7 @@ INSTALLED_APPS = [
     "apps.users",
     "apps.materials",
     "apps.stock",
+    "apps.requisitions",
     "apps.core",
 ]
 
