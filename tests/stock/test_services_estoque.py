@@ -1,9 +1,10 @@
 from decimal import Decimal
 
 import pytest
+from django.db import IntegrityError
 
 from apps.materials.models import GrupoMaterial, Material, SubgrupoMaterial
-from apps.stock.models import EstoqueMaterial, TipoMovimentacao
+from apps.stock.models import EstoqueMaterial, MovimentacaoEstoque, TipoMovimentacao
 from apps.stock.services import registrar_saldo_inicial
 
 
@@ -119,3 +120,71 @@ class TestRegistrarSaldoInicial:
         assert movimentacao.saldo_anterior == Decimal("0")
         assert movimentacao.saldo_posterior == quantidade
         assert movimentacao.observacao == ""
+
+    def test_movimentacao_nao_pode_ser_atualizada_por_save(self):
+        material = self._criar_material()
+        _, movimentacao = registrar_saldo_inicial(
+            material=material,
+            quantidade=Decimal("75.500"),
+        )
+
+        movimentacao.quantidade = Decimal("80.000")
+
+        with pytest.raises(ValueError, match="imutáveis"):
+            movimentacao.save()
+
+    def test_movimentacao_nao_pode_ser_removida_por_delete(self):
+        material = self._criar_material()
+        _, movimentacao = registrar_saldo_inicial(
+            material=material,
+            quantidade=Decimal("75.500"),
+        )
+
+        with pytest.raises(ValueError, match="não podem ser removidas"):
+            movimentacao.delete()
+
+    def test_movimentacao_nao_pode_ser_atualizada_por_queryset_update(self):
+        material = self._criar_material()
+        _, movimentacao = registrar_saldo_inicial(
+            material=material,
+            quantidade=Decimal("75.500"),
+        )
+
+        with pytest.raises(ValueError, match="imutáveis"):
+            MovimentacaoEstoque.objects.filter(pk=movimentacao.pk).update(
+                quantidade=Decimal("80.000")
+            )
+
+    def test_movimentacao_nao_pode_ser_atualizada_por_bulk_update(self):
+        material = self._criar_material()
+        _, movimentacao = registrar_saldo_inicial(
+            material=material,
+            quantidade=Decimal("75.500"),
+        )
+
+        movimentacao.quantidade = Decimal("80.000")
+
+        with pytest.raises(ValueError, match="imutáveis"):
+            MovimentacaoEstoque.objects.bulk_update([movimentacao], ["quantidade"])
+
+    def test_movimentacao_nao_pode_ser_removida_por_queryset_delete(self):
+        material = self._criar_material()
+        _, movimentacao = registrar_saldo_inicial(
+            material=material,
+            quantidade=Decimal("75.500"),
+        )
+
+        with pytest.raises(ValueError, match="não podem ser removidas"):
+            MovimentacaoEstoque.objects.filter(pk=movimentacao.pk).delete()
+
+    def test_movimentacao_saldo_inicial_precisa_ser_coerente_no_banco(self):
+        material = self._criar_material()
+
+        with pytest.raises(IntegrityError):
+            MovimentacaoEstoque.objects.create(
+                material=material,
+                tipo=TipoMovimentacao.SALDO_INICIAL,
+                quantidade=Decimal("75.500"),
+                saldo_anterior=Decimal("10.000"),
+                saldo_posterior=Decimal("85.500"),
+            )
