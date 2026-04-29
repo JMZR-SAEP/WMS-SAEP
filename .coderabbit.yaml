@@ -1,0 +1,275 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+
+language: pt-BR
+
+reviews:
+  profile: assertive
+  request_changes_workflow: false
+
+  high_level_summary: true
+  high_level_summary_instructions: >
+    Resuma o PR em bullets curtos com:
+    - objetivo da mudança
+    - apps Django impactados
+    - risco funcional
+    - impacto em regras de negócio
+    - impacto em autenticação, autorização, escopo por perfil e escopo por setor
+    - impacto em contratos DRF, serializers, paginação, filtros, envelope de erro e OpenAPI
+    - impacto em integridade de dados, constraints, snapshots históricos, auditoria e rastreabilidade
+    - impacto em transações, concorrência, idempotência, saldo físico, saldo reservado e saldo disponível
+    - impacto em importação SCPI, dados oficiais de materiais ou divergência de estoque
+    - impacto em configuração, CI, dependências, lint, testes ou ambiente efêmero
+    - como validar manualmente via API, admin, comando ou teste automatizado
+
+    Priorize apontamentos sobre:
+    - lógica de negócio, autorização contextual, transições de estado, side effects ou transações colocadas fora de services.py
+    - divergências entre implementação e docs/design-acesso-rapido/
+    - risco de inconsistência de dados, saldo negativo, reserva acima do disponível ou reprocessamento indevido por retry
+    - falhas de autorização por papel, setor, visibilidade indevida entre setores ou superusuário operando fluxo cotidiano
+    - mudanças que quebrem rastreabilidade, snapshot histórico, imutabilidade futura de movimentos ou auditoria
+    - violação da direção de dependências entre apps
+    - N+1 queries, select_related/prefetch_related ausentes onde houver impacto real
+    - exigência indevida de migrations versionadas no contexto efêmero atual
+
+  auto_review:
+    enabled: true
+    drafts: true
+    auto_incremental_review: true
+    auto_pause_after_reviewed_commits: 10
+    ignore_title_keywords:
+      - wip
+      - draft
+      - do not review
+      - poc
+    labels:
+      - "!wip"
+      - "!skip-coderabbit"
+    base_branches:
+      - "^main$"
+
+  path_instructions:
+    - path: "apps/**/services.py"
+      instructions: >
+        Este é o ponto mais crítico para regra de negócio.
+        Revise com rigor máximo domínio, transações atômicas, concorrência,
+        idempotência, integridade de dados, side effects, escopo por perfil/setor
+        e aderência a docs/design-acesso-rapido/.
+        Trate como alta severidade qualquer PR que mova regra de negócio,
+        autorização contextual, transições de estado, side effects ou fronteiras
+        transacionais para views.py, serializers.py, models.py, admin.py,
+        signals.py, managers, commands ou helpers genéricos sem justificativa
+        arquitetural clara.
+
+        Services devem revalidar autorização contextual em escritas, mesmo quando
+        a view já usa permission_classes. Operações que alterem estoque, reserva,
+        número público, importação aplicada ou histórico auditável devem ser
+        transacionais e protegidas contra retry/reexecução.
+
+    - path: "apps/**/policies.py"
+      instructions: >
+        Revise como fonte central de autorização contextual.
+        Views e services devem chamar a mesma policy para evitar divergência entre
+        contrato HTTP e gravação efetiva.
+        Priorize brechas de autorização, IDOR, elevação indevida de privilégio,
+        acesso cruzado entre setores, superusuário executando ações operacionais
+        e desalinhamento com docs/design-acesso-rapido/matriz-permissoes.md.
+
+    - path: "apps/core/api/**/*.py"
+      instructions: >
+        Este pacote é infraestrutura DRF comum, não domínio.
+        Revise paginação, envelope de erro, exceções HTTP-safe, serializers comuns,
+        schema OpenAPI e integração com DRF/drf-spectacular.
+        Não aceite acoplamento de apps de domínio dentro de apps/core/api.
+        Verifique aderência a docs/design-acesso-rapido/api-contracts.md:
+        session auth + CSRF por padrão, listas paginadas, detalhes sem envelope de
+        sucesso global, erros em {"error": {"code", "message", "details", "trace_id"}},
+        409 domain_conflict para conflito de domínio e mensagens PT-BR com códigos
+        técnicos em inglês.
+
+    - path: "apps/users/**/*.py"
+      instructions: >
+        Foque em autenticação por matricula_funcional, usuário inativo, Setor,
+        papel, chefe responsável e policies compartilhadas.
+        Regras estáveis do v2:
+        - login usa matricula_funcional única
+        - CPF e telefone não são cadastro permanente
+        - usuário pertence a um único setor
+        - setor deve ter chefe responsável
+        - um chefe não responde por dois setores
+        - chefe de Almoxarifado autoriza apenas o setor canônico Almoxarifado
+        - superusuário é suporte/administração técnica, não operador cotidiano de estoque
+        Sinalize regressões no caminho real de autenticação Django/Admin/sessão,
+        inclusive authenticate(username=..., password=...), e não apenas chamadas
+        específicas do backend customizado.
+
+    - path: "apps/materials/**/*.py"
+      instructions: >
+        Foque em integridade cadastral SCPI de GrupoMaterial, SubgrupoMaterial e
+        Material.
+        Campos oficiais vindos do SCPI não devem virar cadastro livre mantido pelo
+        ERP em fluxos operacionais normais.
+        Códigos de grupo/subgrupo devem permanecer exatamente com 3 dígitos
+        numéricos, reforçados por validação e constraint quando houver risco real
+        de bypass.
+        Revise unicidade, related_name, on_delete, filtros, busca textual e
+        exposição de campos oficiais como read-only em admin/API quando aplicável.
+        O campo local editável esperado é observação interna, não os dados oficiais
+        do SCPI.
+
+    - path: "apps/stock/**/*.py"
+      instructions: >
+        Foque em EstoqueMaterial, saldo_fisico, saldo_reservado e
+        saldo_disponivel.
+        Regra estável: saldo_disponivel = saldo_fisico - saldo_reservado.
+        Não aceite ajuste manual de estoque via admin ou endpoint operacional no
+        MVP. Mudanças futuras que alterem saldo/reserva devem usar transaction.atomic(),
+        select_for_update() quando houver concorrência, ordem determinística de locks
+        e testes PostgreSQL quando o comportamento depender de locking/constraints.
+        Sinalize risco de saldo negativo, reserva acima do disponível, físico menor
+        que reservado sem marcação de divergência, ou caminho que permita material
+        inativo/divergente em nova requisição.
+
+    - path: "apps/requisitions/**/*.py"
+      instructions: >
+        Este app pode aparecer em PRs futuros. Revise contra
+        docs/design-acesso-rapido/estado-transicoes-requisicao.md,
+        matriz-invariantes.md e matriz-permissoes.md.
+        Foque em rascunho, envio, autorização, recusa, retorno, cancelamento,
+        atendimento, snapshot do setor do beneficiário, número público anual,
+        consistência entre requisição e itens, reserva/baixa/liberação de estoque
+        e timeline auditável.
+        Não aceitar transições espalhadas em if/elif por views/serializers.
+        A máquina de estados deve ter uma fonte de verdade clara em service/use case.
+
+    - path: "apps/imports/**/*.py"
+      instructions: >
+        Este app pode aparecer em PRs futuros para SCPI CSV.
+        Revise normalização, pré-visualização e aplicação como serviço reutilizável.
+        O CSV SCPI é fonte oficial para cadastro de materiais e correção de saldo
+        físico; aplicação deve ser transacional quando persistir dados.
+        Erros técnicos impeditivos devem aplicar tudo ou nada. Alertas/divergências
+        podem exigir confirmação explícita, mas não devem corromper dados oficiais.
+        Material ausente no CSV não deve ser inativado automaticamente.
+
+    - path: "apps/**/models.py"
+      instructions: >
+        Revise nullability, defaults, constraints, indexes, related_name, on_delete,
+        unicidade, choices, validação estrutural e compatibilidade com as regras do
+        domínio.
+        Não incentive regra de negócio complexa em save(), clean(), managers ou
+        properties quando ela pertencer a services/use cases.
+        full_clean() e validação de serializer não bastam para invariantes críticos
+        que precisam resistir a bypass por ORM, bulk operations ou concorrência.
+        No contexto efêmero atual, models/constraints/testes são fonte de verdade;
+        migrations geradas são artefatos locais.
+
+    - path: "apps/**/views.py"
+      instructions: >
+        Revise como camada fina DRF.
+        Foque em permission_classes, escopo do queryset, IDOR, filtros públicos,
+        códigos HTTP, @extend_schema, serializers de input/output e delegação para
+        services.py quando houver regra de domínio.
+        Views não devem conter regra central de autorização contextual, transição de
+        estado, mutação de saldo/reserva, importação aplicada ou side effect.
+
+    - path: "apps/**/serializers.py"
+      instructions: >
+        Revise validação de formato, tipos, coerência local do payload, campos
+        read-only/write-only, campos sensíveis e representação de saída.
+        Serializers não devem virar service layer nem conter autorização contextual,
+        regra crítica de domínio ou side effects.
+        Contratos de API devem seguir os nomes e padrões de
+        docs/design-acesso-rapido/api-contracts.md quando houver endpoint formal.
+
+    - path: "apps/**/filters.py"
+      instructions: >
+        Foque em filtros tipados com django-filter, busca/ordenação com allowlist
+        explícita e não vazamento de campos sensíveis.
+        Regras de visibilidade por usuário, setor ou papel não devem ser escondidas
+        em filtros públicos; devem ficar em policy/queryset controlado.
+
+    - path: "apps/**/urls.py"
+      instructions: >
+        Verifique coerência entre rotas e contratos de API.
+        Endpoints formais devem ficar sob /api/v1/ quando estabilizados.
+        Ações customizadas precisam ter semântica, status, permissões e schema
+        coerentes com docs/design-acesso-rapido/api-contracts.md.
+
+    - path: "apps/**/admin.py"
+      instructions: >
+        Revise segurança operacional do Django Admin.
+        Admin não deve expor ações perigosas em massa nem permitir operação cotidiana
+        de estoque fora dos services.
+        Para users/materials/stock, respeite restrições de campos oficiais SCPI,
+        papéis/setores, usuário inativo, ausência de ajuste manual de estoque e
+        superfícies read-only quando o domínio exigir.
+
+    - path: "apps/**/migrations/*.py"
+      instructions: >
+        Migrations locais de apps são efêmeras neste estágio e normalmente não devem
+        ser versionadas nem exigidas em PR.
+        Não faça comentários pedindo editar/commitar migrations geradas apenas para
+        o ambiente local. Foque no model, constraints, índices e testes.
+        Exceção: se o PR for explicitamente de preparação para staging/produção ou
+        migração de dados real, revisar risco destrutivo, compatibilidade e plano de
+        aplicação.
+
+    - path: "apps/**/tests/**/*.py"
+      instructions: >
+        Foque em cobertura de regra de negócio, autorização, escopo por setor,
+        contratos DRF, envelope de erro, regressões, idempotência, concorrência e
+        transições de estado.
+        Para endpoints, exigir caminho feliz, não autenticado, permission denied,
+        input inválido, 409 domain_conflict quando aplicável, paginação/filtros/
+        ordenação e OpenAPI.
+        Para estoque/reserva/ledger/concurrency, testes SQLite não provam locking;
+        exigir teste PostgreSQL quando a regra depender de select_for_update(),
+        constraints parciais, índices ou corrida real.
+
+    - path: "config/**/*.py"
+      instructions: >
+        Revise settings, URLs raiz, ASGI/WSGI e configuração de apps com foco em
+        segurança, ambiente, autenticação, DRF, drf-spectacular, django-filter,
+        logging, DATABASE_URL e consistência entre dev/test/prod.
+        Evite duplicação divergente de INSTALLED_APPS entre settings.
+        Secrets não devem ser versionados.
+
+    - path: "requirements*.txt"
+      instructions: >
+        Revise apenas impacto real de dependências, segurança, compatibilidade,
+        remoções perigosas e efeito no ambiente. O projeto usa uv/lockfile; não
+        sugerir fluxo pip manual como padrão quando o repo define rtk/uv.
+
+    - path: "pyproject.toml"
+      instructions: >
+        Revise impacto em lint, format, pytest, coverage, dependências e tooling.
+        O baseline esperado é ruff check, ruff format --check e pytest via rtk/uv.
+
+    - path: "Makefile"
+      instructions: >
+        Revise comandos como contrato operacional do ambiente efêmero.
+        rtk make init é setup inicial, rtk make setup recria ambiente/migrations
+        locais, rtk make test executa a suíte e lint deve ser check-only alinhado à CI.
+
+    - path: ".github/workflows/*.yml"
+      instructions: >
+        Revise qualidade do CI, execução de lint/testes/checks Django, segurança de
+        secrets e confiabilidade do pipeline.
+        Considere que o fluxo do projeto exige ruff + pytest como gates reais e que
+        migrations locais de apps são geradas de forma efêmera quando necessário.
+
+    - path: "docs/design-acesso-rapido/**/*.md"
+      instructions: >
+        Estes docs são a referência operacional rápida para agentes e review.
+        Sinalize contradições entre API, permissões, invariantes, stack e transições.
+        Não aceitar mudança de código que altere contrato, permissão, estado, saldo,
+        importação ou auditoria sem atualizar o doc rápido afetado quando a decisão
+        do produto/arquitetura mudar.
+
+    - path: "docs/code-review-guidelines.md"
+      instructions: >
+        Este documento orienta o próprio CodeRabbit.
+        Revise para manter alinhamento com AGENTS.md, docs/design-acesso-rapido/ e
+        estado atual materializado do v2. Evite trazer regras específicas do repo
+        antigo que ainda não existem aqui, salvo como invariantes futuras claramente
+        documentadas.
