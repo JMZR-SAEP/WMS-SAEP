@@ -29,16 +29,16 @@ class TestSettingsLoading:
         assert "django.contrib.auth" in installed or "auth" in installed
         assert "rest_framework" in installed or "rest_framework" in installed
 
-    def test_no_domain_apps_installed(self):
-        """Verify no unauthorized domain apps are installed."""
+    def test_only_released_domain_apps_are_installed(self):
+        """Verify only the domain apps already released in the current milestone are installed."""
         installed = [app.name for app in apps.get_app_configs()]
         # users is installed after PIL-BE-ACE-001 (complete)
         # materials is installed after PIL-BE-MAT-001 (complete)
-        # stock is installed after PIL-BE-EST-001 (current)
+        # stock is installed after PIL-BE-EST-001 (complete)
+        # requisitions is installed after PIL-BE-REQ-001 (current)
         # Other domain apps should not be installed yet
         domain_apps = [
             "organizational",
-            "requisitions",
             "approvals",
             "warehouse",
             "notifications",
