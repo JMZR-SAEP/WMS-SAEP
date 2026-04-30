@@ -51,3 +51,17 @@ class TestOpenAPISchema:
         from django.conf import settings
 
         assert "apps.core" in settings.INSTALLED_APPS
+
+    def test_schema_contem_rotas_de_requisicoes(self):
+        """Verify requisitions routes are exposed in OpenAPI."""
+        client = APIClient()
+        response = client.get(reverse("schema"))
+
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert "/api/v1/requisitions/" in content
+        assert "/api/v1/requisitions/{id}/submit/" in content
+        assert "/api/v1/requisitions/{id}/return-to-draft/" in content
+        assert "/api/v1/requisitions/{id}/discard/" in content
+        assert "/api/v1/requisitions/{id}/cancel/" in content
+        assert "/api/v1/requisitions/pending-approvals/" in content
