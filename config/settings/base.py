@@ -63,7 +63,7 @@ WSGI_APPLICATION = "config.wsgi.application"
 DATABASES = {}
 DATABASE_URL = os.environ.get(
     "DATABASE_URL",
-    "postgres://saep:saep@localhost:5432/erp_saep",
+    "postgres://saep:saep@localhost:5432/wms_saep",
 )
 parsed_url = urlparse(DATABASE_URL)
 DATABASES["default"] = {
