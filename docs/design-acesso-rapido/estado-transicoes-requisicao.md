@@ -1,4 +1,4 @@
-# Estados e Transições da Requisição — ERP-SAEP
+# Estados e Transições da Requisição — WMS-SAEP
 
 ## 1. Objetivo
 

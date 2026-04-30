@@ -1,6 +1,6 @@
-# ERP-SAEP-v2 overview
+# WMS-SAEP-v2 overview
 
-ERP-SAEP is an auxiliary ERP for SAEP (Servico de Agua e Esgoto de Pirassununga), initially focused on a robust backend for warehouse/material requisition workflows.
+WMS-SAEP is an auxiliary WMS for SAEP (Servico de Agua e Esgoto de Pirassununga), initially focused on a robust backend for warehouse/material requisition workflows.
 
 The active implementation direction is backend/API only: domain modeling, persistence, authentication, authorization, stock/requisition workflows, SCPI CSV import, auditability, and technical/administrative operation paths. Frontend work is explicitly out of current scope and remains future planning only.
 

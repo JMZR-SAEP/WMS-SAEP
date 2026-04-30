@@ -1,10 +1,10 @@
-# Importação SCPI CSV — ERP-SAEP
+# Importação SCPI CSV — WMS-SAEP
 
 ## 1. Objetivo
 
-Definir como o ERP-SAEP importa, normaliza e aplica dados de materiais e saldos vindos do SCPI por arquivo CSV.
+Definir como o WMS-SAEP importa, normaliza e aplica dados de materiais e saldos vindos do SCPI por arquivo CSV.
 
-O SCPI é a fonte oficial dos dados cadastrais dos materiais e da correção de saldo físico. O ERP-SAEP usa esses dados como base operacional, mas não substitui o cadastro oficial do SCPI.
+O SCPI é a fonte oficial dos dados cadastrais dos materiais e da correção de saldo físico. O WMS-SAEP usa esses dados como base operacional, mas não substitui o cadastro oficial do SCPI.
 
 Status atual de implementação:
 
@@ -55,7 +55,7 @@ Cabeçalhos identificados no relatório:
 
 ## 3. Campos importados no MVP
 
-No MVP, devem ser importados apenas os campos necessários ao ERP-SAEP:
+No MVP, devem ser importados apenas os campos necessários ao WMS-SAEP:
 
 | Campo normalizado | Origem SCPI | Observação |
 |---|---|---|
@@ -91,7 +91,7 @@ O campo `NOCULTAR` não precisa ser importado no MVP, pois o relatório de orige
 
 ## 4. Normalização
 
-A importação deve possuir uma etapa de normalização antes da aplicação no banco do ERP-SAEP.
+A importação deve possuir uma etapa de normalização antes da aplicação no banco do WMS-SAEP.
 
 Regras:
 
@@ -107,7 +107,7 @@ Regras:
 
 Na carga inicial:
 
-- O ERP-SAEP importa grupos, subgrupos e materiais.
+- O WMS-SAEP importa grupos, subgrupos e materiais.
 - O campo `QUAN3` cria o saldo inicial do material.
 - Deve ser registrada movimentação de **entrada por saldo inicial**.
 - Essa carga pode ser executada por modo técnico/script administrativo durante o piloto, se isso acelerar a validação.
@@ -120,8 +120,8 @@ No baseline atual, esta é a única etapa de importação já implementada como 
 
 Em reimportações futuras:
 
-- Se o material já existir no ERP-SAEP com o mesmo código completo, seus dados cadastrais devem ser atualizados conforme o SCPI.
-- Para materiais já existentes, `QUAN3` deve atualizar o saldo físico do ERP-SAEP.
+- Se o material já existir no WMS-SAEP com o mesmo código completo, seus dados cadastrais devem ser atualizados conforme o SCPI.
+- Para materiais já existentes, `QUAN3` deve atualizar o saldo físico do WMS-SAEP.
 - Quando `QUAN3` alterar o saldo físico de material existente, registrar evento histórico **Atualização de saldo via SCPI**.
 
 Esse evento deve guardar:
@@ -148,7 +148,7 @@ Estas regras descrevem o comportamento-alvo de reimportação. Elas ainda não s
 
 ## 7. Materiais ausentes no CSV
 
-Se um material existir no ERP-SAEP, mas não vier no CSV do SCPI:
+Se um material existir no WMS-SAEP, mas não vier no CSV do SCPI:
 
 - Não deve ser inativado automaticamente.
 - Deve aparecer em relatório/lista de divergência.
@@ -162,12 +162,12 @@ Se um material existir no ERP-SAEP, mas não vier no CSV do SCPI:
 
 ## 8. Divergência crítica
 
-Pode ocorrer quando o saldo físico importado do SCPI fica menor que o saldo reservado no ERP-SAEP.
+Pode ocorrer quando o saldo físico importado do SCPI fica menor que o saldo reservado no WMS-SAEP.
 
 Exemplo:
 
 - Saldo físico importado: 10.
-- Saldo reservado no ERP-SAEP: 20.
+- Saldo reservado no WMS-SAEP: 20.
 - Saldo disponível: -10.
 
 Regras:
@@ -205,7 +205,7 @@ A pré-visualização deve apresentar:
 - total de produtos lógicos lidos;
 - quantidade de materiais novos;
 - quantidade de materiais existentes que serão atualizados;
-- materiais existentes no ERP-SAEP que não vieram no CSV;
+- materiais existentes no WMS-SAEP que não vieram no CSV;
 - quantidade de erros técnicos;
 - lista detalhada apenas dos erros;
 - botão para confirmar importação;
@@ -267,7 +267,7 @@ Esta seção descreve capacidade futura. O baseline atual não mantém ainda um 
 
 ## 11. Erros de importação
 
-O ERP-SAEP deve confiar que os dados cadastrais principais já foram validados pelo SCPI, incluindo:
+O WMS-SAEP deve confiar que os dados cadastrais principais já foram validados pelo SCPI, incluindo:
 
 - formato do `CADPRO`;
 - relação entre `CADPRO`, `GRUPO` e `SUBGRUPO`;
@@ -276,7 +276,7 @@ O ERP-SAEP deve confiar que os dados cadastrais principais já foram validados p
 - quantidade/saldo;
 - ausência de duplicidade lógica.
 
-O importador do ERP-SAEP deve reportar principalmente erros técnicos de leitura, normalização ou salvamento.
+O importador do WMS-SAEP deve reportar principalmente erros técnicos de leitura, normalização ou salvamento.
 
 No MVP, a importação deve seguir a regra de **tudo ou nada**: se houver erro técnico impeditivo, nenhuma alteração deve ser aplicada. O sistema não deve importar parcialmente os registros válidos quando houver falha técnica que comprometa a leitura, normalização ou gravação confiável do arquivo.
 

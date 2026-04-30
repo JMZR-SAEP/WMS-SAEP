@@ -1,4 +1,4 @@
-# ERP-SAEP development routines
+# WMS-SAEP development routines
 #
 # Fluxo pensado para a fase atual do projeto:
 # - ambiente descartável

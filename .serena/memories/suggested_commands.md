@@ -38,4 +38,4 @@ Useful Darwin/macOS development commands:
 - `rtk sed -n '1,200p' path`
 - `rtk proxy find . -maxdepth 3 -type f`
 
-Serena was initialized for `/Users/jmzr/Dev/ERP-SAEP-v2` with project name `ERP-SAEP-v2`.
+Serena was initialized for `/Users/jmzr/Dev/WMS-SAEP-v2` with project name `WMS-SAEP-v2`.

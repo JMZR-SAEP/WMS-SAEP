@@ -2,11 +2,7 @@
 
 ## Projeto
 
->ERP auxiliar para o **SAEP — Serviço de Água e Esgoto de Pirassununga**, autarquia municipal. O foco inicial é um backend robusto em **Django 6 + Django REST Framework (DRF)**.
-
-## IDs do Context7 para consulta rápida:
-- Django 6: `/django/django`
-- DRF: `/encode/django-rest-framework`
+>WMS auxiliar para o **SAEP — Serviço de Água e Esgoto de Pirassununga**, autarquia municipal. O foco inicial é um backend robusto em **Django 6 + Django REST Framework (DRF)**.
 
 ## Estratégia de leitura da documentação
 
@@ -15,6 +11,11 @@ Para economizar tokens e manter os agentes focados, a documentação de design d
 - `docs/design-acesso-rapido/`: sínteses operacionais. Deve ser a primeira fonte consultada por agentes de IA.
 - `docs/design-acesso-ocasional/`: documentação completa. Deve ser consultada apenas quando a síntese rápida não resolver a dúvida, quando houver ambiguidade ou quando a tarefa depender de detalhe de domínio.
 - `docs/code-review-guidelines.md` e `.coderabbit.yaml`: orientam o comportamento de revisões de código.
+
+### IDs do Context7 para consulta rápida:
+
+- Django 6: `/django/django`
+- DRF: `/encode/django-rest-framework`
 
 ### Exemplos positivos do que fazer:
 

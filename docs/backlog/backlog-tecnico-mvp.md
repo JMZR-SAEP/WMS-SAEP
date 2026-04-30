@@ -151,7 +151,7 @@ Objetivo: completar a primeira versão operacional mínima após validação do 
 - **Tipo:** Backend / Frontend
 - **Agente sugerido:** Agente fullstack
 - **Depende de:** MVP-BE-IMP-001
-- **Objetivo:** listar materiais existentes no ERP-SAEP que não vieram no CSV.
+- **Objetivo:** listar materiais existentes no WMS-SAEP que não vieram no CSV.
 - **Regras de negócio:**
   - Material ausente no CSV não deve ser inativado automaticamente.
   - Ausência deve aparecer para análise.
@@ -844,7 +844,7 @@ Objetivo: registrar funcionalidades futuras que não devem entrar no piloto nem 
 
 Itens pós-MVP:
 
-- Ajuste manual de estoque no ERP-SAEP.
+- Ajuste manual de estoque no WMS-SAEP.
 - Conversão de unidades de medida.
 - Edição manual dos dados cadastrais de materiais provenientes do SCPI.
 - Cadastro e uso operacional de localização física de prateleiras.

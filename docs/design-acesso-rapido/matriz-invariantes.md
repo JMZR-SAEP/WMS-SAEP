@@ -1,4 +1,4 @@
-# Matriz de Invariantes — ERP-SAEP
+# Matriz de Invariantes — WMS-SAEP
 
 ## 1. Objetivo
 
@@ -66,7 +66,7 @@ Para cada mudança, localizar o invariante aplicável, implementar na camada ind
 | AUD-05 | Auditoria | Side effects ocorrem após commit quando aplicável. | Eventos/`publish_on_commit()`. | Falha de notificação não desfaz operação; só após commit. | CodeRabbit |
 | AUD-06 | Auditoria | Notificações não decidem sucesso da transação principal. | Side effect desacoplado. | Operação conclui sem depender de notificação. | CodeRabbit |
 | SCPI-01 | SCPI CSV | SCPI é a fonte oficial para a carga inicial técnica de catálogo e saldo físico. | Import service/model. | Criar grupo, subgrupo, material e saldo inicial pelo CSV. | Importação 1 |
-| SCPI-02 | SCPI CSV | ERP-SAEP não edita cadastro oficial vindo do SCPI. | Campos oficiais read-only. | Bloquear edição de nome, descrição, grupo, subgrupo, sequencial e unidade. | Modelo 2.1 |
+| SCPI-02 | SCPI CSV | WMS-SAEP não edita cadastro oficial vindo do SCPI. | Campos oficiais read-only. | Bloquear edição de nome, descrição, grupo, subgrupo, sequencial e unidade. | Modelo 2.1 |
 | SCPI-03 | SCPI CSV | CSV aceito: UTF-8 com BOM e separador `;`. | Leitor configurado. | Arquivo válido lido corretamente. | Crit. 8.1 |
 | SCPI-04 | SCPI CSV | Linha sem código continua o registro lógico anterior. | Normalizer de produto lógico. | Nome/descrição quebrados em múltiplas linhas viram um único material lógico. | Crit. 8.1 |
 | SCPI-05 | SCPI CSV | Erro técnico impeditivo aplica tudo ou nada. | Transação na aplicação. | Falha técnica não persiste nada. | Crit. 8.3 |
@@ -86,7 +86,7 @@ Para cada mudança, localizar o invariante aplicável, implementar na camada ind
 - **Usuários/setores/papéis:** dados cadastrais definem escopo; permissões completas ficam em `matriz-permissoes.md`.
 - **Requisições/itens:** estados e transições ficam em `estado-transicoes-requisicao.md`; este arquivo lista invariantes que não podem ser contornados.
 - **Estoque:** qualquer mutação de saldo/reserva é transacional, auditável e recalcula disponibilidade no ponto crítico.
-- **SCPI:** cadastro oficial e correção de físico vêm do SCPI; ERP-SAEP só registra observações internas e operações formais.
+- **SCPI:** cadastro oficial e correção de físico vêm do SCPI; WMS-SAEP só registra observações internas e operações formais.
 - **API:** contrato DRF é parte da entrega, não etapa posterior.
 
 ## 5. Checklist para PRs

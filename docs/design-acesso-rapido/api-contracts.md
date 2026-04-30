@@ -1,6 +1,6 @@
-# Contratos de API — ERP-SAEP
+# Contratos de API — WMS-SAEP
 
-Este documento define o padrão obrigatório para endpoints HTTP do ERP-SAEP.
+Este documento define o padrão obrigatório para endpoints HTTP do WMS-SAEP.
 
 A API formal deve ser versionada em `/api/v1/`, implementada com Django REST Framework e documentada com drf-spectacular. Nenhum endpoint novo ou alterado deve ser considerado completo sem contrato explícito de autenticação, autorização, entrada, saída, status HTTP, erros, paginação/filtros quando aplicável e schema OpenAPI.
 

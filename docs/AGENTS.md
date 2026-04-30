@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Este arquivo é o **traffic marshal** da documentação do ERP-SAEP. Ele não é a documentação de domínio em si; ele indica a rota correta para agentes encontrarem a fonte mais adequada sem ler documentos demais nem decidir com base em fonte incompleta.
+Este arquivo é o **traffic marshal** da documentação do WMS-SAEP. Ele não é a documentação de domínio em si; ele indica a rota correta para agentes encontrarem a fonte mais adequada sem ler documentos demais nem decidir com base em fonte incompleta.
 
 ## Rota padrão
 

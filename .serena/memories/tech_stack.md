@@ -1,6 +1,6 @@
 # Tech stack
 
-Current active stack for ERP-SAEP:
+Current active stack for WMS-SAEP:
 - Python compatible with Django 6.
 - Django 6 monolith.
 - Django REST Framework for APIs.

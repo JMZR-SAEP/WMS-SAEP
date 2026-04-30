@@ -1,4 +1,4 @@
-# Matriz de Permissões — ERP-SAEP
+# Matriz de Permissões — WMS-SAEP
 
 ## 1. Objetivo
 

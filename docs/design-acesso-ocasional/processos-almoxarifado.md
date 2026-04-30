@@ -2,7 +2,7 @@
 
 ## 1.1 Objetivo
 
-Descrever os fluxos operacionais do módulo de Almoxarifado do ERP-SAEP, incluindo criação de requisição, autorização, atendimento, cancelamento, devolução, saídas excepcionais e estornos.
+Descrever os fluxos operacionais do módulo de Almoxarifado do WMS-SAEP, incluindo criação de requisição, autorização, atendimento, cancelamento, devolução, saídas excepcionais e estornos.
 
 ## 1.2 Fluxo principal de requisição
 

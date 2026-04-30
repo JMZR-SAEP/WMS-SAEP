@@ -1,4 +1,4 @@
-# Backlog Técnico — ERP-SAEP
+# Backlog Técnico — WMS-SAEP
 
 O backlog técnico foi dividido em dois documentos:
 
