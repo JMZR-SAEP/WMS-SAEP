@@ -181,10 +181,15 @@ class Requisicao(models.Model):
                 )
             self.setor_beneficiario_id = self.beneficiario.setor_id
         else:
-            persisted = type(self).objects.filter(pk=self.pk).values(
-                "beneficiario_id",
-                "setor_beneficiario_id",
-            ).first()
+            persisted = (
+                type(self)
+                .objects.filter(pk=self.pk)
+                .values(
+                    "beneficiario_id",
+                    "setor_beneficiario_id",
+                )
+                .first()
+            )
             if persisted is not None:
                 errors = {}
                 if self.beneficiario_id != persisted["beneficiario_id"]:
