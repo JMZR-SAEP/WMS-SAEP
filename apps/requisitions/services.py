@@ -46,6 +46,8 @@ class ItemAutorizacaoData:
 def _side_effect_reservar_itens_autorizados(
     requisicao: Requisicao, payload: dict[str, object]
 ) -> None:
+    # CONTRATO: payload precisa conter "itens_requisicao": list[ItemRequisicao]
+    # quando este side effect for registrado em TRANSICOES_REQUISICAO.
     for item_requisicao in payload["itens_requisicao"]:
         quantidade_autorizada = item_requisicao.quantidade_autorizada
         if quantidade_autorizada <= 0:
@@ -95,7 +97,7 @@ TRANSICOES_REQUISICAO: dict[str, dict[str, object]] = {
 }
 
 
-def apply_requisicao_transition(
+def _apply_requisicao_transition(
     requisicao: Requisicao,
     transition_name: str,
     actor: User,
@@ -183,8 +185,8 @@ def _validar_itens_autorizacao(
 
     houve_quantidade_maior_que_zero = False
     erros_itens: list[dict[str, list[str]]] = [{} for _ in itens]
-    for index, item_requisicao in enumerate(itens_requisicao):
-        item_autorizacao = itens_por_id[item_requisicao.id]
+    for index, item_autorizacao in enumerate(itens):
+        item_requisicao = itens_requisicao_por_id[item_autorizacao.item_id]
         if item_autorizacao.quantidade_autorizada > 0:
             houve_quantidade_maior_que_zero = True
 
@@ -606,7 +608,7 @@ def autorizar_requisicao(
         ):
             transicao = "autorizar_parcial"
 
-        apply_requisicao_transition(
+        _apply_requisicao_transition(
             requisicao=requisicao,
             transition_name=transicao,
             actor=ator,
@@ -646,7 +648,7 @@ def recusar_requisicao(*, requisicao: Requisicao, ator: User, motivo_recusa: str
                 details={"status_atual": requisicao.status},
             )
 
-        apply_requisicao_transition(
+        _apply_requisicao_transition(
             requisicao=requisicao,
             transition_name="recusar",
             actor=ator,

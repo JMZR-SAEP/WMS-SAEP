@@ -1,8 +1,8 @@
 from decimal import Decimal
 
 from django.db import IntegrityError, transaction
-from rest_framework.exceptions import ValidationError
 
+from apps.core.api.exceptions import DomainConflict
 from apps.materials.models import Material
 from apps.requisitions.models import ItemRequisicao, Requisicao
 from apps.stock.models import (
@@ -63,15 +63,11 @@ def registrar_reserva_por_autorizacao(
     requisicao: Requisicao,
     item: ItemRequisicao,
     quantidade: Decimal,
-) -> tuple[EstoqueMaterial, MovimentacaoEstoque] | None:
+) -> tuple[EstoqueMaterial, MovimentacaoEstoque]:
     """Registra reserva por autorização sem alterar saldo físico.
 
-    Retorna `(estoque, movimentacao)` quando a quantidade for maior que zero.
-    Quando a quantidade for zero, não cria movimentação e retorna `None`.
+    Retorna `(estoque, movimentacao)`.
     """
-    if quantidade <= 0:
-        return None
-
     with transaction.atomic():
         estoque = (
             EstoqueMaterial.objects.select_for_update()
@@ -80,13 +76,13 @@ def registrar_reserva_por_autorizacao(
         )
 
         if quantidade > estoque.saldo_disponivel:
-            raise ValidationError(
-                {
-                    "quantidade": (
-                        f"Quantidade reservada ({quantidade}) excede o saldo disponível "
-                        f"({estoque.saldo_disponivel}) para o material {item.material.codigo_completo}."
-                    )
-                }
+            raise DomainConflict(
+                "Quantidade reservada excede o saldo disponível.",
+                details={
+                    "quantidade": str(quantidade),
+                    "saldo_disponivel": str(estoque.saldo_disponivel),
+                    "material_id": item.material_id,
+                },
             )
 
         saldo_reservado_anterior = estoque.saldo_reservado
