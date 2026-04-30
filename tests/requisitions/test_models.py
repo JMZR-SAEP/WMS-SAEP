@@ -178,20 +178,32 @@ class TestRequisicaoModel:
         req.save()
         assert req.status == StatusRequisicao.RECUSADA
 
-    def test_constraint_motivo_cancelamento_obrigatorio(self):
-        """REQ-domain — motivo_cancelamento obrigatório quando status=cancelada"""
+    def test_constraint_motivo_cancelamento_obrigatorio_pos_autorizacao(self):
+        """REQ-domain — motivo_cancelamento obrigatório após etapa de autorização"""
         req = self._criar_requisicao()
         req.status = StatusRequisicao.CANCELADA
+        req.data_autorizacao_ou_recusa = timezone.now()
         req.motivo_cancelamento = ""
         with pytest.raises(IntegrityError):
             req.save()
 
-    def test_constraint_motivo_cancelamento_valido(self):
-        """REQ-domain — motivo_cancelamento válido quando preenchido"""
+    def test_constraint_motivo_cancelamento_valido_pos_autorizacao(self):
+        """REQ-domain — motivo_cancelamento preenchido segue válido após autorização"""
         req = self._criar_requisicao()
         req.status = StatusRequisicao.CANCELADA
+        req.data_autorizacao_ou_recusa = timezone.now()
         req.motivo_cancelamento = "Solicitação cancelada por diretor"
         req.save()
+        assert req.status == StatusRequisicao.CANCELADA
+
+    def test_constraint_motivo_cancelamento_nao_e_obrigatorio_pre_autorizacao(self):
+        """REQ-domain — cancelamento pré-autorização não exige justificativa"""
+        req = self._criar_requisicao()
+        req.status = StatusRequisicao.CANCELADA
+        req.motivo_cancelamento = ""
+
+        req.save()
+
         assert req.status == StatusRequisicao.CANCELADA
 
     def test_numero_publico_unico_quando_preenchido(self):
@@ -240,6 +252,16 @@ class TestRequisicaoModel:
 
         with pytest.raises(IntegrityError):
             req.save()
+
+    def test_numero_publico_em_rascunho_reenviado_eh_valido(self):
+        """REQ-02 — rascunho já enviado alguma vez preserva o número público"""
+        req = self._criar_requisicao()
+        req.numero_publico = "REQ-2026-000001"
+        req.data_envio_autorizacao = timezone.now()
+
+        req.save()
+
+        assert req.numero_publico == "REQ-2026-000001"
 
     def test_numero_publico_null_nao_e_unico(self):
         """REQ-02 — multiplas requisições podem ter numero_publico=None"""

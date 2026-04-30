@@ -28,6 +28,7 @@ class StatusRequisicao(models.TextChoices):
 class TipoEvento(models.TextChoices):
     CRIACAO = "criacao", "Criação"
     ENVIO_AUTORIZACAO = "envio_autorizacao", "Envio para Autorização"
+    RETORNO_RASCUNHO = "retorno_rascunho", "Retorno para Rascunho"
     REENVIO_AUTORIZACAO = "reenvio_autorizacao", "Reenvio para Autorização"
     AUTORIZACAO = "autorizacao", "Autorização"
     RECUSA = "recusa", "Recusa"
@@ -35,6 +36,27 @@ class TipoEvento(models.TextChoices):
     ATENDIMENTO = "atendimento", "Atendimento"
     CANCELAMENTO = "cancelamento", "Cancelamento"
     ESTORNO = "estorno", "Estorno"
+
+
+class SequenciaNumeroRequisicao(models.Model):
+    ano = models.PositiveIntegerField(unique=True)
+    ultimo_numero = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Sequência Anual de Requisição"
+        verbose_name_plural = "Sequências Anuais de Requisição"
+        ordering = ["-ano"]
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(ultimo_numero__gte=0),
+                name="req_seq_ultimo_numero_nao_negativo",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.ano}: {self.ultimo_numero}"
 
 
 class Requisicao(models.Model):
@@ -152,16 +174,19 @@ class Requisicao(models.Model):
             models.CheckConstraint(
                 condition=Q(numero_publico__isnull=True)
                 | Q(numero_publico="")
-                | ~Q(status=StatusRequisicao.RASCUNHO),
-                name="req_numero_publico_nao_pode_ser_preenchido_em_rascunho",
+                | ~Q(status=StatusRequisicao.RASCUNHO)
+                | Q(data_envio_autorizacao__isnull=False),
+                name="req_numero_publico_nao_pode_ser_preenchido_em_rascunho_nunca_enviado",
             ),
             models.CheckConstraint(
                 condition=~Q(status=StatusRequisicao.RECUSADA) | Q(motivo_recusa__gt=""),
                 name="req_motivo_recusa_obrigatorio_quando_recusada",
             ),
             models.CheckConstraint(
-                condition=~Q(status=StatusRequisicao.CANCELADA) | Q(motivo_cancelamento__gt=""),
-                name="req_motivo_cancelamento_obrigatorio_quando_cancelada",
+                condition=~Q(status=StatusRequisicao.CANCELADA)
+                | Q(motivo_cancelamento__gt="")
+                | Q(data_autorizacao_ou_recusa__isnull=True),
+                name="req_motivo_cancelamento_obrigatorio_quando_cancelada_pos_autorizacao",
             ),
         ]
 
