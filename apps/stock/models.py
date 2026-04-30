@@ -23,6 +23,12 @@ class MovimentacaoEstoqueQuerySet(models.QuerySet):
 
 
 class MovimentacaoEstoqueManager(models.Manager.from_queryset(MovimentacaoEstoqueQuerySet)):
+    def bulk_create(self, objs, **kwargs):
+        objs = list(objs)
+        for obj in objs:
+            obj.full_clean()
+        return super().bulk_create(objs, **kwargs)
+
     def bulk_update(self, objs, fields, batch_size=None):
         raise ValueError("Movimentações de estoque são imutáveis")
 

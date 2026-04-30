@@ -68,6 +68,12 @@ def registrar_reserva_por_autorizacao(
 
     Retorna `(estoque, movimentacao)`.
     """
+    if quantidade <= 0:
+        raise DomainConflict(
+            "Quantidade reservada deve ser maior que zero.",
+            details={"quantidade": str(quantidade)},
+        )
+
     with transaction.atomic():
         estoque = (
             EstoqueMaterial.objects.select_for_update()

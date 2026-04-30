@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
@@ -187,17 +187,20 @@ def _validar_itens_autorizacao(
     erros_itens: list[dict[str, list[str]]] = [{} for _ in itens]
     for index, item_autorizacao in enumerate(itens):
         item_requisicao = itens_requisicao_por_id[item_autorizacao.item_id]
-        if item_autorizacao.quantidade_autorizada > 0:
-            houve_quantidade_maior_que_zero = True
-
         item_erros: dict[str, list[str]] = {}
+        justificativa_autorizacao_parcial = (
+            item_autorizacao.justificativa_autorizacao_parcial or ""
+        ).strip()
+
+        if item_autorizacao.quantidade_autorizada < 0:
+            item_erros["quantidade_autorizada"] = ["Não pode ser negativa."]
         if item_autorizacao.quantidade_autorizada > item_requisicao.quantidade_solicitada:
             item_erros["quantidade_autorizada"] = [
                 "Não pode ser maior que a quantidade solicitada."
             ]
         if (
             item_autorizacao.quantidade_autorizada < item_requisicao.quantidade_solicitada
-            and not item_autorizacao.justificativa_autorizacao_parcial
+            and not justificativa_autorizacao_parcial
         ):
             item_erros["justificativa_autorizacao_parcial"] = [
                 "Justificativa é obrigatória quando a autorização é parcial ou zero."
@@ -205,6 +208,14 @@ def _validar_itens_autorizacao(
 
         if item_erros:
             erros_itens[index] = item_erros
+            continue
+
+        if item_autorizacao.quantidade_autorizada > 0:
+            houve_quantidade_maior_que_zero = True
+        itens_por_id[item_autorizacao.item_id] = replace(
+            item_autorizacao,
+            justificativa_autorizacao_parcial=justificativa_autorizacao_parcial,
+        )
 
     if any(erros_itens):
         raise ValidationError({"itens": erros_itens})
@@ -539,11 +550,10 @@ def cancelar_pre_autorizacao(*, requisicao: Requisicao, ator: User) -> Requisica
 def autorizar_requisicao(
     *, requisicao: Requisicao, ator: User, itens: list[ItemAutorizacaoData]
 ) -> Requisicao:
-    if not pode_autorizar_requisicao(ator, requisicao):
-        raise PermissionDenied("Usuário sem permissão para autorizar esta requisição.")
-
     with transaction.atomic():
         requisicao = _recarregar_requisicao_para_autorizacao(requisicao)
+        if not pode_autorizar_requisicao(ator, requisicao):
+            raise PermissionDenied("Usuário sem permissão para autorizar esta requisição.")
 
         if requisicao.status != StatusRequisicao.AGUARDANDO_AUTORIZACAO:
             raise DomainConflict(
@@ -632,15 +642,14 @@ def autorizar_requisicao(
 
 
 def recusar_requisicao(*, requisicao: Requisicao, ator: User, motivo_recusa: str) -> Requisicao:
-    if not pode_autorizar_requisicao(ator, requisicao):
-        raise PermissionDenied("Usuário sem permissão para recusar esta requisição.")
-
     motivo_recusa = motivo_recusa.strip()
     if not motivo_recusa:
         raise ValidationError({"motivo_recusa": ["Motivo da recusa é obrigatório."]})
 
     with transaction.atomic():
         requisicao = _recarregar_requisicao_para_autorizacao(requisicao)
+        if not pode_autorizar_requisicao(ator, requisicao):
+            raise PermissionDenied("Usuário sem permissão para recusar esta requisição.")
 
         if requisicao.status != StatusRequisicao.AGUARDANDO_AUTORIZACAO:
             raise DomainConflict(

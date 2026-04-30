@@ -3,10 +3,11 @@ from decimal import Decimal
 import pytest
 from django.core.exceptions import ValidationError
 
+from apps.core.api.exceptions import DomainConflict
 from apps.materials.models import GrupoMaterial, Material, SubgrupoMaterial
 from apps.requisitions.models import ItemRequisicao, Requisicao, StatusRequisicao
 from apps.stock.models import EstoqueMaterial, MovimentacaoEstoque, TipoMovimentacao
-from apps.stock.services import registrar_saldo_inicial
+from apps.stock.services import registrar_reserva_por_autorizacao, registrar_saldo_inicial
 from apps.users.models import PapelChoices, Setor, User
 
 
@@ -257,3 +258,104 @@ class TestRegistrarSaldoInicial:
                 saldo_reservado_posterior=Decimal("2.000"),
                 observacao="Reserva inconsistente",
             )
+
+    def test_movimentacao_bulk_create_valida_invariantes(self):
+        chefe = User.objects.create(
+            matricula_funcional="99002",
+            nome_completo="Chefe Estoque 2",
+            papel=PapelChoices.CHEFE_SETOR,
+            is_active=True,
+        )
+        setor = Setor.objects.create(nome="Setor Estoque 2", chefe_responsavel=chefe)
+        chefe.setor = setor
+        chefe.save(update_fields=["setor"])
+        material_a = self._criar_material()
+        grupo = material_a.subgrupo.grupo
+        subgrupo = SubgrupoMaterial.objects.create(
+            grupo=grupo,
+            codigo_subgrupo="005",
+            nome="Subgrupo C",
+        )
+        material_b = Material.objects.create(
+            subgrupo=subgrupo,
+            codigo_completo="001.005.001",
+            sequencial="001",
+            nome="Material C",
+            unidade_medida="UN",
+        )
+        requisicao = Requisicao.objects.create(
+            criador=chefe,
+            beneficiario=chefe,
+            setor_beneficiario=setor,
+            status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
+        )
+        item = ItemRequisicao.objects.create(
+            requisicao=requisicao,
+            material=material_a,
+            unidade_medida=material_a.unidade_medida,
+            quantidade_solicitada=Decimal("2.000"),
+        )
+
+        with pytest.raises(ValidationError):
+            MovimentacaoEstoque.objects.bulk_create(
+                [
+                    MovimentacaoEstoque(
+                        requisicao=requisicao,
+                        item_requisicao=item,
+                        material=material_b,
+                        tipo=TipoMovimentacao.RESERVA_POR_AUTORIZACAO,
+                        quantidade=Decimal("2.000"),
+                        saldo_anterior=Decimal("10.000"),
+                        saldo_posterior=Decimal("10.000"),
+                        saldo_reservado_anterior=Decimal("0.000"),
+                        saldo_reservado_posterior=Decimal("2.000"),
+                        observacao="Reserva inconsistente em lote",
+                    )
+                ]
+            )
+
+    def test_registrar_reserva_rejeita_quantidade_nao_positiva(self):
+        chefe = User.objects.create(
+            matricula_funcional="99003",
+            nome_completo="Chefe Estoque 3",
+            papel=PapelChoices.CHEFE_SETOR,
+            is_active=True,
+        )
+        setor = Setor.objects.create(nome="Setor Estoque 3", chefe_responsavel=chefe)
+        chefe.setor = setor
+        chefe.save(update_fields=["setor"])
+        material = self._criar_material()
+        estoque = EstoqueMaterial.objects.create(
+            material=material,
+            saldo_fisico=Decimal("10"),
+            saldo_reservado=Decimal("3"),
+        )
+        requisicao = Requisicao.objects.create(
+            criador=chefe,
+            beneficiario=chefe,
+            setor_beneficiario=setor,
+            status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
+        )
+        item = ItemRequisicao.objects.create(
+            requisicao=requisicao,
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal("2.000"),
+        )
+
+        with pytest.raises(DomainConflict):
+            registrar_reserva_por_autorizacao(
+                requisicao=requisicao,
+                item=item,
+                quantidade=Decimal("0"),
+            )
+        with pytest.raises(DomainConflict):
+            registrar_reserva_por_autorizacao(
+                requisicao=requisicao,
+                item=item,
+                quantidade=Decimal("-1"),
+            )
+
+        estoque.refresh_from_db()
+        assert estoque.saldo_reservado == Decimal("3")
+        assert MovimentacaoEstoque.objects.count() == 0

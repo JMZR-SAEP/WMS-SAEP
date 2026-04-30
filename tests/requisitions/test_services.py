@@ -254,6 +254,58 @@ class TestAutorizacaoRequisicaoService:
                 ],
             )
 
+    def test_autoriza_parcial_com_justificativa_so_com_espacos_falha(self):
+        setor = self._criar_setor("Oficina Pesada", "91031")
+        chefe = setor.chefe_responsavel
+        requisitante = self._criar_usuario("11031", "Solicitante Oficina Pesada", setor=setor)
+        material = self._criar_material_com_estoque("001.002.031", saldo_fisico=Decimal("8"))
+        requisicao, item = self._criar_requisicao_aguardando(
+            criador=requisitante,
+            beneficiario=requisitante,
+            numero_publico="REQ-2026-100031",
+            item_quantidade=Decimal("5"),
+            material=material,
+        )
+
+        with pytest.raises(ValidationError):
+            autorizar_requisicao(
+                requisicao=requisicao,
+                ator=chefe,
+                itens=[
+                    ItemAutorizacaoData(
+                        item_id=item.id,
+                        quantidade_autorizada=Decimal("4"),
+                        justificativa_autorizacao_parcial="   ",
+                    )
+                ],
+            )
+
+    def test_autoriza_quantidade_negativa_falha_no_service(self):
+        setor = self._criar_setor("Planejamento", "91032")
+        chefe = setor.chefe_responsavel
+        requisitante = self._criar_usuario("11032", "Solicitante Planejamento", setor=setor)
+        material = self._criar_material_com_estoque("001.002.032", saldo_fisico=Decimal("8"))
+        requisicao, item = self._criar_requisicao_aguardando(
+            criador=requisitante,
+            beneficiario=requisitante,
+            numero_publico="REQ-2026-100032",
+            item_quantidade=Decimal("5"),
+            material=material,
+        )
+
+        with pytest.raises(ValidationError):
+            autorizar_requisicao(
+                requisicao=requisicao,
+                ator=chefe,
+                itens=[
+                    ItemAutorizacaoData(
+                        item_id=item.id,
+                        quantidade_autorizada=Decimal("-1"),
+                        justificativa_autorizacao_parcial="Inválida",
+                    )
+                ],
+            )
+
     def test_autoriza_todos_itens_zerados_falha(self):
         setor = self._criar_setor("Financeiro", "91004")
         chefe = setor.chefe_responsavel
@@ -358,6 +410,7 @@ class TestAutorizacaoRequisicaoService:
         with pytest.raises(ValidationError):
             recusar_requisicao(requisicao=requisicao, ator=chefe, motivo_recusa="   ")
 
+    @pytest.mark.postgres
     def test_autorizacoes_concorrentes_nao_dividem_mesmo_saldo(self):
         setor = self._criar_setor("Logistica", "91008")
         chefe = setor.chefe_responsavel
