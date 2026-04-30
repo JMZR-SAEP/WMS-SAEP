@@ -107,6 +107,61 @@ class TestRequisicaoModel:
         assert req.beneficiario == beneficiario
         assert req.setor_beneficiario == setor
 
+    def test_setor_beneficiario_e_derivado_do_beneficiario_na_criacao(self):
+        """REQ-domain — snapshot do setor é sempre derivado do beneficiário no create"""
+        criador = self._criar_usuario(matricula="1001", nome="João")
+        beneficiario = self._criar_usuario(matricula="1002", nome="Maria")
+        outro_setor = self._criar_setor(nome="Outro Setor", matricula_chefe="9909")
+
+        req = self._criar_requisicao(
+            criador=criador,
+            beneficiario=beneficiario,
+            setor_beneficiario=outro_setor,
+        )
+
+        assert req.setor_beneficiario == beneficiario.setor
+
+    def test_beneficiario_nao_pode_ser_alterado_apos_criacao(self):
+        """REQ-domain — beneficiário é imutável após a criação"""
+        req = self._criar_requisicao()
+        novo_beneficiario = self._criar_usuario(matricula="1003", nome="Carlos")
+
+        req.beneficiario = novo_beneficiario
+
+        with pytest.raises(ValidationError):
+            req.save(update_fields=["beneficiario"])
+
+    def test_setor_beneficiario_nao_pode_ser_alterado_apos_criacao(self):
+        """REQ-domain — snapshot de setor é imutável após a criação"""
+        req = self._criar_requisicao()
+        outro_setor = self._criar_setor(nome="Setor Alternativo", matricula_chefe="9910")
+
+        req.setor_beneficiario = outro_setor
+
+        with pytest.raises(ValidationError):
+            req.save(update_fields=["setor_beneficiario"])
+
+    def test_beneficiario_sem_setor_nao_pode_criar_requisicao(self):
+        """REQ-domain — criação exige beneficiário com setor para materializar snapshot"""
+        criador = self._criar_usuario(matricula="1001", nome="João")
+        beneficiario = User.objects.create(
+            matricula_funcional="1004",
+            nome_completo="Ana sem setor",
+            papel=PapelChoices.SOLICITANTE,
+        )
+
+        with pytest.raises(ValidationError):
+            Requisicao.objects.create(
+                criador=criador,
+                beneficiario=beneficiario,
+                setor_beneficiario=criador.setor,
+            )
+
+    def test_setor_beneficiario_nao_e_editavel(self):
+        """REQ-domain — snapshot histórico não aparece em forms ModelForm por editable=False"""
+        field = Requisicao._meta.get_field("setor_beneficiario")
+        assert field.editable is False
+
     def test_constraint_motivo_recusa_obrigatorio(self):
         """REQ-domain — motivo_recusa obrigatório quando status=recusada"""
         req = self._criar_requisicao()

@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
 from django.db import models
 from django.db.models import F, Q
@@ -65,6 +66,7 @@ class Requisicao(models.Model):
         "users.Setor",
         on_delete=models.PROTECT,
         related_name="requisicoes",
+        editable=False,
         help_text="Setor do beneficiário (snapshot histórico, nunca recalculado)",
     )
     status = models.CharField(
@@ -168,6 +170,33 @@ class Requisicao(models.Model):
             f"REQ {self.numero_publico or f'(rascunho {self.id})'}"
             f" — {self.beneficiario.nome_completo}"
         )
+
+    def save(self, *args, **kwargs):
+        if self._state.adding:
+            if self.beneficiario_id is None:
+                raise ValidationError({"beneficiario": "Beneficiário é obrigatório."})
+            if self.beneficiario.setor_id is None:
+                raise ValidationError(
+                    {"beneficiario": "Beneficiário deve possuir setor para criar a requisição."}
+                )
+            self.setor_beneficiario_id = self.beneficiario.setor_id
+        else:
+            persisted = type(self).objects.filter(pk=self.pk).values(
+                "beneficiario_id",
+                "setor_beneficiario_id",
+            ).first()
+            if persisted is not None:
+                errors = {}
+                if self.beneficiario_id != persisted["beneficiario_id"]:
+                    errors["beneficiario"] = "Beneficiário não pode ser alterado após a criação."
+                if self.setor_beneficiario_id != persisted["setor_beneficiario_id"]:
+                    errors["setor_beneficiario"] = (
+                        "Setor beneficiário é snapshot histórico e não pode ser alterado."
+                    )
+                if errors:
+                    raise ValidationError(errors)
+
+        super().save(*args, **kwargs)
 
 
 class ItemRequisicao(models.Model):
