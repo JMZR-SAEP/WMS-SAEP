@@ -431,6 +431,7 @@ class TestRequisicaoAPI:
         assert response.data["chefe_autorizador"]["id"] == chefe.id
         requisicao.refresh_from_db()
         assert requisicao.eventos.filter(tipo_evento=TipoEvento.RECUSA).exists()
+        material.estoque.refresh_from_db()
         assert material.estoque.saldo_reservado == Decimal("0")
 
     def test_authorize_bloqueia_usuario_sem_permissao(self):
@@ -550,6 +551,64 @@ class TestRequisicaoAPI:
         assert material_a.estoque.saldo_reservado == Decimal("4")
         assert material_b.estoque.saldo_reservado == Decimal("0")
 
+    def test_authorize_partial_and_zero_sem_justificativa_falha(self):
+        setor = self._criar_setor("Apoio Financeiro", "90024")
+        chefe = setor.chefe_responsavel
+        requisitante = self._criar_usuario("10024", "Solicitante Apoio Financeiro", setor=setor)
+        material_a = self._criar_material_com_estoque("001.001.020", saldo_fisico=Decimal("8"))
+        material_b = self._criar_material_com_estoque("001.001.021", saldo_fisico=Decimal("8"))
+        requisicao = Requisicao.objects.create(
+            criador=requisitante,
+            beneficiario=requisitante,
+            numero_publico="REQ-2026-000406",
+            status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
+            data_envio_autorizacao="2026-04-30T10:00:00Z",
+        )
+        item_a = requisicao.itens.create(
+            material=material_a,
+            unidade_medida=material_a.unidade_medida,
+            quantidade_solicitada=Decimal("5"),
+        )
+        item_b = requisicao.itens.create(
+            material=material_b,
+            unidade_medida=material_b.unidade_medida,
+            quantidade_solicitada=Decimal("3"),
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=chefe)
+        response = client.post(
+            reverse("requisicao-authorize", args=[requisicao.id]),
+            {
+                "itens": [
+                    {
+                        "item_id": item_a.id,
+                        "quantidade_autorizada": "4.000",
+                        "justificativa_autorizacao_parcial": "",
+                    },
+                    {
+                        "item_id": item_b.id,
+                        "quantidade_autorizada": "0.000",
+                        "justificativa_autorizacao_parcial": "",
+                    },
+                ]
+            },
+            format="json",
+        )
+
+        assert response.status_code == 400
+        assert response.data["error"]["code"] == "validation_error"
+        assert response.data["error"]["details"]["itens"][0]["justificativa_autorizacao_parcial"]
+        assert response.data["error"]["details"]["itens"][1]["justificativa_autorizacao_parcial"]
+
+        requisicao.refresh_from_db()
+        material_a.estoque.refresh_from_db()
+        material_b.estoque.refresh_from_db()
+        assert requisicao.status == StatusRequisicao.AGUARDANDO_AUTORIZACAO
+        assert not requisicao.eventos.exists()
+        assert material_a.estoque.saldo_reservado == Decimal("0")
+        assert material_b.estoque.saldo_reservado == Decimal("0")
+
     def test_authorize_rejeita_status_invalido(self):
         setor = self._criar_setor("Qualidade", "90021")
         chefe = setor.chefe_responsavel
@@ -593,7 +652,9 @@ class TestRequisicaoAPI:
 
         client = APIClient()
         client.force_authenticate(user=chefe)
-        response = client.post(reverse("requisicao-refuse", args=[requisicao.id]), {}, format="json")
+        response = client.post(
+            reverse("requisicao-refuse", args=[requisicao.id]), {}, format="json"
+        )
 
         assert response.status_code == 400
         assert response.data["error"]["code"] == "validation_error"

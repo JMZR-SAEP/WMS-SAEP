@@ -8,8 +8,6 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from apps.core.api.exceptions import DomainConflict
 from apps.materials.models import Material
-from apps.stock.models import EstoqueMaterial
-from apps.stock.services import registrar_reserva_por_autorizacao
 from apps.requisitions.models import (
     EventoTimeline,
     ItemRequisicao,
@@ -23,6 +21,8 @@ from apps.requisitions.policies import (
     pode_manipular_pre_autorizacao,
     queryset_fila_autorizacao,
 )
+from apps.stock.models import EstoqueMaterial
+from apps.stock.services import registrar_reserva_por_autorizacao
 from apps.users.models import PapelChoices
 from apps.users.policies import pode_criar_requisicao_para
 
@@ -41,6 +41,98 @@ class ItemAutorizacaoData:
     item_id: int
     quantidade_autorizada: Decimal
     justificativa_autorizacao_parcial: str = ""
+
+
+def _side_effect_reservar_itens_autorizados(
+    requisicao: Requisicao, payload: dict[str, object]
+) -> None:
+    for item_requisicao in payload["itens_requisicao"]:
+        quantidade_autorizada = item_requisicao.quantidade_autorizada
+        if quantidade_autorizada <= 0:
+            continue
+        registrar_reserva_por_autorizacao(
+            requisicao=requisicao,
+            item=item_requisicao,
+            quantidade=quantidade_autorizada,
+        )
+
+
+TRANSICOES_REQUISICAO: dict[str, dict[str, object]] = {
+    "autorizar_total": {
+        "from_status": (StatusRequisicao.AGUARDANDO_AUTORIZACAO,),
+        "to_status": StatusRequisicao.AUTORIZADA,
+        "timeline_event_type": TipoEvento.AUTORIZACAO_TOTAL,
+        "audit_fields_to_set": (
+            "chefe_autorizador",
+            "data_autorizacao_ou_recusa",
+            "status",
+        ),
+        "side_effects": (_side_effect_reservar_itens_autorizados,),
+    },
+    "autorizar_parcial": {
+        "from_status": (StatusRequisicao.AGUARDANDO_AUTORIZACAO,),
+        "to_status": StatusRequisicao.AUTORIZADA,
+        "timeline_event_type": TipoEvento.AUTORIZACAO_PARCIAL,
+        "audit_fields_to_set": (
+            "chefe_autorizador",
+            "data_autorizacao_ou_recusa",
+            "status",
+        ),
+        "side_effects": (_side_effect_reservar_itens_autorizados,),
+    },
+    "recusar": {
+        "from_status": (StatusRequisicao.AGUARDANDO_AUTORIZACAO,),
+        "to_status": StatusRequisicao.RECUSADA,
+        "timeline_event_type": TipoEvento.RECUSA,
+        "audit_fields_to_set": (
+            "chefe_autorizador",
+            "data_autorizacao_ou_recusa",
+            "motivo_recusa",
+            "status",
+        ),
+        "side_effects": (),
+    },
+}
+
+
+def apply_requisicao_transition(
+    requisicao: Requisicao,
+    transition_name: str,
+    actor: User,
+    *,
+    payload: dict[str, object],
+) -> Requisicao:
+    config = TRANSICOES_REQUISICAO[transition_name]
+
+    if requisicao.status not in config["from_status"]:
+        raise DomainConflict(
+            "Transição inválida para o status atual da requisição.",
+            details={"status_atual": requisicao.status, "transicao": transition_name},
+        )
+
+    for field_name in config["audit_fields_to_set"]:
+        if field_name == "status":
+            setattr(requisicao, field_name, config["to_status"])
+            continue
+        setattr(requisicao, field_name, payload[field_name])
+
+    requisicao.full_clean()
+    requisicao.save(
+        update_fields=[
+            *config["audit_fields_to_set"],
+            "updated_at",
+        ]
+    )
+    EventoTimeline.objects.create(
+        requisicao=requisicao,
+        tipo_evento=config["timeline_event_type"],
+        usuario=actor,
+    )
+
+    for side_effect in config["side_effects"]:
+        side_effect(requisicao, payload)
+
+    return requisicao
 
 
 def _material_e_estoque_validos_autorizacao(
@@ -81,9 +173,7 @@ def _validar_itens_autorizacao(
 
     itens_requisicao_por_id = {item.id: item for item in itens_requisicao}
 
-    missing_ids = [
-        item.id for item in itens_requisicao if item.id not in itens_por_id
-    ]
+    missing_ids = [item.id for item in itens_requisicao if item.id not in itens_por_id]
     if missing_ids:
         raise ValidationError({"itens": [f"Itens ausentes na autorização: {missing_ids}."]})
 
@@ -92,41 +182,30 @@ def _validar_itens_autorizacao(
         raise ValidationError({"itens": [f"Itens inválidos na autorização: {extra_ids}."]})
 
     houve_quantidade_maior_que_zero = False
-    for item_requisicao in itens_requisicao:
+    erros_itens: list[dict[str, list[str]]] = [{} for _ in itens]
+    for index, item_requisicao in enumerate(itens_requisicao):
         item_autorizacao = itens_por_id[item_requisicao.id]
-        if item_autorizacao.quantidade_autorizada < 0:
-            raise ValidationError(
-                {"itens": ["Quantidade autorizada deve ser maior ou igual a zero."]}
-            )
-        if item_autorizacao.quantidade_autorizada > item_requisicao.quantidade_solicitada:
-            raise ValidationError(
-                {
-                    "itens": [
-                        f"Item {item_requisicao.id} não pode ser autorizado acima da quantidade solicitada."
-                    ]
-                }
-            )
-        if item_autorizacao.quantidade_autorizada < item_requisicao.quantidade_solicitada and not item_autorizacao.justificativa_autorizacao_parcial:
-            raise ValidationError(
-                {
-                    "itens": [
-                        f"Item {item_requisicao.id} exige justificativa quando autorizado parcialmente."
-                    ]
-                }
-            )
-        if (
-            item_autorizacao.quantidade_autorizada == 0
-            and not item_autorizacao.justificativa_autorizacao_parcial
-        ):
-            raise ValidationError(
-                {
-                    "itens": [
-                        f"Item {item_requisicao.id} exige justificativa quando autorizado com quantidade zero."
-                    ]
-                }
-            )
         if item_autorizacao.quantidade_autorizada > 0:
             houve_quantidade_maior_que_zero = True
+
+        item_erros: dict[str, list[str]] = {}
+        if item_autorizacao.quantidade_autorizada > item_requisicao.quantidade_solicitada:
+            item_erros["quantidade_autorizada"] = [
+                "Não pode ser maior que a quantidade solicitada."
+            ]
+        if (
+            item_autorizacao.quantidade_autorizada < item_requisicao.quantidade_solicitada
+            and not item_autorizacao.justificativa_autorizacao_parcial
+        ):
+            item_erros["justificativa_autorizacao_parcial"] = [
+                "Justificativa é obrigatória quando a autorização é parcial ou zero."
+            ]
+
+        if item_erros:
+            erros_itens[index] = item_erros
+
+    if any(erros_itens):
+        raise ValidationError({"itens": erros_itens})
 
     if not houve_quantidade_maior_que_zero:
         raise DomainConflict(
@@ -476,9 +555,7 @@ def autorizar_requisicao(
             .filter(requisicao=requisicao)
             .order_by("id")
         )
-        itens_por_id = _validar_itens_autorizacao(
-            itens_requisicao=itens_requisicao, itens=itens
-        )
+        itens_por_id = _validar_itens_autorizacao(itens_requisicao=itens_requisicao, itens=itens)
         estoque_por_material_id = {
             estoque.material_id: estoque
             for estoque in (
@@ -523,41 +600,22 @@ def autorizar_requisicao(
                 ]
             )
 
-        requisicao.chefe_autorizador = ator
-        requisicao.data_autorizacao_ou_recusa = timezone.now()
-        requisicao.status = StatusRequisicao.AUTORIZADA
-        requisicao.full_clean()
-        requisicao.save(
-            update_fields=[
-                "chefe_autorizador",
-                "data_autorizacao_ou_recusa",
-                "status",
-                "updated_at",
-            ]
-        )
-
-        tipo_evento = TipoEvento.AUTORIZACAO_TOTAL
+        transicao = "autorizar_total"
         if any(
-            item.quantidade_autorizada < item.quantidade_solicitada
-            for item in itens_requisicao
+            item.quantidade_autorizada < item.quantidade_solicitada for item in itens_requisicao
         ):
-            tipo_evento = TipoEvento.AUTORIZACAO_PARCIAL
+            transicao = "autorizar_parcial"
 
-        EventoTimeline.objects.create(
+        apply_requisicao_transition(
             requisicao=requisicao,
-            tipo_evento=tipo_evento,
-            usuario=ator,
+            transition_name=transicao,
+            actor=ator,
+            payload={
+                "chefe_autorizador": ator,
+                "data_autorizacao_ou_recusa": timezone.now(),
+                "itens_requisicao": itens_requisicao,
+            },
         )
-
-        for item_requisicao in itens_requisicao:
-            quantidade_autorizada = item_requisicao.quantidade_autorizada
-            if quantidade_autorizada <= 0:
-                continue
-            registrar_reserva_por_autorizacao(
-                requisicao=requisicao,
-                item=item_requisicao,
-                quantidade=quantidade_autorizada,
-            )
 
     return (
         Requisicao.objects.select_related(
@@ -571,9 +629,7 @@ def autorizar_requisicao(
     )
 
 
-def recusar_requisicao(
-    *, requisicao: Requisicao, ator: User, motivo_recusa: str
-) -> Requisicao:
+def recusar_requisicao(*, requisicao: Requisicao, ator: User, motivo_recusa: str) -> Requisicao:
     if not pode_autorizar_requisicao(ator, requisicao):
         raise PermissionDenied("Usuário sem permissão para recusar esta requisição.")
 
@@ -590,24 +646,15 @@ def recusar_requisicao(
                 details={"status_atual": requisicao.status},
             )
 
-        requisicao.chefe_autorizador = ator
-        requisicao.motivo_recusa = motivo_recusa
-        requisicao.data_autorizacao_ou_recusa = timezone.now()
-        requisicao.status = StatusRequisicao.RECUSADA
-        requisicao.full_clean()
-        requisicao.save(
-            update_fields=[
-                "chefe_autorizador",
-                "motivo_recusa",
-                "data_autorizacao_ou_recusa",
-                "status",
-                "updated_at",
-            ]
-        )
-        EventoTimeline.objects.create(
+        apply_requisicao_transition(
             requisicao=requisicao,
-            tipo_evento=TipoEvento.RECUSA,
-            usuario=ator,
+            transition_name="recusar",
+            actor=ator,
+            payload={
+                "chefe_autorizador": ator,
+                "motivo_recusa": motivo_recusa,
+                "data_autorizacao_ou_recusa": timezone.now(),
+            },
         )
 
     return (

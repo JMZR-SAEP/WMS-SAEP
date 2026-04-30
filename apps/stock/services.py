@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from django.db import IntegrityError, transaction
+from rest_framework.exceptions import ValidationError
 
 from apps.materials.models import Material
 from apps.requisitions.models import ItemRequisicao, Requisicao
@@ -77,6 +78,16 @@ def registrar_reserva_por_autorizacao(
             .select_related("material")
             .get(material_id=item.material_id)
         )
+
+        if quantidade > estoque.saldo_disponivel:
+            raise ValidationError(
+                {
+                    "quantidade": (
+                        f"Quantidade reservada ({quantidade}) excede o saldo disponível "
+                        f"({estoque.saldo_disponivel}) para o material {item.material.codigo_completo}."
+                    )
+                }
+            )
 
         saldo_reservado_anterior = estoque.saldo_reservado
         saldo_reservado_posterior = saldo_reservado_anterior + quantidade

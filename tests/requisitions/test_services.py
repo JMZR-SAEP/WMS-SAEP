@@ -9,7 +9,6 @@ from rest_framework.exceptions import ValidationError
 from apps.core.api.exceptions import DomainConflict
 from apps.materials.models import GrupoMaterial, Material, SubgrupoMaterial
 from apps.requisitions.models import (
-    EventoTimeline,
     ItemRequisicao,
     Requisicao,
     StatusRequisicao,
@@ -164,11 +163,14 @@ class TestAutorizacaoRequisicaoService:
         assert item.justificativa_autorizacao_parcial == ""
         assert material.estoque.saldo_fisico == Decimal("10")
         assert material.estoque.saldo_reservado == Decimal("4")
-        assert MovimentacaoEstoque.objects.filter(
-            tipo=TipoMovimentacao.RESERVA_POR_AUTORIZACAO,
-            requisicao=autorizado,
-            item_requisicao=item,
-        ).count() == 1
+        assert (
+            MovimentacaoEstoque.objects.filter(
+                tipo=TipoMovimentacao.RESERVA_POR_AUTORIZACAO,
+                requisicao=autorizado,
+                item_requisicao=item,
+            ).count()
+            == 1
+        )
 
     def test_autoriza_parcial_e_zero_com_justificativa(self):
         setor = self._criar_setor("Apoio", "91002")
@@ -331,10 +333,13 @@ class TestAutorizacaoRequisicaoService:
         assert recusada.chefe_autorizador_id == chefe.id
         assert recusada.eventos.filter(tipo_evento=TipoEvento.RECUSA).exists()
         assert material.estoque.saldo_reservado == Decimal("0")
-        assert MovimentacaoEstoque.objects.filter(
-            requisicao=recusada,
-            tipo=TipoMovimentacao.RESERVA_POR_AUTORIZACAO,
-        ).count() == 0
+        assert (
+            MovimentacaoEstoque.objects.filter(
+                requisicao=recusada,
+                tipo=TipoMovimentacao.RESERVA_POR_AUTORIZACAO,
+            ).count()
+            == 0
+        )
 
     def test_recusa_sem_motivo_falha(self):
         setor = self._criar_setor("Apoio Administrativo", "91007")

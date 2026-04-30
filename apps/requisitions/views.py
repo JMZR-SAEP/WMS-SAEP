@@ -20,8 +20,8 @@ from apps.requisitions.serializers import (
     RequisicaoRefuseInputSerializer,
 )
 from apps.requisitions.services import (
-    ItemRascunhoData,
     ItemAutorizacaoData,
+    ItemRascunhoData,
     autorizar_requisicao,
     cancelar_pre_autorizacao,
     criar_rascunho_requisicao,
@@ -161,8 +161,7 @@ class RequisicaoViewSet(GenericViewSet):
             requisicao=self.get_object(),
             ator=request.user,
             itens=[
-                ItemAutorizacaoData(**item_data)
-                for item_data in serializer.validated_data["itens"]
+                ItemAutorizacaoData(**item_data) for item_data in serializer.validated_data["itens"]
             ],
         )
         return Response(RequisicaoDetailOutputSerializer(requisicao).data)
