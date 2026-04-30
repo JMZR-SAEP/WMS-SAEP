@@ -17,14 +17,20 @@ class DomainConflict(APIException):
 def api_exception_handler(exc, context):
     """Custom exception handler for API responses."""
     response = exception_handler(exc, context)
+    request = context.get("request") if context else None
 
     if response is None:
+        trace_id = getattr(exc, "trace_id", None)
+        if trace_id is None and request is not None:
+            trace_id = request.META.get("HTTP_X_TRACE_ID")
+
         return Response(
             {
                 "error": {
                     "code": "internal_error",
                     "message": "Erro interno do servidor",
                     "details": None,
+                    "trace_id": trace_id,
                 }
             },
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -34,6 +40,14 @@ def api_exception_handler(exc, context):
         details = getattr(exc, "details_payload", None)
         if details is None and isinstance(response.data, dict) and "detail" not in response.data:
             details = response.data
+
+        trace_id = None
+        if isinstance(response.data, dict):
+            trace_id = response.data.get("trace_id")
+        if trace_id is None:
+            trace_id = getattr(exc, "trace_id", None)
+        if trace_id is None and request is not None:
+            trace_id = request.META.get("HTTP_X_TRACE_ID")
 
         if response.status_code == status.HTTP_400_BAD_REQUEST:
             code = "validation_error"
@@ -50,6 +64,7 @@ def api_exception_handler(exc, context):
                 "code": code,
                 "message": message,
                 "details": details,
+                "trace_id": trace_id,
             }
         }
 

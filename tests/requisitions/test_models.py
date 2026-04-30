@@ -79,10 +79,11 @@ class TestRequisicaoModel:
         )
 
     @staticmethod
-    def _marcar_primeiro_envio(req):
+    def _marcar_primeiro_envio(req, numero_publico="REQ-2026-000001"):
         req.status = StatusRequisicao.AGUARDANDO_AUTORIZACAO
         req.data_envio_autorizacao = timezone.now()
-        req.save(update_fields=["status", "data_envio_autorizacao"])
+        req.numero_publico = numero_publico
+        req.save(update_fields=["status", "data_envio_autorizacao", "numero_publico"])
         return req
 
     def test_rascunho_sem_numero_publico(self):
@@ -209,12 +210,10 @@ class TestRequisicaoModel:
     def test_numero_publico_unico_quando_preenchido(self):
         """REQ-04 — numero_publico é único quando preenchido (não-null)"""
         req1 = self._criar_requisicao()
-        self._marcar_primeiro_envio(req1)
-        req1.numero_publico = "REQ-2026-000001"
-        req1.save()
+        self._marcar_primeiro_envio(req1, "REQ-2026-000001")
 
         req2 = self._criar_requisicao()
-        self._marcar_primeiro_envio(req2)
+        self._marcar_primeiro_envio(req2, "REQ-2026-000002")
         req2.numero_publico = "REQ-2026-000001"
         with pytest.raises(IntegrityError):
             req2.save()
@@ -263,6 +262,16 @@ class TestRequisicaoModel:
 
         assert req.numero_publico == "REQ-2026-000001"
 
+    def test_numero_publico_e_obrigatorio_quando_data_envio_preenchida(self):
+        """REQ-02 — data_envio_autorizacao exige numero_publico persistido"""
+        req = self._criar_requisicao()
+        req.status = StatusRequisicao.AGUARDANDO_AUTORIZACAO
+        req.data_envio_autorizacao = timezone.now()
+        req.numero_publico = None
+
+        with pytest.raises(IntegrityError):
+            req.save()
+
     def test_numero_publico_null_nao_e_unico(self):
         """REQ-02 — multiplas requisições podem ter numero_publico=None"""
         req1 = self._criar_requisicao()
@@ -287,9 +296,7 @@ class TestRequisicaoModel:
         req = self._criar_requisicao()
         assert str(req) == f"REQ (rascunho {req.id}) — {req.beneficiario.nome_completo}"
 
-        self._marcar_primeiro_envio(req)
-        req.numero_publico = "REQ-2026-000001"
-        req.save()
+        self._marcar_primeiro_envio(req, "REQ-2026-000001")
         assert str(req) == f"REQ REQ-2026-000001 — {req.beneficiario.nome_completo}"
 
 

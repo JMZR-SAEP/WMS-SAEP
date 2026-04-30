@@ -30,7 +30,7 @@ class RequisicaoItemCreateInputSerializer(serializers.Serializer):
 class RequisicaoCreateInputSerializer(serializers.Serializer):
     beneficiario_id = serializers.IntegerField()
     observacao = serializers.CharField(required=False, allow_blank=True, default="")
-    itens = RequisicaoItemCreateInputSerializer(many=True)
+    itens = RequisicaoItemCreateInputSerializer(many=True, min_length=1)
 
 
 class RequisicaoActionOutputSerializer(serializers.ModelSerializer):

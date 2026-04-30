@@ -61,4 +61,7 @@ class TestOpenAPISchema:
         content = response.content.decode()
         assert "/api/v1/requisitions/" in content
         assert "/api/v1/requisitions/{id}/submit/" in content
+        assert "/api/v1/requisitions/{id}/return-to-draft/" in content
+        assert "/api/v1/requisitions/{id}/discard/" in content
+        assert "/api/v1/requisitions/{id}/cancel/" in content
         assert "/api/v1/requisitions/pending-approvals/" in content

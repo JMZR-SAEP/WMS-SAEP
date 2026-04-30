@@ -1,6 +1,6 @@
 from django.db.models import Q, QuerySet
 
-from apps.requisitions.models import Requisicao
+from apps.requisitions.models import Requisicao, StatusRequisicao
 from apps.users.models import PapelChoices
 from apps.users.policies import pode_autorizar_setor
 
@@ -71,9 +71,15 @@ def queryset_fila_autorizacao(user) -> QuerySet[Requisicao]:
         setor_responsavel = getattr(user, "setor_responsavel", None)
         if setor_responsavel is None:
             return Requisicao.objects.none()
-        return Requisicao.objects.filter(setor_beneficiario=setor_responsavel)
+        return Requisicao.objects.filter(
+            setor_beneficiario=setor_responsavel,
+            status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
+        )
 
     if user.papel == PapelChoices.CHEFE_ALMOXARIFADO and user.setor_id is not None:
-        return Requisicao.objects.filter(setor_beneficiario_id=user.setor_id)
+        return Requisicao.objects.filter(
+            setor_beneficiario_id=user.setor_id,
+            status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
+        )
 
     return Requisicao.objects.none()

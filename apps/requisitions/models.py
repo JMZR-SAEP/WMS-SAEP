@@ -179,6 +179,11 @@ class Requisicao(models.Model):
                 name="req_numero_publico_nao_pode_ser_preenchido_em_rascunho_nunca_enviado",
             ),
             models.CheckConstraint(
+                condition=Q(data_envio_autorizacao__isnull=True)
+                | (Q(numero_publico__isnull=False) & ~Q(numero_publico="")),
+                name="req_numero_publico_obrigatorio_quando_enviada",
+            ),
+            models.CheckConstraint(
                 condition=~Q(status=StatusRequisicao.RECUSADA) | Q(motivo_recusa__gt=""),
                 name="req_motivo_recusa_obrigatorio_quando_recusada",
             ),

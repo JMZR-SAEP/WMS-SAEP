@@ -299,6 +299,31 @@ class TestRequisicaoAPI:
         assert response.status_code == 204
         assert not Requisicao.objects.filter(pk=requisicao.pk).exists()
 
+    def test_discard_rascunho_formalizado_retorna_domain_conflict(self):
+        setor = self._criar_setor("Fiscal Formalizado", "900111")
+        usuario = self._criar_usuario("100121", "Solicitante Fiscal Formalizado", setor=setor)
+        material = self._criar_material_com_estoque("001.001.099")
+        requisicao = Requisicao.objects.create(
+            criador=usuario,
+            beneficiario=usuario,
+            numero_publico="REQ-2026-009999",
+            status=StatusRequisicao.RASCUNHO,
+            data_envio_autorizacao="2026-04-30T10:00:00Z",
+        )
+        requisicao.itens.create(
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal("1"),
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=usuario)
+        response = client.delete(reverse("requisicao-discard", args=[requisicao.id]))
+
+        assert response.status_code == 409
+        assert response.data["error"]["code"] == "domain_conflict"
+        assert Requisicao.objects.filter(pk=requisicao.pk).exists()
+
     def test_cancela_rascunho_numerado_sem_justificativa(self):
         setor = self._criar_setor("Almox Interno", "90012")
         usuario = self._criar_usuario("10013", "Solicitante Almox Interno", setor=setor)
