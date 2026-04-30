@@ -33,6 +33,22 @@ class RequisicaoCreateInputSerializer(serializers.Serializer):
     itens = RequisicaoItemCreateInputSerializer(many=True, min_length=1)
 
 
+class RequisicaoItemAuthorizeInputSerializer(serializers.Serializer):
+    item_id = serializers.IntegerField()
+    quantidade_autorizada = serializers.DecimalField(max_digits=12, decimal_places=3)
+    justificativa_autorizacao_parcial = serializers.CharField(
+        required=False, allow_blank=True, default=""
+    )
+
+
+class RequisicaoAuthorizeInputSerializer(serializers.Serializer):
+    itens = RequisicaoItemAuthorizeInputSerializer(many=True, min_length=1)
+
+
+class RequisicaoRefuseInputSerializer(serializers.Serializer):
+    motivo_recusa = serializers.CharField(allow_blank=False)
+
+
 class RequisicaoActionOutputSerializer(serializers.ModelSerializer):
     material = RequisicaoMaterialOutputSerializer(read_only=True)
 
@@ -56,6 +72,7 @@ class RequisicaoDetailOutputSerializer(serializers.ModelSerializer):
     criador = RequisicaoUserOutputSerializer(read_only=True)
     beneficiario = RequisicaoUserOutputSerializer(read_only=True)
     setor_beneficiario = RequisicaoSetorOutputSerializer(read_only=True)
+    chefe_autorizador = RequisicaoUserOutputSerializer(read_only=True)
     itens = RequisicaoActionOutputSerializer(many=True, read_only=True)
 
     class Meta:
@@ -67,9 +84,11 @@ class RequisicaoDetailOutputSerializer(serializers.ModelSerializer):
             "criador",
             "beneficiario",
             "setor_beneficiario",
+            "chefe_autorizador",
             "data_criacao",
             "data_envio_autorizacao",
             "data_autorizacao_ou_recusa",
+            "motivo_recusa",
             "data_finalizacao",
             "observacao",
             "itens",
