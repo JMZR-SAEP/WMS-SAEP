@@ -1,8 +1,8 @@
 # Project Status — Post-Materialization
 
-**Date:** 2026-04-29
-**Status:** Django materialization COMPLETE; PIL-BE-ACE foundation COMPLETE through `PIL-BE-ACE-005`; PIL-BE-MAT-001 COMPLETE; PIL-BE-MAT-002 COMPLETE; PIL-BE-EST-001 COMPLETE; PIL-BE-MAT-003 COMPLETE; PIL-BE-IMP-001 COMPLETE; PIL-BE-IMP-002 COMPLETE; PIL-BE-REQ-001 COMPLETE
-**Current branch:** `main` (latest local check on 2026-04-29)
+**Date:** 2026-04-30
+**Status:** Django materialization COMPLETE; PIL-BE-ACE foundation COMPLETE through `PIL-BE-ACE-005`; PIL-BE-MAT-001 COMPLETE; PIL-BE-MAT-002 COMPLETE; PIL-BE-EST-001 COMPLETE; PIL-BE-MAT-003 COMPLETE; PIL-BE-IMP-001 COMPLETE; PIL-BE-IMP-002 COMPLETE; PIL-BE-REQ-001 COMPLETE; `PIL-BE-REQ-002/003/004/005/007/008` COMPLETE; `PIL-BE-AUT-001` COMPLETE for listing only
+**Current branch:** `main` (updated after merge of PR #23 on 2026-04-30)
 
 ## Current Baseline
 
@@ -33,22 +33,31 @@ Technical baseline:
 - `saldo_disponivel = saldo_fisico - saldo_reservado`
 - Initial SCPI stock load creates immutable `SALDO_INICIAL` stock movements
 - No manual stock adjustment via admin
+- Requisition public numbers start only on first submission for authorization, never on draft creation
+- Requisition public numbering is annual and concurrency-safe
+- A returned-to-draft requisition keeps its existing `numero_publico`
+- Pending-approvals listing must contain only `aguardando_autorizacao` requests in the caller scope
+- Pre-authorization discard is physical only for never-formalized drafts; pre-authorization cancel is logical
+- This requisition slice does not yet reserve or decrement stock
 
 ## Current Validation Snapshot
 
-- `rtk make test` passed locally on 2026-04-29 with 175 collected tests
-- The import/parser baseline now includes regression coverage for BOM handling, multiline descriptions, multiline names, decimal comma quantities, and all-or-nothing persistence
+- `rtk make test` passed locally on 2026-04-29 with 175 collected tests before the requisition workflow slice landed
+- For the merged requisitions pre-authorization slice, the validated local flow was `rtk make init` then `rtk make setup` before pytest
+- Requisitions services/API/model tests passed locally for the merged slice
+- OpenAPI route assertions for the requisitions endpoints passed locally
+- Swagger UI HTML-rendering tests remained a separate environment issue and were not used as a blocker for the requisitions domain PR
 
 ## Recommended Next PR Sequence
 
-1. `PIL-BE-REQ-001` — request and request-item models
-   - Dependencies for the base slice are already in place; this becomes the next persistent workflow core
-2. `PIL-BE-REQ-002` — annual public request numbering
-   - Keep numbering/concurrency logic isolated and auditable right after the models land
-3. `PIL-BE-REQ-003` — draft request creation
-   - Reuses the delivered material search API and the request models for the first end-to-end draft flow
-4. Request lifecycle/authorization slices after draft creation
-   - Sequence them only after the persistent request core is merged to avoid mixing state machine work into the model PR
+1. `PIL-BE-AUT-003` — authorization total/partial endpoint and persistence
+   - Highest continuity from the merged pre-authorization slice; adds the first real decision path from the pending queue
+2. `PIL-BE-AUT-004` — full-request refusal
+   - Shares the same actor scope, queue entrypoint, and authorization state machine boundary as AUT-003
+3. `PIL-BE-AUT-005` — stock reservation movement on authorization
+   - Land only after AUT-003 defines the authoritative authorization write path
+4. `PIL-BE-AUT-006` — balance recalculation and locking during authorization
+   - Concurrency hardening should sit on top of the final reservation path, not before it
 
 ## Notes For Future Agents
 
