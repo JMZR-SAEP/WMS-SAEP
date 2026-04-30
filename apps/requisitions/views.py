@@ -1,0 +1,167 @@
+from django.contrib.auth import get_user_model
+from django.db.models import Count
+from django.shortcuts import get_object_or_404
+from drf_spectacular.openapi import OpenApiParameter
+from drf_spectacular.utils import extend_schema
+from rest_framework import status
+from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.viewsets import GenericViewSet
+
+from apps.core.api.serializers import ErrorResponseSerializer
+from apps.requisitions.policies import queryset_requisicoes_visiveis
+from apps.requisitions.serializers import (
+    RequisicaoCreateInputSerializer,
+    RequisicaoDetailOutputSerializer,
+    RequisicaoPendingApprovalOutputSerializer,
+    RequisicaoPendingApprovalPaginatedSerializer,
+)
+from apps.requisitions.services import (
+    ItemRascunhoData,
+    cancelar_pre_autorizacao,
+    criar_rascunho_requisicao,
+    descartar_rascunho_nunca_enviado,
+    enviar_para_autorizacao,
+    listar_fila_autorizacao,
+    retornar_para_rascunho,
+)
+
+User = get_user_model()
+
+
+class RequisicaoViewSet(GenericViewSet):
+    permission_classes = [IsAuthenticated]
+    serializer_class = RequisicaoDetailOutputSerializer
+
+    def get_queryset(self):
+        return queryset_requisicoes_visiveis(self.request.user)
+
+    def get_object(self):
+        queryset = self.filter_queryset(self.get_queryset())
+        obj = get_object_or_404(queryset, pk=self.kwargs["pk"])
+        self.check_object_permissions(self.request, obj)
+        return obj
+
+    @extend_schema(
+        operation_id="requisitions_create_draft",
+        tags=["requisitions"],
+        request=RequisicaoCreateInputSerializer,
+        responses={
+            201: RequisicaoDetailOutputSerializer(),
+            400: ErrorResponseSerializer(),
+            403: ErrorResponseSerializer(),
+            409: ErrorResponseSerializer(),
+        },
+    )
+    def create(self, request, *args, **kwargs):
+        serializer = RequisicaoCreateInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        beneficiario = get_object_or_404(User.objects.select_related("setor"), pk=serializer.validated_data["beneficiario_id"])
+        requisicao = criar_rascunho_requisicao(
+            criador=request.user,
+            beneficiario=beneficiario,
+            observacao=serializer.validated_data["observacao"],
+            itens=[
+                ItemRascunhoData(**item_data)
+                for item_data in serializer.validated_data["itens"]
+            ],
+        )
+        output = RequisicaoDetailOutputSerializer(requisicao)
+        return Response(output.data, status=status.HTTP_201_CREATED)
+
+    @extend_schema(
+        operation_id="requisitions_submit",
+        tags=["requisitions"],
+        request=None,
+        responses={
+            200: RequisicaoDetailOutputSerializer(),
+            403: ErrorResponseSerializer(),
+            404: ErrorResponseSerializer(),
+            409: ErrorResponseSerializer(),
+        },
+    )
+    @action(detail=True, methods=["post"], url_path="submit")
+    def submit(self, request, pk=None):
+        requisicao = enviar_para_autorizacao(requisicao=self.get_object(), ator=request.user)
+        return Response(RequisicaoDetailOutputSerializer(requisicao).data)
+
+    @extend_schema(
+        operation_id="requisitions_return_to_draft",
+        tags=["requisitions"],
+        request=None,
+        responses={
+            200: RequisicaoDetailOutputSerializer(),
+            403: ErrorResponseSerializer(),
+            404: ErrorResponseSerializer(),
+            409: ErrorResponseSerializer(),
+        },
+    )
+    @action(detail=True, methods=["post"], url_path="return-to-draft")
+    def return_to_draft(self, request, pk=None):
+        requisicao = retornar_para_rascunho(requisicao=self.get_object(), ator=request.user)
+        return Response(RequisicaoDetailOutputSerializer(requisicao).data)
+
+    @extend_schema(
+        operation_id="requisitions_discard",
+        tags=["requisitions"],
+        request=None,
+        responses={
+            204: None,
+            403: ErrorResponseSerializer(),
+            404: ErrorResponseSerializer(),
+            409: ErrorResponseSerializer(),
+        },
+    )
+    @action(detail=True, methods=["delete"], url_path="discard")
+    def discard(self, request, pk=None):
+        descartar_rascunho_nunca_enviado(requisicao=self.get_object(), ator=request.user)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @extend_schema(
+        operation_id="requisitions_cancel_pre_approval",
+        tags=["requisitions"],
+        request=None,
+        responses={
+            200: RequisicaoDetailOutputSerializer(),
+            403: ErrorResponseSerializer(),
+            404: ErrorResponseSerializer(),
+            409: ErrorResponseSerializer(),
+        },
+    )
+    @action(detail=True, methods=["post"], url_path="cancel")
+    def cancel(self, request, pk=None):
+        requisicao = cancelar_pre_autorizacao(requisicao=self.get_object(), ator=request.user)
+        return Response(RequisicaoDetailOutputSerializer(requisicao).data)
+
+    @extend_schema(
+        operation_id="requisitions_pending_approvals",
+        tags=["requisitions"],
+        parameters=[
+            OpenApiParameter(
+                name="page",
+                description="Número da página (padrão: 1)",
+                required=False,
+                type=int,
+                location=OpenApiParameter.QUERY,
+            ),
+            OpenApiParameter(
+                name="page_size",
+                description="Quantidade de resultados por página (padrão: 20, máximo: 100)",
+                required=False,
+                type=int,
+                location=OpenApiParameter.QUERY,
+            ),
+        ],
+        responses={
+            200: RequisicaoPendingApprovalPaginatedSerializer(),
+            403: ErrorResponseSerializer(),
+        },
+    )
+    @action(detail=False, methods=["get"], url_path="pending-approvals")
+    def pending_approvals(self, request):
+        queryset = listar_fila_autorizacao(ator=request.user).annotate(total_itens=Count("itens"))
+        page = self.paginate_queryset(queryset)
+        serializer = RequisicaoPendingApprovalOutputSerializer(page, many=True)
+        return self.get_paginated_response(serializer.data)
