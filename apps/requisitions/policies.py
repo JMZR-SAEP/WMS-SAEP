@@ -22,7 +22,9 @@ def pode_visualizar_requisicao(user, requisicao: Requisicao) -> bool:
     if user.papel in (PapelChoices.AUXILIAR_ALMOXARIFADO, PapelChoices.CHEFE_ALMOXARIFADO):
         return _usuario_operacional_ativo(user)
 
-    return _usuario_operacional_ativo(user) and pode_autorizar_setor(user, requisicao.setor_beneficiario)
+    return _usuario_operacional_ativo(user) and pode_autorizar_setor(
+        user, requisicao.setor_beneficiario
+    )
 
 
 def queryset_requisicoes_visiveis(user) -> QuerySet[Requisicao]:

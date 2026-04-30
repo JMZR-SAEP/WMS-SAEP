@@ -52,7 +52,9 @@ def _material_e_estoque_validos(*, material: Material, quantidade_solicitada: De
             )
 
     if errors:
-        raise DomainConflict("Requisição em conflito com o estado atual do estoque.", details=errors)
+        raise DomainConflict(
+            "Requisição em conflito com o estado atual do estoque.", details=errors
+        )
 
 
 def _validar_itens_rascunho(itens: list[ItemRascunhoData]) -> list[Material]:
@@ -72,18 +74,16 @@ def _validar_itens_rascunho(itens: list[ItemRascunhoData]) -> list[Material]:
     )
     materiais_por_id = {material.pk: material for material in materiais}
 
-    missing_ids = [material_id for material_id in material_ids if material_id not in materiais_por_id]
+    missing_ids = [
+        material_id for material_id in material_ids if material_id not in materiais_por_id
+    ]
     if missing_ids:
         raise ValidationError({"itens": [f"Materiais inexistentes: {missing_ids}."]})
 
     for item in itens:
         if item.quantidade_solicitada <= 0:
             raise ValidationError(
-                {
-                    "itens": [
-                        "Quantidade solicitada deve ser maior que zero para todos os itens."
-                    ]
-                }
+                {"itens": ["Quantidade solicitada deve ser maior que zero para todos os itens."]}
             )
         _material_e_estoque_validos(
             material=materiais_por_id[item.material_id],
@@ -98,16 +98,12 @@ def _gerar_numero_publico(*, ano: int | None = None) -> str:
 
     with transaction.atomic():
         try:
-            sequencia = (
-                SequenciaNumeroRequisicao.objects.select_for_update().get(ano=ano)
-            )
+            sequencia = SequenciaNumeroRequisicao.objects.select_for_update().get(ano=ano)
         except SequenciaNumeroRequisicao.DoesNotExist:
             try:
                 sequencia = SequenciaNumeroRequisicao.objects.create(ano=ano, ultimo_numero=0)
             except IntegrityError:
-                sequencia = (
-                    SequenciaNumeroRequisicao.objects.select_for_update().get(ano=ano)
-                )
+                sequencia = SequenciaNumeroRequisicao.objects.select_for_update().get(ano=ano)
 
         sequencia.ultimo_numero += 1
         sequencia.save(update_fields=["ultimo_numero", "updated_at"])
@@ -122,7 +118,9 @@ def criar_rascunho_requisicao(
     itens: list[ItemRascunhoData],
 ) -> Requisicao:
     if not pode_criar_requisicao_para(criador, beneficiario):
-        raise PermissionDenied("Usuário sem permissão para criar requisição para este beneficiário.")
+        raise PermissionDenied(
+            "Usuário sem permissão para criar requisição para este beneficiário."
+        )
 
     if beneficiario.setor_id is None:
         raise ValidationError(
@@ -218,7 +216,9 @@ def enviar_para_autorizacao(*, requisicao: Requisicao, ator: User) -> Requisicao
         EventoTimeline.objects.create(
             requisicao=requisicao,
             tipo_evento=(
-                TipoEvento.ENVIO_AUTORIZACAO if is_primeiro_envio else TipoEvento.REENVIO_AUTORIZACAO
+                TipoEvento.ENVIO_AUTORIZACAO
+                if is_primeiro_envio
+                else TipoEvento.REENVIO_AUTORIZACAO
             ),
             usuario=ator,
         )
@@ -277,9 +277,7 @@ def descartar_rascunho_nunca_enviado(*, requisicao: Requisicao, ator: User) -> N
 
     with transaction.atomic():
         requisicao = (
-            Requisicao.objects.select_for_update()
-            .prefetch_related("itens")
-            .get(pk=requisicao.pk)
+            Requisicao.objects.select_for_update().prefetch_related("itens").get(pk=requisicao.pk)
         )
 
         if requisicao.status != StatusRequisicao.RASCUNHO:

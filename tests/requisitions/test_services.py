@@ -1,5 +1,3 @@
-from decimal import Decimal
-
 import pytest
 
 from apps.requisitions.services import _gerar_numero_publico
