@@ -1,10 +1,10 @@
-# WMS-SAEP-v2 overview
+# WMS-SAEP overview
 
 WMS-SAEP is an auxiliary WMS for SAEP (Servico de Agua e Esgoto de Pirassununga), initially focused on a robust backend for warehouse/material requisition workflows.
 
 The active implementation direction is backend/API only: domain modeling, persistence, authentication, authorization, stock/requisition workflows, SCPI CSV import, auditability, and technical/administrative operation paths. Frontend work is explicitly out of current scope and remains future planning only.
 
-Django materialization is tracked separately in `docs/backlog/backlog-materializacao-django.md` with `MAT-*` tasks. The materialization direction is manual minimum bootstrap, without external project generators. Django apps live under `apps/`, while `config/` remains responsible for project bootstrap and settings. `apps/core/` is reserved for technical API infrastructure only.
+The initial Django materialization has already been completed and the separate materialization backlog was removed. The current active scope is backend/API pilot and MVP work. Django apps live under `apps/`, while `config/` remains responsible for project bootstrap and settings. `apps/core/` is reserved for technical API infrastructure only.
 
 Primary pilot goal: validate the core flow with real users while keeping paper control in parallel: login by matrícula, role permissions, initial SCPI CSV material/stock load, create requisition, submit for authorization, authorize/reject, reserve stock, fulfill in warehouse, decrement stock, release undelivered reservation, basic request timeline, and essential notifications.
 
@@ -21,7 +21,6 @@ Important references:
 - `docs/design-acesso-rapido/api-contracts.md` records DRF/API contract rules.
 - `docs/design-acesso-rapido/matriz-invariantes.md` records critical domain invariants.
 - `docs/design-acesso-rapido/matriz-permissoes.md` records permission/scope rules.
-- `docs/backlog/backlog-materializacao-django.md` is the technical Django materialization backlog.
 - `docs/backlog/backlog-tecnico-piloto.md` is the initial pilot functional backlog.
 - `docs/backlog/backlog-tecnico-mvp.md` is the later MVP backlog.
 - `docs/coderabbit-guidelines.md` records code review/domain invariants.

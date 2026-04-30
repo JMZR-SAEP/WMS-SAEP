@@ -23,7 +23,7 @@ Operational commands now commonly useful:
 - `rtk rg "pattern" path`
 
 Materialization workflow guidance:
-- Complete `docs/backlog/backlog-materializacao-django.md` (`MAT-*`) before starting `PIL-*` pilot tasks.
+- The separate materialization backlog was completed and removed; active work should use the pilot and MVP backlogs directly, without referencing the deleted file.
 - Use `config.settings.dev` for development and `config.settings.test` for tests; there is no separate `config.settings.test_postgres` module in the current plan.
 - `apps/core/` is technical API infrastructure only.
 

@@ -1,7 +1,7 @@
 # Task completion checklist
 
 Before considering implementation work complete:
-- If working on Django materialization, use `docs/backlog/backlog-materializacao-django.md` and stop before any `PIL-*` functional domain work.
+- If working on Django materialization, treat it as already completed and avoid depending on the removed materialization backlog file.
 - Re-read the relevant design/backlog docs for the touched domain area.
 - Ensure rules of business/domain are in services/use cases, not views/serializers/models/signals/templates/admin actions.
 - Ensure contextual authorization is centralized and applied consistently in views and services.

@@ -21,8 +21,8 @@ Current dependency baseline after the 2026-04-27 audit/upgrade (`d7702de chore: 
 - pytest 9.0.3, pytest-django 4.12.0, coverage 7.13.5, ruff 0.15.12, pre-commit 4.6.0, factory_boy 3.3.3.
 
 Materialization baseline:
-- **Django materialization (MAT-000 to MAT-006) COMPLETED**.
-- Functional pilot slices now landed through `PIL-BE-ACE-005`, `PIL-BE-MAT-003`, `PIL-BE-IMP-001`, and `PIL-BE-IMP-002`.
+- Django materialization is complete and no longer tracked in a separate backlog file.
+- Functional pilot slices now landed through `PIL-BE-ACE-005`, `PIL-BE-MAT-002`, `PIL-BE-EST-001`, `PIL-BE-MAT-003`, `PIL-BE-IMP-001`, `PIL-BE-IMP-002`, and `PIL-BE-REQ-001`.
 
 Current state: Django project initialized with technical infrastructure plus active domain apps `users`, `materials`, and `stock`.
 - `config/` owns settings, URLs, ASGI/WSGI, and project bootstrap.

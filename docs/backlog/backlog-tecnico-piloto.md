@@ -6,18 +6,9 @@ Para o backlog do MVP completo, consultar `docs/backlog/backlog-tecnico-mvp.md`.
 
 ## Pré-condição técnica obrigatória
 
-Antes de iniciar qualquer tarefa `PIL-*`, executar completamente o backlog de materialização técnica em `docs/backlog/backlog-materializacao-django.md` (tarefas `MAT-000` a `MAT-006`).
+O piloto assume a base Django já materializada no repositório.
 
-As tarefas `MAT-*` são responsáveis por:
-- Alinhar documentação pré-materialização (`MAT-000`)
-- Inspecionar estrutura existente (`MAT-001`)
-- Criar bootstrap Django mínimo (`MAT-002`)
-- Configurar settings, ambiente e PostgreSQL (`MAT-003`)
-- Configurar testes de smoke (`MAT-004`)
-- Configurar DRF/OpenAPI/core API sem domínio (`MAT-005`)
-- Ajustar CI genérica de bootstrap (`MAT-006`)
-
-As tarefas `MAT-*` não fazem parte do domínio funcional do piloto. O backlog funcional do piloto começa em `PIL-BE-ACE-001`, que deve ser iniciado apenas após a materialização estar completa.
+O backlog funcional do piloto começa em `PIL-BE-ACE-001`.
 
 ## 1. Estratégia de implementação
 
@@ -176,11 +167,10 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
 - **Fase:** Piloto inicial
 - **Tipo:** Backend / Banco de dados
 - **Agente sugerido:** Agente backend
-- **Depende de:** Backlog de materialização completo (`MAT-000` a `MAT-006`)
+- **Depende de:** base técnica Django já materializada
 - **Objetivo:** criar o app de usuários do WMS-SAEP em `apps/users/` com usuário customizado por matrícula funcional.
 - **Contexto técnico:**
-  - A materialização mínima (`docs/backlog/backlog-materializacao-django.md`) cria apenas a base Django e não cria `apps/users/`.
-  - Esta tarefa é a primeira do backlog funcional, após a base técnica estar pronta.
+  - Esta tarefa é a primeira do backlog funcional.
   - Esta tarefa deve criar `apps/users/` como app de usuários oficial do WMS-SAEP.
   - Não criar novo app `accounts` ou outro app de usuários sem decisão registrada.
   - Implementar `apps/users/models.py`, `managers.py`, `forms.py`, `admin.py` e configurações relacionadas.
@@ -312,7 +302,7 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
 
 ### PIL-BE-MAT-001 — Criar modelos de grupo e subgrupo de material
 
-- **Status atual:** não iniciada.
+- **Status atual:** concluída.
 - **Fase:** Piloto inicial
 - **Tipo:** Backend / Banco de dados
 - **Agente sugerido:** Agente backend
@@ -334,7 +324,7 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
 
 ### PIL-BE-MAT-002 — Criar modelo de material
 
-- **Status atual:** não iniciada.
+- **Status atual:** concluída.
 - **Fase:** Piloto inicial
 - **Tipo:** Backend / Banco de dados
 - **Agente sugerido:** Agente backend
@@ -356,7 +346,7 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
 
 ### PIL-BE-EST-001 — Criar modelo de estoque por material
 
-- **Status atual:** não iniciada.
+- **Status atual:** concluída.
 - **Fase:** Piloto inicial
 - **Tipo:** Backend / Banco de dados
 - **Agente sugerido:** Agente backend
@@ -378,7 +368,7 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
 
 ### PIL-BE-IMP-001 — Implementar normalização mínima do CSV SCPI para carga inicial
 
-- **Status atual:** não iniciada.
+- **Status atual:** concluída.
 - **Fase:** Piloto inicial
 - **Tipo:** Backend
 - **Agente sugerido:** Agente backend de importação
@@ -401,7 +391,7 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
 
 ### PIL-BE-IMP-002 — Registrar saldo inicial via QUAN3
 
-- **Status atual:** não iniciada.
+- **Status atual:** concluída.
 - **Fase:** Piloto inicial
 - **Tipo:** Backend
 - **Agente sugerido:** Agente backend de estoque
@@ -421,7 +411,7 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
 
 ### PIL-BE-MAT-003 — Implementar busca de materiais para requisição via API/serviço
 
-- **Status atual:** não iniciada.
+- **Status atual:** concluída.
 - **Fase:** Piloto inicial
 - **Tipo:** Backend / API
 - **Agente sugerido:** Agente backend
@@ -467,7 +457,7 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
 
 ### PIL-BE-REQ-001 — Criar modelos de requisição e item da requisição
 
-- **Status atual:** não iniciada.
+- **Status atual:** concluída.
 - **Fase:** Piloto inicial
 - **Tipo:** Backend / Banco de dados
 - **Agente sugerido:** Agente backend
