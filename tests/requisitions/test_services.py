@@ -117,6 +117,7 @@ class TestAutorizacaoRequisicaoService:
         requisicao = Requisicao.objects.create(
             criador=criador,
             beneficiario=beneficiario,
+            setor_beneficiario=beneficiario.setor,
             numero_publico=numero_publico,
             status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
             data_envio_autorizacao="2026-04-30T10:00:00Z",

@@ -369,6 +369,7 @@ class TestRequisicaoAPI:
         requisicao = Requisicao.objects.create(
             criador=requisitante,
             beneficiario=requisitante,
+            setor_beneficiario=setor,
             numero_publico="REQ-2026-000400",
             status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
             data_envio_autorizacao="2026-04-30T10:00:00Z",
@@ -407,6 +408,7 @@ class TestRequisicaoAPI:
         requisicao = Requisicao.objects.create(
             criador=requisitante,
             beneficiario=requisitante,
+            setor_beneficiario=setor,
             numero_publico="REQ-2026-000401",
             status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
             data_envio_autorizacao="2026-04-30T10:00:00Z",
@@ -441,6 +443,7 @@ class TestRequisicaoAPI:
         requisicao = Requisicao.objects.create(
             criador=usuario,
             beneficiario=usuario,
+            setor_beneficiario=setor,
             numero_publico="REQ-2026-000402",
             status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
             data_envio_autorizacao="2026-04-30T10:00:00Z",
@@ -470,6 +473,7 @@ class TestRequisicaoAPI:
         requisicao = Requisicao.objects.create(
             criador=requisitante,
             beneficiario=requisitante,
+            setor_beneficiario=setor,
             numero_publico="REQ-2026-000403",
             status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
             data_envio_autorizacao="2026-04-30T10:00:00Z",
@@ -504,6 +508,7 @@ class TestRequisicaoAPI:
         requisicao = Requisicao.objects.create(
             criador=requisitante,
             beneficiario=requisitante,
+            setor_beneficiario=setor,
             numero_publico="REQ-2026-000404",
             status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
             data_envio_autorizacao="2026-04-30T10:00:00Z",
@@ -560,6 +565,7 @@ class TestRequisicaoAPI:
         requisicao = Requisicao.objects.create(
             criador=requisitante,
             beneficiario=requisitante,
+            setor_beneficiario=setor,
             numero_publico="REQ-2026-000406",
             status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
             data_envio_autorizacao="2026-04-30T10:00:00Z",
@@ -614,7 +620,11 @@ class TestRequisicaoAPI:
         chefe = setor.chefe_responsavel
         requisitante = self._criar_usuario("10022", "Solicitante Qualidade", setor=setor)
         material = self._criar_material_com_estoque("001.001.018")
-        requisicao = Requisicao.objects.create(criador=requisitante, beneficiario=requisitante)
+        requisicao = Requisicao.objects.create(
+            criador=requisitante,
+            beneficiario=requisitante,
+            setor_beneficiario=setor,
+        )
         item = requisicao.itens.create(
             material=material,
             unidade_medida=material.unidade_medida,
@@ -640,6 +650,7 @@ class TestRequisicaoAPI:
         requisicao = Requisicao.objects.create(
             criador=requisitante,
             beneficiario=requisitante,
+            setor_beneficiario=setor,
             numero_publico="REQ-2026-000405",
             status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
             data_envio_autorizacao="2026-04-30T10:00:00Z",
