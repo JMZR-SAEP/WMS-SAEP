@@ -406,6 +406,46 @@ class TestItemRequisicaoModel:
         item = self._criar_item()
         assert item.quantidade_autorizada == Decimal("0")
 
+    def test_justificativa_autorizacao_obrigatoria_quando_autorizacao_parcial(self):
+        """ITEM-domain — autorização parcial exige justificativa persistida no banco"""
+        item = self._criar_item(quantidade_solicitada=Decimal("10.000"))
+        item.quantidade_autorizada = Decimal("4.000")
+
+        with pytest.raises(IntegrityError):
+            item.save()
+
+    def test_justificativa_autorizacao_permite_autorizacao_parcial(self):
+        """ITEM-domain — justificativa libera autorização parcial"""
+        item = self._criar_item(quantidade_solicitada=Decimal("10.000"))
+        item.quantidade_autorizada = Decimal("4.000")
+        item.justificativa_autorizacao_parcial = "Saldo disponível insuficiente"
+
+        item.save()
+
+        assert item.quantidade_autorizada == Decimal("4.000")
+
+    def test_justificativa_atendimento_obrigatoria_quando_entrega_parcial(self):
+        """ITEM-domain — entrega parcial exige justificativa persistida no banco"""
+        item = self._criar_item(quantidade_solicitada=Decimal("10.000"))
+        item.quantidade_autorizada = Decimal("8.000")
+        item.justificativa_autorizacao_parcial = "Autorizado parcialmente"
+        item.quantidade_entregue = Decimal("3.000")
+
+        with pytest.raises(IntegrityError):
+            item.save()
+
+    def test_justificativa_atendimento_permite_entrega_parcial(self):
+        """ITEM-domain — justificativa libera entrega parcial"""
+        item = self._criar_item(quantidade_solicitada=Decimal("10.000"))
+        item.quantidade_autorizada = Decimal("8.000")
+        item.justificativa_autorizacao_parcial = "Autorizado parcialmente"
+        item.quantidade_entregue = Decimal("3.000")
+        item.justificativa_atendimento_parcial = "Separação parcial no estoque"
+
+        item.save()
+
+        assert item.quantidade_entregue == Decimal("3.000")
+
     def test_quantidade_autorizada_null_invalida(self):
         """ITEM-domain — quantidade_autorizada não aceita NULL"""
         req = self._criar_requisicao()

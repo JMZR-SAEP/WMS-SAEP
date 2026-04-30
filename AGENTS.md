@@ -2,7 +2,7 @@
 
 ## Projeto
 
->WMS auxiliar para o **SAEP — Serviço de Água e Esgoto de Pirassununga**, autarquia municipal. O foco inicial é um backend robusto em **Django 6 + Django REST Framework (DRF)**.
+WMS auxiliar para o **SAEP — Serviço de Água e Esgoto de Pirassununga**, autarquia municipal. O foco inicial é um backend robusto em **Django 6 + Django REST Framework (DRF)**.
 
 ## Estratégia de leitura da documentação
 
@@ -14,8 +14,8 @@ Para economizar tokens e manter os agentes focados, a documentação de design d
 
 ### IDs do Context7 para consulta rápida:
 
-- Django 6: `/django/django`
-- DRF: `/encode/django-rest-framework`
+- Django 6: `/django/django/6.0a1`
+- DRF: `/websites/django-rest-framework`
 
 ### Exemplos positivos do que fazer:
 

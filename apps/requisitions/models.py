@@ -277,6 +277,18 @@ class ItemRequisicao(models.Model):
                 condition=Q(quantidade_entregue__lte=F("quantidade_autorizada")),
                 name="item_req_entregue_lte_autorizada",
             ),
+            models.CheckConstraint(
+                condition=Q(quantidade_autorizada=F("quantidade_solicitada"))
+                | Q(quantidade_autorizada=0)
+                | Q(justificativa_autorizacao_parcial__gt=""),
+                name="item_req_just_autorizacao_obrigatoria_quando_parcial",
+            ),
+            models.CheckConstraint(
+                condition=Q(quantidade_entregue=F("quantidade_autorizada"))
+                | Q(quantidade_entregue=0)
+                | Q(justificativa_atendimento_parcial__gt=""),
+                name="item_req_just_atendimento_obrigatoria_quando_parcial",
+            ),
         ]
 
     def __str__(self):
