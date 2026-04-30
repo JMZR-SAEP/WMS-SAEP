@@ -8,7 +8,7 @@ Para o backlog funcional do piloto inicial, consultar `docs/backlog/backlog-tecn
 
 A materialização mínima deve criar a fundação técnica para que a primeira tarefa funcional do piloto possa começar de forma limpa.
 
-Ela não deve iniciar o domínio do ERP-SAEP.
+Ela não deve iniciar o domínio do WMS-SAEP.
 
 Em particular, materializar Django não significa implementar:
 
@@ -82,7 +82,7 @@ Orientações para agentes:
 - Não criar endpoints funcionais de domínio.
 - Não introduzir frontend.
 - Não adicionar Celery ou Redis.
-- Não implementar regras de negócio do ERP-SAEP.
+- Não implementar regras de negócio do WMS-SAEP.
 
 ## 4. Backlog de materialização
 

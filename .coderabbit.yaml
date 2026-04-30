@@ -107,7 +107,7 @@ reviews:
         Foque em integridade cadastral SCPI de GrupoMaterial, SubgrupoMaterial e
         Material.
         Campos oficiais vindos do SCPI não devem virar cadastro livre mantido pelo
-        ERP em fluxos operacionais normais.
+        WMS em fluxos operacionais normais.
         Códigos de grupo/subgrupo devem permanecer exatamente com 3 dígitos
         numéricos, reforçados por validação e constraint quando houver risco real
         de bypass.

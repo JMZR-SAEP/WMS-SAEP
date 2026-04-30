@@ -7,7 +7,7 @@ from .managers import UserManager
 
 
 class PapelChoices(models.TextChoices):
-    """Papéis operacionais do sistema ERP-SAEP."""
+    """Papéis operacionais do sistema WMS-SAEP."""
 
     SOLICITANTE = "solicitante", "Solicitante"
     AUXILIAR_SETOR = "auxiliar_setor", "Auxiliar de Setor"

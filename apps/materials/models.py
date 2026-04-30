@@ -100,7 +100,7 @@ class Material(models.Model):
         default=True, help_text="Material ativo e disponível para requisições"
     )
     observacoes_internas = models.TextField(
-        blank=True, default="", help_text="Observações internas do ERP-SAEP"
+        blank=True, default="", help_text="Observações internas do WMS-SAEP"
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

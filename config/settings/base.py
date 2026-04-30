@@ -25,6 +25,7 @@ INSTALLED_APPS = [
     "apps.users",
     "apps.materials",
     "apps.stock",
+    "apps.requisitions",
     "apps.core",
 ]
 
@@ -62,7 +63,7 @@ WSGI_APPLICATION = "config.wsgi.application"
 DATABASES = {}
 DATABASE_URL = os.environ.get(
     "DATABASE_URL",
-    "postgres://saep:saep@localhost:5432/erp_saep",
+    "postgres://saep:saep@localhost:5432/wms_saep",
 )
 parsed_url = urlparse(DATABASE_URL)
 DATABASES["default"] = {
@@ -111,7 +112,7 @@ REST_FRAMEWORK = {
 }
 
 SPECTACULAR_SETTINGS = {
-    "TITLE": "ERP-SAEP API",
+    "TITLE": "WMS-SAEP API",
     "DESCRIPTION": "API do Sistema de Requisição de Materiais",
     "VERSION": "0.1.0",
     "SERVE_PERMISSIONS": ["rest_framework.permissions.IsAuthenticated"],

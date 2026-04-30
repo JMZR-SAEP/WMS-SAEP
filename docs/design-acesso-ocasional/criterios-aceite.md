@@ -1,4 +1,4 @@
-# Critérios de Aceite — ERP-SAEP
+# Critérios de Aceite — WMS-SAEP
 
 ## 1. Requisições
 
@@ -427,20 +427,20 @@ Então o sistema deve atualizar o saldo físico e registrar evento de atualizaç
 
 ### 8.6 Material novo na importação
 
-Dado que o CSV contém um material cujo código completo ainda não existe no ERP-SAEP  
+Dado que o CSV contém um material cujo código completo ainda não existe no WMS-SAEP  
 Quando a importação for aplicada  
 Então o sistema deve criar o material como ativo, criar grupo/subgrupo quando necessário, registrar saldo inicial com base em `QUAN3` e não tratar o material como erro.
 
 ### 8.7 Material ausente no CSV
 
-Dado que um material existe no ERP-SAEP  
+Dado que um material existe no WMS-SAEP  
 E esse material não veio no CSV importado  
 Quando a importação for concluída  
 Então o sistema não deve inativar o material automaticamente e deve listá-lo como material ausente no CSV para análise.
 
 ### 8.8 Divergência crítica na importação
 
-Dado que o saldo físico importado do SCPI fica menor que o saldo reservado no ERP-SAEP  
+Dado que o saldo físico importado do SCPI fica menor que o saldo reservado no WMS-SAEP  
 Quando a importação for aplicada  
 Então o sistema deve registrar divergência crítica, bloquear o material para novas requisições e autorizações, e exibir a pendência no painel de Gestão do Almoxarifado.
 

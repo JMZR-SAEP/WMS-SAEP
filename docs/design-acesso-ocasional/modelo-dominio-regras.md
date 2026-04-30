@@ -4,7 +4,7 @@
 
 ### Usuário / Funcionário
 
-Representa uma pessoa com acesso ao ERP-SAEP.
+Representa uma pessoa com acesso ao WMS-SAEP.
 
 Campos iniciais:
 
@@ -21,11 +21,11 @@ Campos iniciais:
 Regras iniciais:
 
 - O login deve ser feito pela matrícula funcional.
-- O CPF não deve ser mantido como campo cadastral do usuário no ERP-SAEP.
-- O telefone não deve ser mantido como campo cadastral do usuário no ERP-SAEP.
+- O CPF não deve ser mantido como campo cadastral do usuário no WMS-SAEP.
+- O telefone não deve ser mantido como campo cadastral do usuário no WMS-SAEP.
 - A senha inicial pode ser definida a partir do CPF, mas o CPF deve ser usado apenas no momento de criação/importação da credencial inicial, sem ser armazenado como dado cadastral permanente.
 - Cada usuário pertence a um único setor.
-- O ERP-SAEP não terá vínculos auxiliares entre usuários e outros setores no MVP.
+- O WMS-SAEP não terá vínculos auxiliares entre usuários e outros setores no MVP.
 - O perfil de auxiliar de setor existe apenas dentro do próprio setor do usuário.
 - Um auxiliar de setor pode criar requisições em nome de funcionários do seu próprio setor.
 - Um auxiliar de setor não pode atuar em setores diferentes do seu.
@@ -84,7 +84,7 @@ Regras iniciais:
 - Cada evento da linha do tempo deve mostrar data/hora, usuário responsável, ação realizada e justificativa/observação quando houver.
 - A linha do tempo é parte central da rastreabilidade da requisição e deve ajudar o usuário a entender o andamento do pedido.
 - Todos os usuários que têm permissão para visualizar a requisição devem ver a linha do tempo completa.
-- Como o ERP-SAEP representa um processo público e rastreável, eventos do fluxo operacional da requisição não devem ser escondidos dos usuários autorizados a visualizar aquela requisição.
+- Como o WMS-SAEP representa um processo público e rastreável, eventos do fluxo operacional da requisição não devem ser escondidos dos usuários autorizados a visualizar aquela requisição.
 - Uma requisição pode ser visualizada pelo criador, pelo beneficiário, pelo chefe do setor do beneficiário, por auxiliares de almoxarifado, pelo chefe de Almoxarifado e pelo superusuário para suporte técnico/administração.
 - Uma requisição pode ser copiada para gerar um novo rascunho, facilitando pedidos recorrentes.
 - Ao copiar uma requisição antiga, o sistema deve recalcular o saldo disponível atual de cada material.
@@ -183,7 +183,7 @@ Campos iniciais:
 Regras iniciais:
 
 - Grupo de material vem do SCPI via importação CSV.
-- Grupo não possui status ativo/inativo próprio no ERP-SAEP.
+- Grupo não possui status ativo/inativo próprio no WMS-SAEP.
 - Se um grupo não vier mais no CSV, não deve ser inativado automaticamente; a ausência deve aparecer apenas como divergência quando aplicável.
 - Regras de inativação não se aplicam diretamente a grupos.
 
@@ -201,7 +201,7 @@ Regras iniciais:
 
 - Subgrupo de material vem do SCPI via importação CSV.
 - Subgrupo deve estar vinculado a um grupo pai.
-- Subgrupo não possui status ativo/inativo próprio no ERP-SAEP.
+- Subgrupo não possui status ativo/inativo próprio no WMS-SAEP.
 - Se um subgrupo não vier mais no CSV, não deve ser inativado automaticamente; a ausência deve aparecer apenas como divergência quando aplicável.
 - Regras de inativação não se aplicam diretamente a subgrupos.
 
@@ -226,11 +226,11 @@ Tela de detalhe do material:
 - Histórico de movimentações do material.
 - Histórico de atualizações via SCPI.
 - Botão para inativar, quando o usuário tiver permissão e as regras de saldo permitirem.
-- Observações internas do ERP-SAEP.
+- Observações internas do WMS-SAEP.
 
 Regras para observações internas:
 
-- As observações internas são o único campo textual editável localmente no ERP-SAEP para o material.
+- As observações internas são o único campo textual editável localmente no WMS-SAEP para o material.
 - Elas servem para comentários operacionais internos do Almoxarifado e não alteram o cadastro oficial vindo do SCPI.
 - Podem ser editadas por auxiliares de almoxarifado e chefe de almoxarifado.
 - A edição das observações internas não precisa entrar no histórico/auditoria formal.
@@ -248,7 +248,7 @@ Campos iniciais:
 - **Grupo** (`xxx`)
 - **Subgrupo** (`yyy`)
 - **Sequencial do produto** (`zzz`)
-- **Unidade de medida** proveniente do SCPI, importada via CSV e não editável no ERP-SAEP
+- **Unidade de medida** proveniente do SCPI, importada via CSV e não editável no WMS-SAEP
 - **Ativo/inativo**
 - **Observações**
 - **Histórico de auditoria**
@@ -266,15 +266,15 @@ Campos previstos para versões futuras:
 - **Localização física no almoxarifado**
 - **Imagem do material**
 
-Grupo e subgrupo devem ser cadastros próprios, mas as informações de grupo, subgrupo, sequencial do produto e código completo não serão geradas livremente pelo ERP-SAEP. Esses dados têm origem no SCPI e devem ser importados a partir de relatório CSV emitido pelo SCPI.
+Grupo e subgrupo devem ser cadastros próprios, mas as informações de grupo, subgrupo, sequencial do produto e código completo não serão geradas livremente pelo WMS-SAEP. Esses dados têm origem no SCPI e devem ser importados a partir de relatório CSV emitido pelo SCPI.
 
 As regras detalhadas de importação, normalização, reimportação, atualização de saldo via `QUAN3`, divergências críticas e erros técnicos ficam documentadas em `docs/design-acesso-ocasional/importacao-scpi-csv.md`.
 
-Após importado, o ERP-SAEP não deve permitir edição direta dos dados cadastrais provenientes do SCPI, como nome, descrição, grupo, subgrupo e sequencial do produto. Em caso de divergência, o SCPI deve ser considerado a fonte correta para dados cadastrais do material.
+Após importado, o WMS-SAEP não deve permitir edição direta dos dados cadastrais provenientes do SCPI, como nome, descrição, grupo, subgrupo e sequencial do produto. Em caso de divergência, o SCPI deve ser considerado a fonte correta para dados cadastrais do material.
 
-O ERP-SAEP não precisa armazenar um identificador interno adicional do SCPI no MVP. O código completo `xxx.yyy.zzz` é suficiente como referência cadastral.
+O WMS-SAEP não precisa armazenar um identificador interno adicional do SCPI no MVP. O código completo `xxx.yyy.zzz` é suficiente como referência cadastral.
 
-A unidade de medida também deve vir do SCPI via CSV. No MVP, ela não será um cadastro próprio no ERP-SAEP e não poderá ser alterada pelos usuários. O sistema deve operar sempre na unidade oficial do material, sem conversão de unidades. Conversões operacionais, como requisitar em unidade um material cadastrado em caixa, ficam fora do MVP.
+A unidade de medida também deve vir do SCPI via CSV. No MVP, ela não será um cadastro próprio no WMS-SAEP e não poderá ser alterada pelos usuários. O sistema deve operar sempre na unidade oficial do material, sem conversão de unidades. Conversões operacionais, como requisitar em unidade um material cadastrado em caixa, ficam fora do MVP.
 
 Observação de nomenclatura: o trecho `zzz` do código completo será chamado de **sequencial do produto**.
 
@@ -372,9 +372,9 @@ Modelo de armazenamento recomendado:
 - O saldo físico deve ser armazenado como valor controlado pelas movimentações de estoque e pela importação CSV do SCPI.
 - O saldo reservado deve ser armazenado como valor controlado pelas movimentações de reserva.
 - O saldo disponível não precisa ser armazenado; deve ser calculado dinamicamente como `saldo físico - saldo reservado`.
-- As movimentações devem permanecer como histórico e trilha de auditoria para explicar alterações feitas dentro do ERP-SAEP.
-- Divergências de saldo físico devem ser corrigidas no SCPI e refletidas no ERP-SAEP por nova importação CSV.
-- O ERP-SAEP não deve permitir ajuste manual de estoque no MVP.
+- As movimentações devem permanecer como histórico e trilha de auditoria para explicar alterações feitas dentro do WMS-SAEP.
+- Divergências de saldo físico devem ser corrigidas no SCPI e refletidas no WMS-SAEP por nova importação CSV.
+- O WMS-SAEP não deve permitir ajuste manual de estoque no MVP.
 - No momento da autorização, o sistema deve conferir o saldo disponível dentro de uma transação segura.
 - Se o saldo disponível tiver mudado entre a leitura inicial e a confirmação da autorização, o sistema deve recalcular a disponibilidade.
 - Se ainda houver saldo suficiente, a autorização pode ser concluída e a reserva registrada.
@@ -421,12 +421,12 @@ Representa o saldo controlado de um material no Almoxarifado.
 
 Regras iniciais:
 
-- No MVP, o ERP-SAEP terá apenas um almoxarifado físico.
+- No MVP, o WMS-SAEP terá apenas um almoxarifado físico.
 - Cada material terá apenas um registro geral de estoque.
 - O estoque deve armazenar o saldo físico.
 - O estoque deve armazenar o saldo reservado.
 - O saldo disponível deve ser calculado dinamicamente como `saldo físico - saldo reservado`.
-- Em situações excepcionais, após importação CSV, o saldo disponível pode ficar negativo se o saldo físico importado do SCPI for menor que o saldo reservado no ERP-SAEP. Esse caso deve ser tratado como divergência crítica.
+- Em situações excepcionais, após importação CSV, o saldo disponível pode ficar negativo se o saldo físico importado do SCPI for menor que o saldo reservado no WMS-SAEP. Esse caso deve ser tratado como divergência crítica.
 - Materiais com divergência crítica ficam bloqueados para novas requisições e novas autorizações até a situação ser resolvida.
 - A divergência crítica é considerada resolvida automaticamente quando o saldo físico volta a ser maior ou igual ao saldo reservado.
 - A resolução pode ocorrer após cancelamentos de requisições autorizadas, atendimentos parciais, estornos ou nova importação CSV.
@@ -443,7 +443,7 @@ Regras iniciais:
 
 ### Movimentação de Estoque
 
-Representa qualquer evento que altere ou comprometa o estoque de um material dentro do ERP-SAEP.
+Representa qualquer evento que altere ou comprometa o estoque de um material dentro do WMS-SAEP.
 
 Campos iniciais:
 
@@ -514,9 +514,9 @@ Origens possíveis da movimentação:
 
 ### Entradas de estoque
 
-No MVP, o ERP-SAEP não deve registrar entrada por compra diretamente. Entradas de compra e correções de saldo físico devem ser registradas no SCPI e refletidas no ERP-SAEP por importação CSV, conforme `docs/design-acesso-ocasional/importacao-scpi-csv.md`.
+No MVP, o WMS-SAEP não deve registrar entrada por compra diretamente. Entradas de compra e correções de saldo físico devem ser registradas no SCPI e refletidas no WMS-SAEP por importação CSV, conforme `docs/design-acesso-ocasional/importacao-scpi-csv.md`.
 
-O ERP-SAEP deve lidar com dois tipos de entrada:
+O WMS-SAEP deve lidar com dois tipos de entrada:
 
 1. **Saldo inicial via CSV**
    - Usado na implantação do sistema a partir do campo `QUAN3` do relatório do SCPI.
@@ -530,7 +530,7 @@ O ERP-SAEP deve lidar com dois tipos de entrada:
    - O sistema deve controlar o total já devolvido por item da requisição.
    - A soma das devoluções de um item nunca pode ultrapassar a quantidade efetivamente entregue daquele item.
    - Deve exigir justificativa ou observação obrigatória.
-   - Deve aumentar automaticamente o saldo físico do material no ERP-SAEP.
+   - Deve aumentar automaticamente o saldo físico do material no WMS-SAEP.
    - A devolução não altera o status da requisição original. A requisição continua atendida/finalizada ou atendida parcialmente, e a devolução aparece apenas no histórico e nas movimentações vinculadas.
 
 ### Saídas de estoque fora de requisição
@@ -560,7 +560,7 @@ Regras iniciais de permissão:
 
 ### Notificação
 
-Representa um aviso interno exibido no ERP-SAEP.
+Representa um aviso interno exibido no WMS-SAEP.
 
 Campos iniciais:
 
@@ -594,7 +594,7 @@ Regras iniciais:
 
 O superusuário será usado apenas pelo administrador técnico do sistema, não por usuários administrativos comuns do SAEP.
 
-O superusuário deve atuar principalmente na administração técnica e estrutural do ERP-SAEP, não como operador comum do processo.
+O superusuário deve atuar principalmente na administração técnica e estrutural do WMS-SAEP, não como operador comum do processo.
 
 Ficam reservados ao superusuário:
 

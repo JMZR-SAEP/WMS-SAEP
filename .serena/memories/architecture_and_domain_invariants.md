@@ -44,7 +44,7 @@ Dependency direction:
 `apps/core/` is technical infrastructure only and must not depend on domain apps. Domain app dependencies should remain explicit and acyclic as apps are introduced by the backlog. Notifications and other side effects must be reached by post-commit events instead of direct domain coupling.
 
 Materials/SCPI invariants:
-- `GrupoMaterial` and `SubgrupoMaterial` are structural catalogs backed by SCPI data, not freeform ERP-maintained master data.
+- `GrupoMaterial` and `SubgrupoMaterial` are structural catalogs backed by SCPI data, not freeform WMS-maintained master data.
 - SCPI code fragments for group/subgroup must remain exactly 3 numeric digits and should be enforced both in model validation and with DB-level constraints.
 - Manual operational mutation of SCPI-official fields such as group/subgroup codes and names should not be exposed through normal admin add/change/delete surfaces.
 - Material search/list selection for requisition flows must return only active materials and include current `saldo_disponivel`.

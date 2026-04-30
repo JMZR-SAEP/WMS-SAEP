@@ -168,7 +168,7 @@ wheels = [
 ]
 
 [[package]]
-name = "erp-saep-v2"
+name = "wms-saep-v2"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

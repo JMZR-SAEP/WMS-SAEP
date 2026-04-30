@@ -1,4 +1,4 @@
-# CodeRabbit Guidelines — ERP-SAEP
+# CodeRabbit Guidelines — WMS-SAEP
 
 Este documento define **invariantes arquiteturais e regras críticas de domínio** que DEVEM ser respeitadas em qualquer Pull Request.
 

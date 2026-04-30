@@ -6,7 +6,7 @@ ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": "test_erp_saep",
+        "NAME": "test_wms_saep",
         "USER": "saep",
         "PASSWORD": "saep",
         "HOST": "localhost",

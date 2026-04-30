@@ -21,7 +21,7 @@ As tarefas `MAT-*` não fazem parte do domínio funcional do piloto. O backlog f
 
 ## 1. Estratégia de implementação
 
-A implementação do ERP-SAEP deve ser organizada em três camadas de escopo:
+A implementação do WMS-SAEP deve ser organizada em três camadas de escopo:
 
 1. **Piloto inicial**
    - Entrega mínima para validar o fluxo principal com usuários reais.
@@ -83,7 +83,7 @@ Orientações para agentes:
 - Não alterar regra de negócio sem atualizar também os critérios de aceite e os documentos de domínio/processo relacionados.
 - Quando uma tarefa envolver status de requisição, preservar o ciclo de vida definido em `docs/design-acesso-ocasional/processos-almoxarifado.md`.
 - Quando uma tarefa envolver estoque, preservar a separação entre saldo físico, saldo reservado e saldo disponível.
-- Quando uma tarefa envolver material importado do SCPI, não permitir edição manual de dados cadastrais oficiais no ERP-SAEP.
+- Quando uma tarefa envolver material importado do SCPI, não permitir edição manual de dados cadastrais oficiais no WMS-SAEP.
 - Toda implementação que altere estoque, status de requisição ou permissões deve possuir testes automatizados ou, no mínimo, cenários de validação documentados.
 - Seguir as decisões técnicas registradas em `docs/design-acesso-rapido/stack.md`.
 - Usar Django REST Framework para endpoints de API e manter views/serializers finos.
@@ -177,11 +177,11 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
 - **Tipo:** Backend / Banco de dados
 - **Agente sugerido:** Agente backend
 - **Depende de:** Backlog de materialização completo (`MAT-000` a `MAT-006`)
-- **Objetivo:** criar o app de usuários do ERP-SAEP em `apps/users/` com usuário customizado por matrícula funcional.
+- **Objetivo:** criar o app de usuários do WMS-SAEP em `apps/users/` com usuário customizado por matrícula funcional.
 - **Contexto técnico:**
   - A materialização mínima (`docs/backlog/backlog-materializacao-django.md`) cria apenas a base Django e não cria `apps/users/`.
   - Esta tarefa é a primeira do backlog funcional, após a base técnica estar pronta.
-  - Esta tarefa deve criar `apps/users/` como app de usuários oficial do ERP-SAEP.
+  - Esta tarefa deve criar `apps/users/` como app de usuários oficial do WMS-SAEP.
   - Não criar novo app `accounts` ou outro app de usuários sem decisão registrada.
   - Implementar `apps/users/models.py`, `managers.py`, `forms.py`, `admin.py` e configurações relacionadas.
 - **Regras de negócio:**
@@ -342,7 +342,7 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
 - **Objetivo:** criar a estrutura persistente dos materiais controlados pelo Almoxarifado.
 - **Regras de negócio:**
   - Código completo deve seguir o padrão `xxx.yyy.zzz`.
-  - Dados cadastrais provenientes do SCPI não devem ser editados diretamente no ERP-SAEP.
+  - Dados cadastrais provenientes do SCPI não devem ser editados diretamente no WMS-SAEP.
   - Unidade de medida vem do SCPI e não deve ser alterada pelo usuário no MVP.
 - **Entregáveis:**
   - Modelo/tabela de material.

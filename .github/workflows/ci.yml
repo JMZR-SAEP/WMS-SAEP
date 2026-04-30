@@ -28,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       SECRET_KEY: test-secret-key-for-ci
-      DATABASE_URL: postgres://saep:saep@localhost:5432/test_erp_saep
+      DATABASE_URL: postgres://saep:saep@localhost:5432/test_wms_saep
       DJANGO_SETTINGS_MODULE: config.settings.test
       TEST_SETTINGS_MODULE: config.settings.test
     services:
@@ -37,7 +37,7 @@ jobs:
         env:
           POSTGRES_USER: saep
           POSTGRES_PASSWORD: saep
-          POSTGRES_DB: test_erp_saep
+          POSTGRES_DB: test_wms_saep
         options: >-
           --health-cmd pg_isready
           --health-interval 10s

@@ -1,10 +1,10 @@
 
 
-# Stack Técnica — ERP-SAEP
+# Stack Técnica — WMS-SAEP
 
 ## 1. Visão geral
 
-O ERP-SAEP será implementado como uma aplicação web monolítica baseada em Django.
+O WMS-SAEP será implementado como uma aplicação web monolítica baseada em Django.
 
 A stack foi escolhida para favorecer:
 
@@ -32,7 +32,7 @@ O sistema deve priorizar uma arquitetura monolítica Django com backend/API-firs
 
 ## 3. Frontend
 
-No momento, frontend não faz parte do escopo ativo do ERP-SAEP.
+No momento, frontend não faz parte do escopo ativo do WMS-SAEP.
 
 A implementação atual deve se concentrar em domínio, persistência, autenticação, autorização, APIs, importações técnicas e rotinas administrativas operadas por comando, admin do Django ou endpoints internos.
 
@@ -63,7 +63,7 @@ O padrão canônico de contratos HTTP, respostas de sucesso, envelope de erro, p
 
 O banco principal será PostgreSQL desde o início.
 
-PostgreSQL é obrigatório para o piloto real porque o ERP-SAEP depende de:
+PostgreSQL é obrigatório para o piloto real porque o WMS-SAEP depende de:
 
 - transações confiáveis;
 - integridade relacional;
@@ -165,7 +165,7 @@ Se Celery ou equivalente for adotado no futuro, ele deve processar tarefas de in
 
 ## 9. Infraestrutura
 
-O ERP-SAEP rodará em servidor próprio.
+O WMS-SAEP rodará em servidor próprio.
 
 Arquitetura recomendada de produção:
 

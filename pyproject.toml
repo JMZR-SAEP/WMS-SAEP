@@ -1,5 +1,5 @@
 [project]
-name = "erp-saep-v2"
+name = "wms-saep-v2"
 version = "0.1.0"
 requires-python = ">=3.14,<3.15"
 dependencies = [

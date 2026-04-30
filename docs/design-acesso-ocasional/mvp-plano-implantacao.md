@@ -2,7 +2,7 @@
 
 ## 3.1 Escopo do Piloto Inicial
 
-O piloto inicial é uma entrega controlada para validar o fluxo principal do ERP-SAEP com usuários reais, antes de liberar todas as funcionalidades do MVP completo.
+O piloto inicial é uma entrega controlada para validar o fluxo principal do WMS-SAEP com usuários reais, antes de liberar todas as funcionalidades do MVP completo.
 
 O piloto inicial deve incluir:
 
@@ -30,25 +30,25 @@ O MVP completo representa a primeira versão operacional mínima do módulo de A
 
 O MVP completo deve incluir importação de materiais por arquivo CSV, usando como base os dados provenientes do SCPI. As regras detalhadas dessa importação ficam documentadas em `docs/design-acesso-ocasional/importacao-scpi-csv.md`.
 
-No MVP completo, o ERP-SAEP deve tratar o SCPI como fonte oficial dos dados cadastrais dos materiais e como fonte para correções de saldo físico via importação CSV. O ERP-SAEP utilizará esses dados para operação interna do Almoxarifado, mas não substituirá o cadastro oficial mantido no SCPI.
+No MVP completo, o WMS-SAEP deve tratar o SCPI como fonte oficial dos dados cadastrais dos materiais e como fonte para correções de saldo físico via importação CSV. O WMS-SAEP utilizará esses dados para operação interna do Almoxarifado, mas não substituirá o cadastro oficial mantido no SCPI.
 
-O MVP completo deve incluir apenas as seguintes entradas de estoque no ERP-SAEP:
+O MVP completo deve incluir apenas as seguintes entradas de estoque no WMS-SAEP:
 
 - Saldo inicial via importação CSV do SCPI, conforme `docs/design-acesso-ocasional/importacao-scpi-csv.md`
 - Entrada por devolução vinculada a requisição
 
-Entradas por compra devem ser feitas no SCPI e refletidas no ERP-SAEP por importação CSV, conforme `docs/design-acesso-ocasional/importacao-scpi-csv.md`.
+Entradas por compra devem ser feitas no SCPI e refletidas no WMS-SAEP por importação CSV, conforme `docs/design-acesso-ocasional/importacao-scpi-csv.md`.
 
 O MVP completo deve incluir inicialmente os seguintes alertas operacionais:
 
 - estoque insuficiente para autorizar toda a quantidade solicitada em uma requisição;
-- divergência crítica de material, quando o saldo físico importado do SCPI ficar menor que o saldo reservado no ERP-SAEP.
+- divergência crítica de material, quando o saldo físico importado do SCPI ficar menor que o saldo reservado no WMS-SAEP.
 
 Divergências críticas devem aparecer como pendência/alerta no painel de Gestão do Almoxarifado para acompanhamento pelo chefe de almoxarifado até serem resolvidas.
 
 O MVP completo deve incluir notificações internas simples no sistema. A forma de exposição dessas notificações para usuários finais pode ser definida depois; o MVP atual não deve depender de frontend dedicado, aplicativo mobile ou notificações por e-mail.
 
-Neste momento, o ERP-SAEP não assume entrega de aplicação web responsiva como parte do escopo ativo. O foco é consolidar backend, APIs, permissões, estoque, importação e rastreabilidade.
+Neste momento, o WMS-SAEP não assume entrega de aplicação web responsiva como parte do escopo ativo. O foco é consolidar backend, APIs, permissões, estoque, importação e rastreabilidade.
 
 Notificações previstas no MVP completo:
 
@@ -65,7 +65,7 @@ O MVP completo não precisa notificar o superusuário sobre importações CSV. E
 O MVP completo deve incluir os seguintes relatórios iniciais:
 
 1. **Estoque atual**
-   - Lista materiais com código completo, nome, grupo, subgrupo, unidade de medida, saldo físico, saldo reservado, saldo disponível, situação ativo/inativo, indicador de divergência crítica, data da última atualização via SCPI e data da última movimentação no ERP-SAEP.
+   - Lista materiais com código completo, nome, grupo, subgrupo, unidade de medida, saldo físico, saldo reservado, saldo disponível, situação ativo/inativo, indicador de divergência crítica, data da última atualização via SCPI e data da última movimentação no WMS-SAEP.
    - Deve permitir filtros por grupo, subgrupo, ativo/inativo, somente com saldo disponível, somente com divergência crítica e busca por código ou nome.
 
 2. **Histórico de movimentações por material**
@@ -175,9 +175,9 @@ Se houver frontend no futuro, o MVP completo pode trabalhar com painéis simples
 
 Ficam fora do MVP inicial:
 
-- Ajuste manual de estoque no ERP-SAEP. Divergências de saldo devem ser corrigidas no SCPI e refletidas por importação CSV.
+- Ajuste manual de estoque no WMS-SAEP. Divergências de saldo devem ser corrigidas no SCPI e refletidas por importação CSV.
 - Conversão de unidades de medida.
-- Edição manual, no ERP-SAEP, dos dados cadastrais de materiais provenientes do SCPI.
+- Edição manual, no WMS-SAEP, dos dados cadastrais de materiais provenientes do SCPI.
 - Cadastro e uso operacional de localização física/endereço físico de prateleiras.
 - Relatórios avançados, como consumo por grupo/subgrupo, requisições por funcionário/beneficiário e importações por período.
 - Exportação de relatórios em PDF ou XLSX.
@@ -198,7 +198,7 @@ Etapas iniciais:
 5. Permitir que todos os setores participem do piloto, desde que as requisições sejam limitadas aos materiais de consumo cotidiano incluídos no escopo.
 6. Manter o controle em papel em paralelo durante o piloto.
 7. No piloto, testar apenas o fluxo de requisição, autorização e retirada. Devoluções, saídas excepcionais, reimportações operacionais e relatórios completos ficam fora do teste inicial do piloto.
-8. Rodar o fluxo principal no ERP-SAEP: requisição, autorização, atendimento, retirada e baixa de estoque.
+8. Rodar o fluxo principal no WMS-SAEP: requisição, autorização, atendimento, retirada e baixa de estoque.
 9. O chefe de almoxarifado deve validar se o saldo inicial e os saldos operacionais estão corretos.
 10. Ajustar regras, contratos, fluxos técnicos e rotinas conforme os problemas encontrados.
 11. Expandir gradualmente para outros tipos de materiais quando os critérios de sucesso forem cumpridos.
