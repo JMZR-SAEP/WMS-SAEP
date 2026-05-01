@@ -111,3 +111,68 @@ def registrar_reserva_por_autorizacao(
         )
 
     return estoque, movimentacao
+
+
+def registrar_saida_por_atendimento(
+    *,
+    requisicao: Requisicao,
+    item: ItemRequisicao,
+    quantidade: Decimal,
+) -> tuple[EstoqueMaterial, MovimentacaoEstoque]:
+    """Registra saída de estoque por atendimento e consome reserva."""
+    if quantidade <= 0:
+        raise DomainConflict(
+            "Quantidade atendida deve ser maior que zero.",
+            details={"quantidade": str(quantidade)},
+        )
+
+    with transaction.atomic():
+        estoque = (
+            EstoqueMaterial.objects.select_for_update()
+            .select_related("material")
+            .get(material_id=item.material_id)
+        )
+
+        if quantidade > estoque.saldo_fisico:
+            raise DomainConflict(
+                "Saldo físico insuficiente para atendimento.",
+                details={
+                    "quantidade": str(quantidade),
+                    "saldo_fisico": str(estoque.saldo_fisico),
+                    "material_id": item.material_id,
+                },
+            )
+
+        if quantidade > estoque.saldo_reservado:
+            raise DomainConflict(
+                "Saldo reservado insuficiente para atendimento.",
+                details={
+                    "quantidade": str(quantidade),
+                    "saldo_reservado": str(estoque.saldo_reservado),
+                    "material_id": item.material_id,
+                },
+            )
+
+        saldo_fisico_anterior = estoque.saldo_fisico
+        saldo_fisico_posterior = saldo_fisico_anterior - quantidade
+        saldo_reservado_anterior = estoque.saldo_reservado
+        saldo_reservado_posterior = saldo_reservado_anterior - quantidade
+
+        estoque.saldo_fisico = saldo_fisico_posterior
+        estoque.saldo_reservado = saldo_reservado_posterior
+        estoque.save(update_fields=["saldo_fisico", "saldo_reservado", "updated_at"])
+
+        movimentacao = MovimentacaoEstoque.objects.create(
+            requisicao=requisicao,
+            item_requisicao=item,
+            material=item.material,
+            tipo=TipoMovimentacao.SAIDA_POR_ATENDIMENTO,
+            quantidade=quantidade,
+            saldo_anterior=saldo_fisico_anterior,
+            saldo_posterior=saldo_fisico_posterior,
+            saldo_reservado_anterior=saldo_reservado_anterior,
+            saldo_reservado_posterior=saldo_reservado_posterior,
+            observacao="Saída por atendimento",
+        )
+
+    return estoque, movimentacao

@@ -7,7 +7,11 @@ from apps.core.api.exceptions import DomainConflict
 from apps.materials.models import GrupoMaterial, Material, SubgrupoMaterial
 from apps.requisitions.models import ItemRequisicao, Requisicao, StatusRequisicao
 from apps.stock.models import EstoqueMaterial, MovimentacaoEstoque, TipoMovimentacao
-from apps.stock.services import registrar_reserva_por_autorizacao, registrar_saldo_inicial
+from apps.stock.services import (
+    registrar_reserva_por_autorizacao,
+    registrar_saida_por_atendimento,
+    registrar_saldo_inicial,
+)
 from apps.users.models import PapelChoices, Setor, User
 
 
@@ -358,4 +362,97 @@ class TestRegistrarSaldoInicial:
 
         estoque.refresh_from_db()
         assert estoque.saldo_reservado == Decimal("3")
+        assert MovimentacaoEstoque.objects.count() == 0
+
+    def test_registrar_saida_por_atendimento_baixa_fisico_e_reserva(self):
+        chefe = User.objects.create(
+            matricula_funcional="99004",
+            nome_completo="Chefe Estoque 4",
+            papel=PapelChoices.CHEFE_SETOR,
+            is_active=True,
+        )
+        setor = Setor.objects.create(nome="Setor Estoque 4", chefe_responsavel=chefe)
+        chefe.setor = setor
+        chefe.save(update_fields=["setor"])
+        material = self._criar_material()
+        estoque = EstoqueMaterial.objects.create(
+            material=material,
+            saldo_fisico=Decimal("10"),
+            saldo_reservado=Decimal("4"),
+        )
+        requisicao = Requisicao.objects.create(
+            criador=chefe,
+            beneficiario=chefe,
+            setor_beneficiario=setor,
+            status=StatusRequisicao.AUTORIZADA,
+        )
+        item = ItemRequisicao.objects.create(
+            requisicao=requisicao,
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal("4.000"),
+            quantidade_autorizada=Decimal("4.000"),
+        )
+
+        _, movimentacao = registrar_saida_por_atendimento(
+            requisicao=requisicao,
+            item=item,
+            quantidade=Decimal("4"),
+        )
+
+        estoque.refresh_from_db()
+        assert estoque.saldo_fisico == Decimal("6")
+        assert estoque.saldo_reservado == Decimal("0")
+        assert movimentacao.tipo == TipoMovimentacao.SAIDA_POR_ATENDIMENTO
+        assert movimentacao.saldo_anterior == Decimal("10")
+        assert movimentacao.saldo_posterior == Decimal("6")
+        assert movimentacao.saldo_reservado_anterior == Decimal("4")
+        assert movimentacao.saldo_reservado_posterior == Decimal("0")
+
+    def test_registrar_saida_rejeita_saldo_fisico_ou_reserva_insuficiente(self):
+        chefe = User.objects.create(
+            matricula_funcional="99005",
+            nome_completo="Chefe Estoque 5",
+            papel=PapelChoices.CHEFE_SETOR,
+            is_active=True,
+        )
+        setor = Setor.objects.create(nome="Setor Estoque 5", chefe_responsavel=chefe)
+        chefe.setor = setor
+        chefe.save(update_fields=["setor"])
+        material = self._criar_material()
+        estoque = EstoqueMaterial.objects.create(
+            material=material,
+            saldo_fisico=Decimal("3"),
+            saldo_reservado=Decimal("2"),
+        )
+        requisicao = Requisicao.objects.create(
+            criador=chefe,
+            beneficiario=chefe,
+            setor_beneficiario=setor,
+            status=StatusRequisicao.AUTORIZADA,
+        )
+        item = ItemRequisicao.objects.create(
+            requisicao=requisicao,
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal("4.000"),
+            quantidade_autorizada=Decimal("4.000"),
+        )
+
+        with pytest.raises(DomainConflict):
+            registrar_saida_por_atendimento(
+                requisicao=requisicao,
+                item=item,
+                quantidade=Decimal("4"),
+            )
+        with pytest.raises(DomainConflict):
+            registrar_saida_por_atendimento(
+                requisicao=requisicao,
+                item=item,
+                quantidade=Decimal("3"),
+            )
+
+        estoque.refresh_from_db()
+        assert estoque.saldo_fisico == Decimal("3")
+        assert estoque.saldo_reservado == Decimal("2")
         assert MovimentacaoEstoque.objects.count() == 0
