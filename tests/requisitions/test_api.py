@@ -33,6 +33,7 @@ class TestRequisicaoAPI:
         papel=PapelChoices.SOLICITANTE,
         setor: Setor | None = None,
         is_active: bool = True,
+        is_superuser: bool = False,
     ) -> User:
         return User.objects.create(
             matricula_funcional=matricula,
@@ -40,6 +41,7 @@ class TestRequisicaoAPI:
             papel=papel,
             setor=setor,
             is_active=is_active,
+            is_superuser=is_superuser,
         )
 
     @staticmethod
@@ -918,6 +920,81 @@ class TestRequisicaoAPI:
 
         client = APIClient()
         client.force_authenticate(user=solicitante)
+        response = client.post(reverse("requisicao-fulfill", args=[requisicao.id]), {})
+
+        assert response.status_code == 403
+        assert response.data["error"]["code"] == "permission_denied"
+
+    def test_fulfill_bloqueia_superuser(self):
+        setor = self._criar_setor("Controle Superior", "90035")
+        solicitante = self._criar_usuario("10038", "Solicitante Controle Superior", setor=setor)
+        superuser = self._criar_usuario(
+            "10039",
+            "Superuser Controle",
+            papel=PapelChoices.SOLICITANTE,
+            setor=setor,
+            is_superuser=True,
+        )
+        material = self._criar_material_com_estoque(
+            "001.001.034",
+            saldo_fisico=Decimal("5"),
+            saldo_reservado=Decimal("2"),
+        )
+        requisicao = Requisicao.objects.create(
+            criador=solicitante,
+            beneficiario=solicitante,
+            setor_beneficiario=setor,
+            numero_publico="REQ-2026-000505",
+            status=StatusRequisicao.AUTORIZADA,
+            data_envio_autorizacao="2026-04-30T10:00:00Z",
+            data_autorizacao_ou_recusa="2026-04-30T11:00:00Z",
+        )
+        requisicao.itens.create(
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal("2"),
+            quantidade_autorizada=Decimal("2"),
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=superuser)
+        response = client.post(reverse("requisicao-fulfill", args=[requisicao.id]), {})
+
+        assert response.status_code == 403
+        assert response.data["error"]["code"] == "permission_denied"
+
+    def test_fulfill_bloqueia_usuario_inativo(self):
+        setor = self._criar_setor("Controle Inativo", "90036")
+        solicitante = self._criar_usuario("10040", "Solicitante Controle Inativo", setor=setor)
+        usuario_inativo = self._criar_usuario(
+            "10041",
+            "Usuario Inativo",
+            setor=setor,
+            is_active=False,
+        )
+        material = self._criar_material_com_estoque(
+            "001.001.035",
+            saldo_fisico=Decimal("5"),
+            saldo_reservado=Decimal("2"),
+        )
+        requisicao = Requisicao.objects.create(
+            criador=solicitante,
+            beneficiario=solicitante,
+            setor_beneficiario=setor,
+            numero_publico="REQ-2026-000506",
+            status=StatusRequisicao.AUTORIZADA,
+            data_envio_autorizacao="2026-04-30T10:00:00Z",
+            data_autorizacao_ou_recusa="2026-04-30T11:00:00Z",
+        )
+        requisicao.itens.create(
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal("2"),
+            quantidade_autorizada=Decimal("2"),
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=usuario_inativo)
         response = client.post(reverse("requisicao-fulfill", args=[requisicao.id]), {})
 
         assert response.status_code == 403
