@@ -780,6 +780,52 @@ class TestRequisicaoAPI:
         assert response.data["results"][0]["total_itens"] == 1
         assert pendente.id not in [item["id"] for item in response.data["results"]]
 
+    def test_fila_atendimento_almoxarifado_ve_requisicoes_de_outros_setores(self):
+        setor_almoxarifado = self._criar_setor("Almoxarifado", "90035")
+        setor_obras = self._criar_setor("Obras", "90036")
+        almoxarife = self._criar_usuario(
+            "10038",
+            "Auxiliar Almoxarifado",
+            papel=PapelChoices.AUXILIAR_ALMOXARIFADO,
+            setor=setor_almoxarifado,
+        )
+        solicitante_obras = self._criar_usuario(
+            "10039",
+            "Solicitante Obras",
+            setor=setor_obras,
+        )
+        material = self._criar_material_com_estoque(
+            "001.001.034",
+            saldo_fisico=Decimal("5"),
+            saldo_reservado=Decimal("2"),
+        )
+        autorizada_outro_setor = Requisicao.objects.create(
+            criador=solicitante_obras,
+            beneficiario=solicitante_obras,
+            setor_beneficiario=setor_obras,
+            numero_publico="REQ-2026-000505",
+            status=StatusRequisicao.AUTORIZADA,
+            data_envio_autorizacao="2026-04-30T10:00:00Z",
+            data_autorizacao_ou_recusa="2026-04-30T11:00:00Z",
+        )
+        autorizada_outro_setor.itens.create(
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal("2"),
+            quantidade_autorizada=Decimal("2"),
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=almoxarife)
+        response = client.get(reverse("requisicao-pending-fulfillments"))
+
+        # matriz-permissoes.md: Almoxarifado vê requisições de todos os setores
+        # e fila de atendimento; não há isolamento por setor nesta fila.
+        assert response.status_code == 200
+        assert response.data["count"] == 1
+        assert response.data["results"][0]["id"] == autorizada_outro_setor.id
+        assert response.data["results"][0]["setor_beneficiario"]["id"] == setor_obras.id
+
     def test_fila_atendimento_bloqueia_papel_sem_permissao(self):
         setor = self._criar_setor("Apoio Operacional", "90031")
         solicitante = self._criar_usuario("10032", "Solicitante Apoio", setor=setor)
