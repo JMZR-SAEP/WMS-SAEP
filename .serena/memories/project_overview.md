@@ -14,6 +14,9 @@ Current delivered backend baseline:
 - Stock base through `PIL-BE-EST-001`
 - Material search/list API through `PIL-BE-MAT-003`
 - SCPI CSV parser + import/bootstrap stock flow through `PIL-BE-IMP-001` and `PIL-BE-IMP-002`
+- Requisition draft/formalization/pre-authorization flow through `PIL-BE-REQ-002/003/004/005/007/008`
+- Authorization queue, authorize/refuse endpoints, stock reservation movement, and locking hardening through `PIL-BE-AUT-001/003/004/005/006`
+- Warehouse fulfillment queue, full fulfillment endpoint, stock exit movement, and withdrawal metadata through `PIL-BE-ATE-001/003/006`
 
 Important references:
 - `AGENTS.md` contains project instructions and guardrails.
@@ -25,9 +28,6 @@ Important references:
 - `docs/backlog/backlog-tecnico-mvp.md` is the later MVP backlog.
 - `docs/coderabbit-guidelines.md` records code review/domain invariants.
 
-Known operational TODO:
-- When the request/requisition workflow lands, review CI and OpenAPI checks so schema diffs and domain contracts stay explicit as the API surface grows.
-
 Current top-level structure:
 - `.github/` GitHub metadata/workflows.
 - `.serena/` Serena project config and memories.
@@ -36,3 +36,8 @@ Current top-level structure:
 - `config/` Django bootstrap/settings.
 - `Makefile` local development routines.
 - `AGENTS.md` agent instructions.
+
+Current near-term implementation frontier:
+- partial / zero fulfillment and reservation release for undelivered quantities
+- physical stock reversal / return / estorno flows after fulfilled requisitions
+- notifications as post-commit side effects only, never domain truth

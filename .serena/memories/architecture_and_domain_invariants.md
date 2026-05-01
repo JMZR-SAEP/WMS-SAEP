@@ -2,7 +2,7 @@
 
 Core architectural rule: business rules belong in `services.py` / service-use-case modules. Keep DRF views, serializers, templates, admin actions, signals, management commands, and generic helpers thin. Serializers validate input/output shape and local payload coherence, not critical domain workflow.
 
-Authorization must be explicit and consistent. Contextual authorization should be centralized in `policies.py` or equivalent and used by both views and services. Always validate object scope/profile in services for writes.
+Authorization must be explicit and consistent. Contextual authorization should be centralized in `policies.py` or equivalent and used by both views and services. Always validate object scope/profile in services for writes, and for concurrent write paths prefer validating against the locked/reloaded object inside `transaction.atomic()` instead of the potentially stale caller instance.
 
 Authentication invariant:
 - The pilot login identifier is `matricula_funcional`.
@@ -20,16 +20,32 @@ API response invariant:
 
 Stock invariants:
 - `MovimentacaoEstoque` is immutable. Do not update/delete/overwrite movements; corrections must be modeled as new movements when new movement types are introduced.
-- The currently implemented movement type is `SALDO_INICIAL` for SCPI bootstrap load.
+- The currently implemented movement types are `SALDO_INICIAL` for SCPI bootstrap load, `RESERVA_POR_AUTORIZACAO` for approved requisition reservation, and `SAIDA_POR_ATENDIMENTO` for full warehouse fulfillment.
 - Any operation altering stock uses `transaction.atomic()` and row locking such as `select_for_update()` on stock rows.
 - Keep `EstoqueMaterial.saldo_fisico`, `saldo_reservado`, `saldo_disponivel`, and movement balances consistent.
 - Avoid double increment/decrement, unauthorized negative stock, race conditions, and movement/balance divergence.
+- The stock reservation write path must reject `quantidade <= 0` and must revalidate available balance inside the locked stock service itself, even if the caller already checked before.
+- The full-fulfillment stock exit write path must reject `quantidade <= 0`, revalidate both `saldo_fisico` and `saldo_reservado` after locking stock, decrement both balances, and record immutable `SAIDA_POR_ATENDIMENTO`.
+- `MovimentacaoEstoque.save()` calls `full_clean()`, and manager-level bulk paths must not bypass critical invariants; `bulk_create()` is now expected to validate each object before insert.
+- Current cross-field consistency between `requisicao`, `item_requisicao`, and `material` for operational stock movements is enforced at the ORM/model level with `clean()/full_clean()` plus regression tests; if durable DB-level enforcement becomes required later, add it explicitly and document the migration decision.
+
+Technical debt to revisit before adding new stock writers:
+- The current fulfillment path locks `Requisicao` / `ItemRequisicao` before `EstoqueMaterial`. This is acceptable while it is the only operational stock-exit writer, but future flows such as exceptional exits, reversals, returns, reservation release, or partial fulfillment must define and reuse one canonical lock acquisition order across requisitions, items, and stock rows to avoid deadlocks. Add PostgreSQL concurrency coverage when introducing another writer that can touch the same stock rows.
 
 Request/requisition invariants:
-- `MaterialRequest.department` is a historical snapshot and must not be recalculated from `requester.department` after creation.
+- `Requisicao.setor_beneficiario` is a historical snapshot and must not be recalculated from `beneficiario.setor` after creation.
 - Request status transitions must follow the declarative state machine documented in domain/process docs and existing services when present.
 - Do not scatter status transitions through ad hoc `if/elif` logic.
-- Preserve consistency between request, request items, deliveries, delivery items, stock reservation, and stock decrement.
+- Preserve consistency between requisition, requisition items, stock reservation, stock decrement, delivery, and audit trail.
+- Authorization rules are service-level domain rules, not serializer-only rules: payload-level guards in DRF are welcome, but critical checks must also exist in `apps/requisitions/services.py`.
+- Authorization payload must not repeat `item_id`.
+- Partial or zero authorization requires a non-blank trimmed justification.
+- At least one item must remain with `quantidade_autorizada > 0` for an authorization to succeed.
+- Authorization records either `AUTORIZACAO_TOTAL` or `AUTORIZACAO_PARCIAL`, persists authorized quantities on items, and reserves stock without changing physical balance.
+- Refusal requires non-blank trimmed `motivo_recusa`, records `RECUSA`, and must not reserve stock.
+- The fulfillment queue is global for Almoxarifado roles by design: `docs/design-acesso-rapido/matriz-permissoes.md` says Almoxarifado sees requests from all sectors and the fulfillment queue.
+- Full fulfillment is currently full-only: it transitions `autorizada` to `atendida`, sets delivered quantity equal to authorized quantity for positive authorized items, records `ATENDIMENTO`, consumes reservation, decrements physical stock, and stores fulfillment metadata.
+- Fulfillment writes must revalidate object-aware permission in services against the `select_for_update()`-locked requisition through `pode_atender_requisicao`; global role checks alone are insufficient for writes.
 
 Notifications:
 - Notifications are side effects, never source of truth and never precondition for domain success.
