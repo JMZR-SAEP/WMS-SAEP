@@ -17,6 +17,7 @@ from apps.requisitions.models import (
     TipoEvento,
 )
 from apps.requisitions.policies import (
+    pode_atender_requisicao,
     pode_autorizar_requisicao,
     pode_manipular_pre_autorizacao,
     queryset_fila_atendimento,
@@ -30,7 +31,6 @@ from apps.stock.services import (
 from apps.users.models import PapelChoices
 from apps.users.policies import (
     pode_criar_requisicao_para,
-    pode_operar_estoque,
     pode_ver_fila_atendimento,
 )
 
@@ -755,7 +755,7 @@ def atender_requisicao_completa(
 ) -> Requisicao:
     with transaction.atomic():
         requisicao = _recarregar_requisicao_para_atendimento(requisicao)
-        if not pode_operar_estoque(ator):
+        if not pode_atender_requisicao(ator, requisicao):
             raise PermissionDenied("Usuário sem permissão para atender esta requisição.")
 
         if requisicao.status != StatusRequisicao.AUTORIZADA:

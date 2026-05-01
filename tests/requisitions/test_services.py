@@ -716,6 +716,38 @@ class TestAtendimentoRequisicaoService:
         assert material.estoque.saldo_reservado == Decimal("3")
         assert MovimentacaoEstoque.objects.count() == 0
 
+    def test_atendimento_bloqueia_saldo_reservado_insuficiente(self):
+        setor = self._criar_setor("Logistica Reserva", "92006")
+        requisitante = self._criar_usuario("12011", "Solicitante Logistica Reserva", setor=setor)
+        atendente = self._criar_usuario(
+            "12012",
+            "Auxiliar Almoxarifado",
+            papel=PapelChoices.AUXILIAR_ALMOXARIFADO,
+            setor=setor,
+        )
+        material = self._criar_material_com_estoque(
+            "001.003.007",
+            saldo_fisico=Decimal("5"),
+            saldo_reservado=Decimal("1"),
+        )
+        requisicao, item = self._criar_requisicao_autorizada(
+            criador=requisitante,
+            beneficiario=requisitante,
+            numero_publico="REQ-2026-200006",
+            material=material,
+            quantidade_autorizada=Decimal("3"),
+        )
+
+        with pytest.raises(DomainConflict):
+            atender_requisicao_completa(requisicao=requisicao, ator=atendente)
+
+        item.refresh_from_db()
+        material.estoque.refresh_from_db()
+        assert item.quantidade_entregue == Decimal("0")
+        assert material.estoque.saldo_fisico == Decimal("5")
+        assert material.estoque.saldo_reservado == Decimal("1")
+        assert MovimentacaoEstoque.objects.count() == 0
+
     @pytest.mark.postgres
     def test_atendimentos_concorrentes_nao_duplicam_baixa(self):
         setor = self._criar_setor("Almoxarifado", "92005")
