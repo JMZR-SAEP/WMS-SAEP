@@ -1044,6 +1044,62 @@ class TestRequisicaoAPI:
         assert item.quantidade_entregue == Decimal("0")
         assert material.estoque.saldo_fisico == Decimal("7")
         assert material.estoque.saldo_reservado == Decimal("3")
+        assert not MovimentacaoEstoque.objects.filter(requisicao=requisicao).exists()
+
+    def test_fulfill_com_itens_rejeita_entrega_acima_do_autorizado(self):
+        setor = self._criar_setor("Manutencao Excesso", "90041")
+        solicitante = self._criar_usuario("10048", "Solicitante Excesso", setor=setor)
+        almoxarife = self._criar_usuario(
+            "10049",
+            "Auxiliar Almoxarifado Excesso",
+            papel=PapelChoices.AUXILIAR_ALMOXARIFADO,
+            setor=setor,
+        )
+        material = self._criar_material_com_estoque(
+            "001.001.038",
+            saldo_fisico=Decimal("10"),
+            saldo_reservado=Decimal("3"),
+        )
+        requisicao = Requisicao.objects.create(
+            criador=solicitante,
+            beneficiario=solicitante,
+            setor_beneficiario=setor,
+            numero_publico="REQ-2026-000509",
+            status=StatusRequisicao.AUTORIZADA,
+            data_envio_autorizacao="2026-04-30T10:00:00Z",
+            data_autorizacao_ou_recusa="2026-04-30T11:00:00Z",
+        )
+        item = requisicao.itens.create(
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal("3"),
+            quantidade_autorizada=Decimal("3"),
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=almoxarife)
+        response = client.post(
+            reverse("requisicao-fulfill", args=[requisicao.id]),
+            {
+                "itens": [
+                    {
+                        "item_id": item.id,
+                        "quantidade_entregue": "5.000",
+                        "justificativa_atendimento_parcial": "Erro de quantidade",
+                    }
+                ]
+            },
+            format="json",
+        )
+
+        assert response.status_code == 409
+        assert response.data["error"]["code"] == "domain_conflict"
+        item.refresh_from_db()
+        material.estoque.refresh_from_db()
+        assert item.quantidade_entregue == Decimal("0")
+        assert material.estoque.saldo_fisico == Decimal("10")
+        assert material.estoque.saldo_reservado == Decimal("3")
+        assert not MovimentacaoEstoque.objects.filter(requisicao=requisicao).exists()
 
     def test_fulfill_bloqueia_usuario_sem_permissao(self):
         setor = self._criar_setor("Controle", "90033")
@@ -1075,6 +1131,38 @@ class TestRequisicaoAPI:
 
         assert response.status_code == 403
         assert response.data["error"]["code"] == "permission_denied"
+
+    def test_fulfill_requisicao_fora_do_escopo_visivel_retorna_404(self):
+        setor_origem = self._criar_setor("Controle Origem", "90042")
+        setor_externo = self._criar_setor("Controle Externo", "90043")
+        solicitante = self._criar_usuario("10050", "Solicitante Origem", setor=setor_origem)
+        usuario_externo = self._criar_usuario("10051", "Solicitante Externo", setor=setor_externo)
+        material = self._criar_material_com_estoque(
+            "001.001.039",
+            saldo_fisico=Decimal("5"),
+            saldo_reservado=Decimal("2"),
+        )
+        requisicao = Requisicao.objects.create(
+            criador=solicitante,
+            beneficiario=solicitante,
+            setor_beneficiario=setor_origem,
+            numero_publico="REQ-2026-000510",
+            status=StatusRequisicao.AUTORIZADA,
+            data_envio_autorizacao="2026-04-30T10:00:00Z",
+            data_autorizacao_ou_recusa="2026-04-30T11:00:00Z",
+        )
+        requisicao.itens.create(
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal("2"),
+            quantidade_autorizada=Decimal("2"),
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=usuario_externo)
+        response = client.post(reverse("requisicao-fulfill", args=[requisicao.id]), {})
+
+        assert response.status_code == 404
 
     def test_fulfill_bloqueia_superuser(self):
         setor = self._criar_setor("Controle Superior", "90035")
@@ -1148,8 +1236,7 @@ class TestRequisicaoAPI:
         client.force_authenticate(user=usuario_inativo)
         response = client.post(reverse("requisicao-fulfill", args=[requisicao.id]), {})
 
-        assert response.status_code == 403
-        assert response.data["error"]["code"] == "permission_denied"
+        assert response.status_code == 404
 
     def test_fulfill_bloqueia_status_invalido(self):
         setor = self._criar_setor("Planejamento Campo", "90034")

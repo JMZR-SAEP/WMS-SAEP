@@ -10,7 +10,6 @@ from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 
 from apps.core.api.serializers import ErrorResponseSerializer
-from apps.requisitions.models import Requisicao
 from apps.requisitions.policies import queryset_requisicoes_visiveis
 from apps.requisitions.serializers import (
     RequisicaoAuthorizeInputSerializer,
@@ -213,7 +212,7 @@ class RequisicaoViewSet(GenericViewSet):
     def fulfill(self, request, pk=None):
         serializer = RequisicaoFulfillInputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        requisicao_atendimento = get_object_or_404(Requisicao, pk=pk)
+        requisicao_atendimento = self.get_object()
         if "itens" in serializer.validated_data:
             requisicao = atender_requisicao_com_itens(
                 requisicao=requisicao_atendimento,
