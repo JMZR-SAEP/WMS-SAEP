@@ -839,6 +839,38 @@ class TestRequisicaoAPI:
         assert response.status_code == 403
         assert response.data["error"]["code"] == "permission_denied"
 
+    def test_fila_atendimento_bloqueia_superuser(self):
+        setor = self._criar_setor("Apoio Superuser", "90037")
+        superuser = self._criar_usuario(
+            "10042",
+            "Superuser Apoio",
+            setor=setor,
+            is_superuser=True,
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=superuser)
+        response = client.get(reverse("requisicao-pending-fulfillments"))
+
+        assert response.status_code == 403
+        assert response.data["error"]["code"] == "permission_denied"
+
+    def test_fila_atendimento_bloqueia_usuario_inativo(self):
+        setor = self._criar_setor("Apoio Inativo", "90038")
+        usuario_inativo = self._criar_usuario(
+            "10043",
+            "Usuario Inativo Apoio",
+            setor=setor,
+            is_active=False,
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=usuario_inativo)
+        response = client.get(reverse("requisicao-pending-fulfillments"))
+
+        assert response.status_code == 403
+        assert response.data["error"]["code"] == "permission_denied"
+
     def test_fulfill_atendimento_completo_baixa_estoque_e_registra_retirada(self):
         setor = self._criar_setor("Manutencao", "90032")
         solicitante = self._criar_usuario("10033", "Solicitante Manutencao", setor=setor)
