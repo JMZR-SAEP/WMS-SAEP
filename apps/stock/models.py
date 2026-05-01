@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from django.core.exceptions import ValidationError
 from django.db import models
 
 from apps.materials.models import Material
@@ -7,6 +8,10 @@ from apps.materials.models import Material
 
 class TipoMovimentacao(models.TextChoices):
     SALDO_INICIAL = "SALDO_INICIAL", "Saldo inicial (carga SCPI)"
+    RESERVA_POR_AUTORIZACAO = (
+        "RESERVA_POR_AUTORIZACAO",
+        "Reserva por autorização",
+    )
 
 
 class MovimentacaoEstoqueQuerySet(models.QuerySet):
@@ -18,6 +23,12 @@ class MovimentacaoEstoqueQuerySet(models.QuerySet):
 
 
 class MovimentacaoEstoqueManager(models.Manager.from_queryset(MovimentacaoEstoqueQuerySet)):
+    def bulk_create(self, objs, **kwargs):
+        objs = list(objs)
+        for obj in objs:
+            obj.full_clean()
+        return super().bulk_create(objs, **kwargs)
+
     def bulk_update(self, objs, fields, batch_size=None):
         raise ValueError("Movimentações de estoque são imutáveis")
 
@@ -68,6 +79,34 @@ class EstoqueMaterial(models.Model):
 
 
 class MovimentacaoEstoque(models.Model):
+    """
+    Movimentações auditáveis de estoque.
+
+    Invariantes:
+    - SALDO_INICIAL nunca referencia requisição/item.
+    - RESERVA_POR_AUTORIZACAO sempre referencia a requisição e o item reservados.
+    - Tipos futuros devem declarar explicitamente sua origem, sem reutilizar
+      registros já persistidos.
+    """
+
+    # SALDO_INICIAL é uma carga de origem; movimentações operacionais apontam
+    # para a requisição/item que consumiu ou reservou saldo.
+    requisicao = models.ForeignKey(
+        "requisitions.Requisicao",
+        on_delete=models.PROTECT,
+        related_name="movimentacoes_estoque",
+        null=True,
+        blank=True,
+        help_text="Requisição relacionada à movimentação",
+    )
+    item_requisicao = models.ForeignKey(
+        "requisitions.ItemRequisicao",
+        on_delete=models.PROTECT,
+        related_name="movimentacoes_estoque",
+        null=True,
+        blank=True,
+        help_text="Item de requisição relacionado à movimentação",
+    )
     material = models.ForeignKey(
         Material,
         on_delete=models.PROTECT,
@@ -93,6 +132,18 @@ class MovimentacaoEstoque(models.Model):
         max_digits=12,
         decimal_places=3,
         help_text="Saldo físico posterior à movimentação",
+    )
+    saldo_reservado_anterior = models.DecimalField(
+        max_digits=12,
+        decimal_places=3,
+        default=0,
+        help_text="Saldo reservado anterior à movimentação",
+    )
+    saldo_reservado_posterior = models.DecimalField(
+        max_digits=12,
+        decimal_places=3,
+        default=0,
+        help_text="Saldo reservado posterior à movimentação",
     )
     observacao = models.TextField(
         blank=True,
@@ -121,16 +172,42 @@ class MovimentacaoEstoque(models.Model):
                 name="check_movimentacao_saldo_posterior_nao_negativo",
             ),
             models.CheckConstraint(
-                condition=models.Q(tipo__in=[TipoMovimentacao.SALDO_INICIAL]),
+                condition=models.Q(
+                    tipo__in=[
+                        TipoMovimentacao.SALDO_INICIAL,
+                        TipoMovimentacao.RESERVA_POR_AUTORIZACAO,
+                    ]
+                ),
                 name="check_movimentacao_tipo_valido",
             ),
             models.CheckConstraint(
-                condition=models.Q(
-                    tipo=TipoMovimentacao.SALDO_INICIAL,
-                    saldo_anterior=0,
-                    saldo_posterior=models.F("quantidade"),
+                condition=(
+                    ~models.Q(tipo=TipoMovimentacao.SALDO_INICIAL)
+                    | (
+                        models.Q(saldo_anterior=0)
+                        & models.Q(saldo_posterior=models.F("quantidade"))
+                        & models.Q(saldo_reservado_anterior=0)
+                        & models.Q(saldo_reservado_posterior=0)
+                        & models.Q(requisicao__isnull=True)
+                        & models.Q(item_requisicao__isnull=True)
+                    )
                 ),
                 name="check_movimentacao_saldo_inicial_coerente",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(tipo=TipoMovimentacao.RESERVA_POR_AUTORIZACAO)
+                    & models.Q(saldo_anterior=models.F("saldo_posterior"))
+                    & models.Q(
+                        saldo_reservado_posterior=(
+                            models.F("saldo_reservado_anterior") + models.F("quantidade")
+                        )
+                    )
+                    & models.Q(requisicao__isnull=False)
+                    & models.Q(item_requisicao__isnull=False)
+                )
+                | ~models.Q(tipo=TipoMovimentacao.RESERVA_POR_AUTORIZACAO),
+                name="check_movimentacao_reserva_por_autorizacao_coerente",
             ),
         ]
 
@@ -140,7 +217,36 @@ class MovimentacaoEstoque(models.Model):
     def save(self, *args, **kwargs):
         if self.pk and MovimentacaoEstoque.objects.filter(pk=self.pk).exists():
             raise ValueError("Movimentações de estoque são imutáveis")
+        self.full_clean()
         return super().save(*args, **kwargs)
+
+    def clean(self):
+        super().clean()
+
+        if self.tipo == TipoMovimentacao.SALDO_INICIAL:
+            if self.requisicao_id is not None or self.item_requisicao_id is not None:
+                raise ValidationError(
+                    {
+                        "requisicao": "Movimentação de saldo inicial não pode referenciar requisição.",
+                        "item_requisicao": "Movimentação de saldo inicial não pode referenciar item.",
+                    }
+                )
+            return
+
+        if self.tipo == TipoMovimentacao.RESERVA_POR_AUTORIZACAO:
+            errors = {}
+            if self.requisicao_id is None:
+                errors["requisicao"] = "Reserva por autorização exige requisição."
+            if self.item_requisicao_id is None:
+                errors["item_requisicao"] = "Reserva por autorização exige item."
+            if self.item_requisicao_id is not None:
+                item = self.item_requisicao
+                if self.requisicao_id is not None and item.requisicao_id != self.requisicao_id:
+                    errors["requisicao"] = "Requisição deve ser a mesma do item da movimentação."
+                if self.material_id != item.material_id:
+                    errors["material"] = "Material deve ser o mesmo do item da movimentação."
+            if errors:
+                raise ValidationError(errors)
 
     def delete(self, *args, **kwargs):
         raise ValueError("Movimentações de estoque não podem ser removidas")

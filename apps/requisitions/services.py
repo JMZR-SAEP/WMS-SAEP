@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
@@ -16,7 +16,13 @@ from apps.requisitions.models import (
     StatusRequisicao,
     TipoEvento,
 )
-from apps.requisitions.policies import pode_manipular_pre_autorizacao, queryset_fila_autorizacao
+from apps.requisitions.policies import (
+    pode_autorizar_requisicao,
+    pode_manipular_pre_autorizacao,
+    queryset_fila_autorizacao,
+)
+from apps.stock.models import EstoqueMaterial
+from apps.stock.services import registrar_reserva_por_autorizacao
 from apps.users.models import PapelChoices
 from apps.users.policies import pode_criar_requisicao_para
 
@@ -28,6 +34,199 @@ class ItemRascunhoData:
     material_id: int
     quantidade_solicitada: Decimal
     observacao: str = ""
+
+
+@dataclass(frozen=True)
+class ItemAutorizacaoData:
+    item_id: int
+    quantidade_autorizada: Decimal
+    justificativa_autorizacao_parcial: str = ""
+
+
+def _side_effect_reservar_itens_autorizados(
+    requisicao: Requisicao, payload: dict[str, object]
+) -> None:
+    # CONTRATO: payload precisa conter "itens_requisicao": list[ItemRequisicao]
+    # quando este side effect for registrado em TRANSICOES_REQUISICAO.
+    for item_requisicao in payload["itens_requisicao"]:
+        quantidade_autorizada = item_requisicao.quantidade_autorizada
+        if quantidade_autorizada <= 0:
+            continue
+        registrar_reserva_por_autorizacao(
+            requisicao=requisicao,
+            item=item_requisicao,
+            quantidade=quantidade_autorizada,
+        )
+
+
+TRANSICOES_REQUISICAO: dict[str, dict[str, object]] = {
+    "autorizar_total": {
+        "from_status": (StatusRequisicao.AGUARDANDO_AUTORIZACAO,),
+        "to_status": StatusRequisicao.AUTORIZADA,
+        "timeline_event_type": TipoEvento.AUTORIZACAO_TOTAL,
+        "audit_fields_to_set": (
+            "chefe_autorizador",
+            "data_autorizacao_ou_recusa",
+            "status",
+        ),
+        "side_effects": (_side_effect_reservar_itens_autorizados,),
+    },
+    "autorizar_parcial": {
+        "from_status": (StatusRequisicao.AGUARDANDO_AUTORIZACAO,),
+        "to_status": StatusRequisicao.AUTORIZADA,
+        "timeline_event_type": TipoEvento.AUTORIZACAO_PARCIAL,
+        "audit_fields_to_set": (
+            "chefe_autorizador",
+            "data_autorizacao_ou_recusa",
+            "status",
+        ),
+        "side_effects": (_side_effect_reservar_itens_autorizados,),
+    },
+    "recusar": {
+        "from_status": (StatusRequisicao.AGUARDANDO_AUTORIZACAO,),
+        "to_status": StatusRequisicao.RECUSADA,
+        "timeline_event_type": TipoEvento.RECUSA,
+        "audit_fields_to_set": (
+            "chefe_autorizador",
+            "data_autorizacao_ou_recusa",
+            "motivo_recusa",
+            "status",
+        ),
+        "side_effects": (),
+    },
+}
+
+
+def _apply_requisicao_transition(
+    requisicao: Requisicao,
+    transition_name: str,
+    actor: User,
+    *,
+    payload: dict[str, object],
+) -> Requisicao:
+    config = TRANSICOES_REQUISICAO[transition_name]
+
+    if requisicao.status not in config["from_status"]:
+        raise DomainConflict(
+            "Transição inválida para o status atual da requisição.",
+            details={"status_atual": requisicao.status, "transicao": transition_name},
+        )
+
+    for field_name in config["audit_fields_to_set"]:
+        if field_name == "status":
+            setattr(requisicao, field_name, config["to_status"])
+            continue
+        setattr(requisicao, field_name, payload[field_name])
+
+    requisicao.full_clean()
+    requisicao.save(
+        update_fields=[
+            *config["audit_fields_to_set"],
+            "updated_at",
+        ]
+    )
+    EventoTimeline.objects.create(
+        requisicao=requisicao,
+        tipo_evento=config["timeline_event_type"],
+        usuario=actor,
+    )
+
+    for side_effect in config["side_effects"]:
+        side_effect(requisicao, payload)
+
+    return requisicao
+
+
+def _material_e_estoque_validos_autorizacao(
+    *, material: Material, quantidade_autorizada: Decimal
+) -> None:
+    errors = {}
+    estoque = getattr(material, "estoque", None)
+
+    if not material.is_active:
+        errors["material_id"] = f"Material {material.codigo_completo} está inativo."
+    elif estoque is None:
+        errors["material_id"] = f"Material {material.codigo_completo} está sem estoque disponível."
+    else:
+        saldo_disponivel = estoque.saldo_disponivel
+        if quantidade_autorizada > saldo_disponivel:
+            errors["quantidade_autorizada"] = (
+                f"Quantidade autorizada ({quantidade_autorizada}) excede o saldo disponível "
+                f"({saldo_disponivel}) para o material {material.codigo_completo}."
+            )
+
+    if errors:
+        raise DomainConflict(
+            "Requisição em conflito com o estado atual do estoque.", details=errors
+        )
+
+
+def _validar_itens_autorizacao(
+    *, itens_requisicao: list[ItemRequisicao], itens: list[ItemAutorizacaoData]
+) -> dict[int, ItemAutorizacaoData]:
+    if not itens:
+        raise ValidationError({"itens": ["Informe ao menos um item para autorizar."]})
+
+    itens_por_id = {item.item_id: item for item in itens}
+    if len(itens_por_id) != len(itens):
+        raise ValidationError(
+            {"itens": ["Não informe o mesmo item mais de uma vez na mesma autorização."]}
+        )
+
+    itens_requisicao_por_id = {item.id: item for item in itens_requisicao}
+
+    missing_ids = [item.id for item in itens_requisicao if item.id not in itens_por_id]
+    if missing_ids:
+        raise ValidationError({"itens": [f"Itens ausentes na autorização: {missing_ids}."]})
+
+    extra_ids = [item_id for item_id in itens_por_id if item_id not in itens_requisicao_por_id]
+    if extra_ids:
+        raise ValidationError({"itens": [f"Itens inválidos na autorização: {extra_ids}."]})
+
+    houve_quantidade_maior_que_zero = False
+    erros_itens: list[dict[str, list[str]]] = [{} for _ in itens]
+    for index, item_autorizacao in enumerate(itens):
+        item_requisicao = itens_requisicao_por_id[item_autorizacao.item_id]
+        item_erros: dict[str, list[str]] = {}
+        justificativa_autorizacao_parcial = (
+            item_autorizacao.justificativa_autorizacao_parcial or ""
+        ).strip()
+
+        if item_autorizacao.quantidade_autorizada < 0:
+            item_erros["quantidade_autorizada"] = ["Não pode ser negativa."]
+        if item_autorizacao.quantidade_autorizada > item_requisicao.quantidade_solicitada:
+            item_erros["quantidade_autorizada"] = [
+                "Não pode ser maior que a quantidade solicitada."
+            ]
+        if (
+            item_autorizacao.quantidade_autorizada < item_requisicao.quantidade_solicitada
+            and not justificativa_autorizacao_parcial
+        ):
+            item_erros["justificativa_autorizacao_parcial"] = [
+                "Justificativa é obrigatória quando a autorização é parcial ou zero."
+            ]
+
+        if item_erros:
+            erros_itens[index] = item_erros
+            continue
+
+        if item_autorizacao.quantidade_autorizada > 0:
+            houve_quantidade_maior_que_zero = True
+        itens_por_id[item_autorizacao.item_id] = replace(
+            item_autorizacao,
+            justificativa_autorizacao_parcial=justificativa_autorizacao_parcial,
+        )
+
+    if any(erros_itens):
+        raise ValidationError({"itens": erros_itens})
+
+    if not houve_quantidade_maior_que_zero:
+        raise DomainConflict(
+            "Autorização deve manter ao menos um item com quantidade maior que zero.",
+            details={"itens": "Autorize pelo menos um item com quantidade maior que zero."},
+        )
+
+    return itens_por_id
 
 
 def _material_e_estoque_validos(*, material: Material, quantidade_solicitada: Decimal) -> None:
@@ -55,6 +254,15 @@ def _material_e_estoque_validos(*, material: Material, quantidade_solicitada: De
         raise DomainConflict(
             "Requisição em conflito com o estado atual do estoque.", details=errors
         )
+
+
+def _recarregar_requisicao_para_autorizacao(requisicao: Requisicao) -> Requisicao:
+    return (
+        Requisicao.objects.select_for_update()
+        .select_related("criador", "beneficiario", "setor_beneficiario")
+        .prefetch_related("itens__material__estoque", "eventos__usuario")
+        .get(pk=requisicao.pk)
+    )
 
 
 def _validar_itens_rascunho(itens: list[ItemRascunhoData]) -> list[Material]:
@@ -335,6 +543,139 @@ def cancelar_pre_autorizacao(*, requisicao: Requisicao, ator: User) -> Requisica
             "setor_beneficiario",
         )
         .prefetch_related("itens__material", "eventos__usuario")
+        .get(pk=requisicao.pk)
+    )
+
+
+def autorizar_requisicao(
+    *, requisicao: Requisicao, ator: User, itens: list[ItemAutorizacaoData]
+) -> Requisicao:
+    with transaction.atomic():
+        requisicao = _recarregar_requisicao_para_autorizacao(requisicao)
+        if not pode_autorizar_requisicao(ator, requisicao):
+            raise PermissionDenied("Usuário sem permissão para autorizar esta requisição.")
+
+        if requisicao.status != StatusRequisicao.AGUARDANDO_AUTORIZACAO:
+            raise DomainConflict(
+                "Somente requisições aguardando autorização podem ser autorizadas.",
+                details={"status_atual": requisicao.status},
+            )
+
+        itens_requisicao = list(
+            ItemRequisicao.objects.select_for_update()
+            .select_related("material")
+            .filter(requisicao=requisicao)
+            .order_by("id")
+        )
+        itens_por_id = _validar_itens_autorizacao(itens_requisicao=itens_requisicao, itens=itens)
+        estoque_por_material_id = {
+            estoque.material_id: estoque
+            for estoque in (
+                EstoqueMaterial.objects.select_for_update()
+                .select_related("material")
+                .filter(material_id__in=[item.material_id for item in itens_requisicao])
+                .order_by("material_id")
+            )
+        }
+
+        for item_requisicao in itens_requisicao:
+            item_autorizacao = itens_por_id[item_requisicao.id]
+            quantidade_autorizada = item_autorizacao.quantidade_autorizada
+
+            if quantidade_autorizada > 0:
+                estoque = estoque_por_material_id.get(item_requisicao.material_id)
+                if estoque is None:
+                    raise DomainConflict(
+                        "Material da requisição está sem estoque disponível.",
+                        details={"material_id": item_requisicao.material_id},
+                    )
+                if quantidade_autorizada > estoque.saldo_disponivel:
+                    raise DomainConflict(
+                        "Saldo disponível insuficiente no momento da autorização.",
+                        details={
+                            "item_id": item_requisicao.id,
+                            "saldo_disponivel": str(estoque.saldo_disponivel),
+                            "quantidade_autorizada": str(quantidade_autorizada),
+                        },
+                    )
+
+            item_requisicao.quantidade_autorizada = quantidade_autorizada
+            item_requisicao.justificativa_autorizacao_parcial = (
+                item_autorizacao.justificativa_autorizacao_parcial
+            )
+            item_requisicao.full_clean()
+            item_requisicao.save(
+                update_fields=[
+                    "quantidade_autorizada",
+                    "justificativa_autorizacao_parcial",
+                    "updated_at",
+                ]
+            )
+
+        transicao = "autorizar_total"
+        if any(
+            item.quantidade_autorizada < item.quantidade_solicitada for item in itens_requisicao
+        ):
+            transicao = "autorizar_parcial"
+
+        _apply_requisicao_transition(
+            requisicao=requisicao,
+            transition_name=transicao,
+            actor=ator,
+            payload={
+                "chefe_autorizador": ator,
+                "data_autorizacao_ou_recusa": timezone.now(),
+                "itens_requisicao": itens_requisicao,
+            },
+        )
+
+    return (
+        Requisicao.objects.select_related(
+            "criador",
+            "beneficiario",
+            "setor_beneficiario",
+            "chefe_autorizador",
+        )
+        .prefetch_related("itens__material__estoque", "eventos__usuario")
+        .get(pk=requisicao.pk)
+    )
+
+
+def recusar_requisicao(*, requisicao: Requisicao, ator: User, motivo_recusa: str) -> Requisicao:
+    motivo_recusa = motivo_recusa.strip()
+    if not motivo_recusa:
+        raise ValidationError({"motivo_recusa": ["Motivo da recusa é obrigatório."]})
+
+    with transaction.atomic():
+        requisicao = _recarregar_requisicao_para_autorizacao(requisicao)
+        if not pode_autorizar_requisicao(ator, requisicao):
+            raise PermissionDenied("Usuário sem permissão para recusar esta requisição.")
+
+        if requisicao.status != StatusRequisicao.AGUARDANDO_AUTORIZACAO:
+            raise DomainConflict(
+                "Somente requisições aguardando autorização podem ser recusadas.",
+                details={"status_atual": requisicao.status},
+            )
+
+        _apply_requisicao_transition(
+            requisicao=requisicao,
+            transition_name="recusar",
+            actor=ator,
+            payload={
+                "chefe_autorizador": ator,
+                "motivo_recusa": motivo_recusa,
+                "data_autorizacao_ou_recusa": timezone.now(),
+            },
+        )
+
+    return (
+        Requisicao.objects.select_related(
+            "criador",
+            "beneficiario",
+            "setor_beneficiario",
+            "chefe_autorizador",
+        )
+        .prefetch_related("itens__material__estoque", "eventos__usuario")
         .get(pk=requisicao.pk)
     )
 

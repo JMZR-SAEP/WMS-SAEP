@@ -12,18 +12,23 @@ from rest_framework.viewsets import GenericViewSet
 from apps.core.api.serializers import ErrorResponseSerializer
 from apps.requisitions.policies import queryset_requisicoes_visiveis
 from apps.requisitions.serializers import (
+    RequisicaoAuthorizeInputSerializer,
     RequisicaoCreateInputSerializer,
     RequisicaoDetailOutputSerializer,
     RequisicaoPendingApprovalOutputSerializer,
     RequisicaoPendingApprovalPaginatedSerializer,
+    RequisicaoRefuseInputSerializer,
 )
 from apps.requisitions.services import (
+    ItemAutorizacaoData,
     ItemRascunhoData,
+    autorizar_requisicao,
     cancelar_pre_autorizacao,
     criar_rascunho_requisicao,
     descartar_rascunho_nunca_enviado,
     enviar_para_autorizacao,
     listar_fila_autorizacao,
+    recusar_requisicao,
     retornar_para_rascunho,
 )
 
@@ -134,6 +139,54 @@ class RequisicaoViewSet(GenericViewSet):
     @action(detail=True, methods=["post"], url_path="cancel")
     def cancel(self, request, pk=None):
         requisicao = cancelar_pre_autorizacao(requisicao=self.get_object(), ator=request.user)
+        return Response(RequisicaoDetailOutputSerializer(requisicao).data)
+
+    @extend_schema(
+        operation_id="requisitions_authorize",
+        tags=["requisitions"],
+        request=RequisicaoAuthorizeInputSerializer,
+        responses={
+            200: RequisicaoDetailOutputSerializer(),
+            400: ErrorResponseSerializer(),
+            403: ErrorResponseSerializer(),
+            404: ErrorResponseSerializer(),
+            409: ErrorResponseSerializer(),
+        },
+    )
+    @action(detail=True, methods=["post"], url_path="authorize")
+    def authorize(self, request, pk=None):
+        serializer = RequisicaoAuthorizeInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        requisicao = autorizar_requisicao(
+            requisicao=self.get_object(),
+            ator=request.user,
+            itens=[
+                ItemAutorizacaoData(**item_data) for item_data in serializer.validated_data["itens"]
+            ],
+        )
+        return Response(RequisicaoDetailOutputSerializer(requisicao).data)
+
+    @extend_schema(
+        operation_id="requisitions_refuse",
+        tags=["requisitions"],
+        request=RequisicaoRefuseInputSerializer,
+        responses={
+            200: RequisicaoDetailOutputSerializer(),
+            400: ErrorResponseSerializer(),
+            403: ErrorResponseSerializer(),
+            404: ErrorResponseSerializer(),
+            409: ErrorResponseSerializer(),
+        },
+    )
+    @action(detail=True, methods=["post"], url_path="refuse")
+    def refuse(self, request, pk=None):
+        serializer = RequisicaoRefuseInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        requisicao = recusar_requisicao(
+            requisicao=self.get_object(),
+            ator=request.user,
+            motivo_recusa=serializer.validated_data["motivo_recusa"],
+        )
         return Response(RequisicaoDetailOutputSerializer(requisicao).data)
 
     @extend_schema(

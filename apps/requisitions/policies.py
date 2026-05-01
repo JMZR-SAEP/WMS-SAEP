@@ -65,6 +65,12 @@ def pode_manipular_pre_autorizacao(user, requisicao: Requisicao) -> bool:
     )
 
 
+def pode_autorizar_requisicao(user, requisicao: Requisicao) -> bool:
+    return _usuario_operacional_ativo(user) and pode_autorizar_setor(
+        user, requisicao.setor_beneficiario
+    )
+
+
 def queryset_fila_autorizacao(user) -> QuerySet[Requisicao]:
     if not _usuario_operacional_ativo(user):
         return Requisicao.objects.none()
@@ -78,6 +84,8 @@ def queryset_fila_autorizacao(user) -> QuerySet[Requisicao]:
             status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
         )
 
+    # INVARIANTE: CHEFE_ALMOXARIFADO precisa estar lotado no setor do almoxarifado.
+    # Se `setor_id` vier vazio, tratamos como configuração inválida e retornamos vazio.
     if user.papel == PapelChoices.CHEFE_ALMOXARIFADO and user.setor_id is not None:
         return Requisicao.objects.filter(
             setor_beneficiario_id=user.setor_id,

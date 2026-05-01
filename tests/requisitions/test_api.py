@@ -89,6 +89,18 @@ class TestRequisicaoAPI:
             ],
         }
 
+    @staticmethod
+    def _payload_autorizacao(*, item_id: int, quantidade_autorizada: str, justificativa: str = ""):
+        return {
+            "itens": [
+                {
+                    "item_id": item_id,
+                    "quantidade_autorizada": quantidade_autorizada,
+                    "justificativa_autorizacao_parcial": justificativa,
+                }
+            ]
+        }
+
     def test_cria_rascunho_para_si(self):
         setor = self._criar_setor("Operacional", "90001")
         usuario = self._criar_usuario("10001", "Solicitante", setor=setor)
@@ -348,6 +360,315 @@ class TestRequisicaoAPI:
         assert response.status_code == 200
         assert response.data["status"] == StatusRequisicao.CANCELADA
         assert response.data["numero_publico"] == "REQ-2026-000200"
+
+    def test_authorize_total_reserva_estoque_e_define_autorizador(self):
+        setor = self._criar_setor("Producao", "90016")
+        chefe = setor.chefe_responsavel
+        requisitante = self._criar_usuario("10017", "Solicitante Producao", setor=setor)
+        material = self._criar_material_com_estoque("001.001.012", saldo_fisico=Decimal("10"))
+        requisicao = Requisicao.objects.create(
+            criador=requisitante,
+            beneficiario=requisitante,
+            setor_beneficiario=setor,
+            numero_publico="REQ-2026-000400",
+            status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
+            data_envio_autorizacao="2026-04-30T10:00:00Z",
+        )
+        item = requisicao.itens.create(
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal("4"),
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=chefe)
+        response = client.post(
+            reverse("requisicao-authorize", args=[requisicao.id]),
+            self._payload_autorizacao(item_id=item.id, quantidade_autorizada="4.000"),
+            format="json",
+        )
+
+        assert response.status_code == 200
+        assert response.data["status"] == StatusRequisicao.AUTORIZADA
+        assert response.data["chefe_autorizador"]["id"] == chefe.id
+        assert response.data["itens"][0]["quantidade_autorizada"] == "4.000"
+        requisicao.refresh_from_db()
+        material.estoque.refresh_from_db()
+        assert requisicao.chefe_autorizador_id == chefe.id
+        assert requisicao.eventos.filter(tipo_evento=TipoEvento.AUTORIZACAO_TOTAL).exists()
+        estoque = material.estoque
+        assert estoque.saldo_fisico == Decimal("10")
+        assert estoque.saldo_reservado == Decimal("4")
+
+    def test_refuse_requer_motivo_e_nao_reserva_estoque(self):
+        setor = self._criar_setor("Transporte", "90017")
+        chefe = setor.chefe_responsavel
+        requisitante = self._criar_usuario("10018", "Solicitante Transporte", setor=setor)
+        material = self._criar_material_com_estoque("001.001.013", saldo_fisico=Decimal("7"))
+        requisicao = Requisicao.objects.create(
+            criador=requisitante,
+            beneficiario=requisitante,
+            setor_beneficiario=setor,
+            numero_publico="REQ-2026-000401",
+            status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
+            data_envio_autorizacao="2026-04-30T10:00:00Z",
+        )
+        requisicao.itens.create(
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal("2"),
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=chefe)
+        response = client.post(
+            reverse("requisicao-refuse", args=[requisicao.id]),
+            {"motivo_recusa": "Item fora de prioridade"},
+            format="json",
+        )
+
+        assert response.status_code == 200
+        assert response.data["status"] == StatusRequisicao.RECUSADA
+        assert response.data["motivo_recusa"] == "Item fora de prioridade"
+        assert response.data["chefe_autorizador"]["id"] == chefe.id
+        requisicao.refresh_from_db()
+        assert requisicao.eventos.filter(tipo_evento=TipoEvento.RECUSA).exists()
+        material.estoque.refresh_from_db()
+        assert material.estoque.saldo_reservado == Decimal("0")
+
+    def test_authorize_bloqueia_usuario_sem_permissao(self):
+        setor = self._criar_setor("Oficina", "90018")
+        usuario = self._criar_usuario("10019", "Solicitante Oficina", setor=setor)
+        material = self._criar_material_com_estoque("001.001.014")
+        requisicao = Requisicao.objects.create(
+            criador=usuario,
+            beneficiario=usuario,
+            setor_beneficiario=setor,
+            numero_publico="REQ-2026-000402",
+            status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
+            data_envio_autorizacao="2026-04-30T10:00:00Z",
+        )
+        item = requisicao.itens.create(
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal("1"),
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=usuario)
+        response = client.post(
+            reverse("requisicao-authorize", args=[requisicao.id]),
+            self._payload_autorizacao(item_id=item.id, quantidade_autorizada="1.000"),
+            format="json",
+        )
+
+        assert response.status_code == 403
+        assert response.data["error"]["code"] == "permission_denied"
+
+    def test_authorize_rejeita_saldo_estavel_insuficiente(self):
+        setor = self._criar_setor("Logistica", "90019")
+        chefe = setor.chefe_responsavel
+        requisitante = self._criar_usuario("10020", "Solicitante Logistica", setor=setor)
+        material = self._criar_material_com_estoque("001.001.015", saldo_fisico=Decimal("5"))
+        requisicao = Requisicao.objects.create(
+            criador=requisitante,
+            beneficiario=requisitante,
+            setor_beneficiario=setor,
+            numero_publico="REQ-2026-000403",
+            status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
+            data_envio_autorizacao="2026-04-30T10:00:00Z",
+        )
+        item = requisicao.itens.create(
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal("4"),
+        )
+        material.estoque.saldo_fisico = Decimal("2")
+        material.estoque.save(update_fields=["saldo_fisico", "updated_at"])
+
+        client = APIClient()
+        client.force_authenticate(user=chefe)
+        response = client.post(
+            reverse("requisicao-authorize", args=[requisicao.id]),
+            self._payload_autorizacao(item_id=item.id, quantidade_autorizada="4.000"),
+            format="json",
+        )
+
+        assert response.status_code == 409
+        assert response.data["error"]["code"] == "domain_conflict"
+        material.estoque.refresh_from_db()
+        assert material.estoque.saldo_reservado == Decimal("0")
+
+    def test_authorize_partial_and_zero_require_justificativa(self):
+        setor = self._criar_setor("Apoio", "90020")
+        chefe = setor.chefe_responsavel
+        requisitante = self._criar_usuario("10021", "Solicitante Apoio", setor=setor)
+        material_a = self._criar_material_com_estoque("001.001.016", saldo_fisico=Decimal("8"))
+        material_b = self._criar_material_com_estoque("001.001.017", saldo_fisico=Decimal("8"))
+        requisicao = Requisicao.objects.create(
+            criador=requisitante,
+            beneficiario=requisitante,
+            setor_beneficiario=setor,
+            numero_publico="REQ-2026-000404",
+            status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
+            data_envio_autorizacao="2026-04-30T10:00:00Z",
+        )
+        item_a = requisicao.itens.create(
+            material=material_a,
+            unidade_medida=material_a.unidade_medida,
+            quantidade_solicitada=Decimal("5"),
+        )
+        item_b = requisicao.itens.create(
+            material=material_b,
+            unidade_medida=material_b.unidade_medida,
+            quantidade_solicitada=Decimal("3"),
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=chefe)
+        response = client.post(
+            reverse("requisicao-authorize", args=[requisicao.id]),
+            {
+                "itens": [
+                    {
+                        "item_id": item_a.id,
+                        "quantidade_autorizada": "4.000",
+                        "justificativa_autorizacao_parcial": "Saldo limitado",
+                    },
+                    {
+                        "item_id": item_b.id,
+                        "quantidade_autorizada": "0.000",
+                        "justificativa_autorizacao_parcial": "Não prioritário",
+                    },
+                ]
+            },
+            format="json",
+        )
+
+        assert response.status_code == 200
+        assert response.data["status"] == StatusRequisicao.AUTORIZADA
+        assert response.data["chefe_autorizador"]["id"] == chefe.id
+        assert response.data["itens"][0]["quantidade_autorizada"] == "4.000"
+        requisicao.refresh_from_db()
+        material_a.estoque.refresh_from_db()
+        material_b.estoque.refresh_from_db()
+        assert requisicao.eventos.filter(tipo_evento=TipoEvento.AUTORIZACAO_PARCIAL).exists()
+        assert material_a.estoque.saldo_reservado == Decimal("4")
+        assert material_b.estoque.saldo_reservado == Decimal("0")
+
+    def test_authorize_partial_and_zero_sem_justificativa_falha(self):
+        setor = self._criar_setor("Apoio Financeiro", "90024")
+        chefe = setor.chefe_responsavel
+        requisitante = self._criar_usuario("10024", "Solicitante Apoio Financeiro", setor=setor)
+        material_a = self._criar_material_com_estoque("001.001.020", saldo_fisico=Decimal("8"))
+        material_b = self._criar_material_com_estoque("001.001.021", saldo_fisico=Decimal("8"))
+        requisicao = Requisicao.objects.create(
+            criador=requisitante,
+            beneficiario=requisitante,
+            setor_beneficiario=setor,
+            numero_publico="REQ-2026-000406",
+            status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
+            data_envio_autorizacao="2026-04-30T10:00:00Z",
+        )
+        item_a = requisicao.itens.create(
+            material=material_a,
+            unidade_medida=material_a.unidade_medida,
+            quantidade_solicitada=Decimal("5"),
+        )
+        item_b = requisicao.itens.create(
+            material=material_b,
+            unidade_medida=material_b.unidade_medida,
+            quantidade_solicitada=Decimal("3"),
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=chefe)
+        response = client.post(
+            reverse("requisicao-authorize", args=[requisicao.id]),
+            {
+                "itens": [
+                    {
+                        "item_id": item_a.id,
+                        "quantidade_autorizada": "4.000",
+                        "justificativa_autorizacao_parcial": "",
+                    },
+                    {
+                        "item_id": item_b.id,
+                        "quantidade_autorizada": "0.000",
+                        "justificativa_autorizacao_parcial": "",
+                    },
+                ]
+            },
+            format="json",
+        )
+
+        assert response.status_code == 400
+        assert response.data["error"]["code"] == "validation_error"
+        assert response.data["error"]["details"]["itens"][0]["justificativa_autorizacao_parcial"]
+        assert response.data["error"]["details"]["itens"][1]["justificativa_autorizacao_parcial"]
+
+        requisicao.refresh_from_db()
+        material_a.estoque.refresh_from_db()
+        material_b.estoque.refresh_from_db()
+        assert requisicao.status == StatusRequisicao.AGUARDANDO_AUTORIZACAO
+        assert not requisicao.eventos.exists()
+        assert material_a.estoque.saldo_reservado == Decimal("0")
+        assert material_b.estoque.saldo_reservado == Decimal("0")
+
+    def test_authorize_rejeita_status_invalido(self):
+        setor = self._criar_setor("Qualidade", "90021")
+        chefe = setor.chefe_responsavel
+        requisitante = self._criar_usuario("10022", "Solicitante Qualidade", setor=setor)
+        material = self._criar_material_com_estoque("001.001.018")
+        requisicao = Requisicao.objects.create(
+            criador=requisitante,
+            beneficiario=requisitante,
+            setor_beneficiario=setor,
+        )
+        item = requisicao.itens.create(
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal("1"),
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=chefe)
+        response = client.post(
+            reverse("requisicao-authorize", args=[requisicao.id]),
+            self._payload_autorizacao(item_id=item.id, quantidade_autorizada="1.000"),
+            format="json",
+        )
+
+        assert response.status_code == 409
+        assert response.data["error"]["code"] == "domain_conflict"
+
+    def test_refuse_sem_motivo_falha_validacao(self):
+        setor = self._criar_setor("Fiscalizacao", "90022")
+        chefe = setor.chefe_responsavel
+        requisitante = self._criar_usuario("10023", "Solicitante Fiscalizacao", setor=setor)
+        material = self._criar_material_com_estoque("001.001.019")
+        requisicao = Requisicao.objects.create(
+            criador=requisitante,
+            beneficiario=requisitante,
+            setor_beneficiario=setor,
+            numero_publico="REQ-2026-000405",
+            status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
+            data_envio_autorizacao="2026-04-30T10:00:00Z",
+        )
+        requisicao.itens.create(
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal("1"),
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=chefe)
+        response = client.post(
+            reverse("requisicao-refuse", args=[requisicao.id]), {}, format="json"
+        )
+
+        assert response.status_code == 400
+        assert response.data["error"]["code"] == "validation_error"
 
     def test_fila_autorizacao_retorna_apenas_setor_do_chefe(self):
         setor_a = self._criar_setor("Administrativo", "90013")
