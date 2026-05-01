@@ -8,6 +8,7 @@ from apps.materials.models import GrupoMaterial, Material, SubgrupoMaterial
 from apps.requisitions.models import ItemRequisicao, Requisicao, StatusRequisicao
 from apps.stock.models import EstoqueMaterial, MovimentacaoEstoque, TipoMovimentacao
 from apps.stock.services import (
+    registrar_liberacao_reserva_por_atendimento,
     registrar_reserva_por_autorizacao,
     registrar_saida_por_atendimento,
     registrar_saldo_inicial,
@@ -455,4 +456,94 @@ class TestRegistrarSaldoInicial:
         estoque.refresh_from_db()
         assert estoque.saldo_fisico == Decimal("3")
         assert estoque.saldo_reservado == Decimal("2")
+        assert MovimentacaoEstoque.objects.count() == 0
+
+    def test_registrar_liberacao_reserva_por_atendimento_nao_altera_saldo_fisico(self):
+        chefe = User.objects.create(
+            matricula_funcional="99006",
+            nome_completo="Chefe Estoque 6",
+            papel=PapelChoices.CHEFE_SETOR,
+            is_active=True,
+        )
+        setor = Setor.objects.create(nome="Setor Estoque 6", chefe_responsavel=chefe)
+        chefe.setor = setor
+        chefe.save(update_fields=["setor"])
+        material = self._criar_material()
+        estoque = EstoqueMaterial.objects.create(
+            material=material,
+            saldo_fisico=Decimal("10"),
+            saldo_reservado=Decimal("4"),
+        )
+        requisicao = Requisicao.objects.create(
+            criador=chefe,
+            beneficiario=chefe,
+            setor_beneficiario=setor,
+            status=StatusRequisicao.AUTORIZADA,
+        )
+        item = ItemRequisicao.objects.create(
+            requisicao=requisicao,
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal("4.000"),
+            quantidade_autorizada=Decimal("4.000"),
+        )
+
+        _, movimentacao = registrar_liberacao_reserva_por_atendimento(
+            requisicao=requisicao,
+            item=item,
+            quantidade=Decimal("2"),
+        )
+
+        estoque.refresh_from_db()
+        assert estoque.saldo_fisico == Decimal("10")
+        assert estoque.saldo_reservado == Decimal("2")
+        assert movimentacao.tipo == TipoMovimentacao.LIBERACAO_RESERVA_ATENDIMENTO
+        assert movimentacao.saldo_anterior == Decimal("10")
+        assert movimentacao.saldo_posterior == Decimal("10")
+        assert movimentacao.saldo_reservado_anterior == Decimal("4")
+        assert movimentacao.saldo_reservado_posterior == Decimal("2")
+
+    def test_registrar_liberacao_reserva_rejeita_quantidade_invalida_ou_reserva_insuficiente(
+        self,
+    ):
+        chefe = User.objects.create(
+            matricula_funcional="99007",
+            nome_completo="Chefe Estoque 7",
+            papel=PapelChoices.CHEFE_SETOR,
+            is_active=True,
+        )
+        setor = Setor.objects.create(nome="Setor Estoque 7", chefe_responsavel=chefe)
+        chefe.setor = setor
+        chefe.save(update_fields=["setor"])
+        material = self._criar_material()
+        estoque = EstoqueMaterial.objects.create(
+            material=material,
+            saldo_fisico=Decimal("10"),
+            saldo_reservado=Decimal("1"),
+        )
+        requisicao = Requisicao.objects.create(
+            criador=chefe,
+            beneficiario=chefe,
+            setor_beneficiario=setor,
+            status=StatusRequisicao.AUTORIZADA,
+        )
+        item = ItemRequisicao.objects.create(
+            requisicao=requisicao,
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal("4.000"),
+            quantidade_autorizada=Decimal("4.000"),
+        )
+
+        for quantidade in (Decimal("0"), Decimal("-1"), Decimal("2")):
+            with pytest.raises(DomainConflict):
+                registrar_liberacao_reserva_por_atendimento(
+                    requisicao=requisicao,
+                    item=item,
+                    quantidade=quantidade,
+                )
+
+        estoque.refresh_from_db()
+        assert estoque.saldo_fisico == Decimal("10")
+        assert estoque.saldo_reservado == Decimal("1")
         assert MovimentacaoEstoque.objects.count() == 0

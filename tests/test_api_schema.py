@@ -69,3 +69,6 @@ class TestOpenAPISchema:
         assert "/api/v1/requisitions/{id}/fulfill/" in content
         assert "/api/v1/requisitions/pending-approvals/" in content
         assert "/api/v1/requisitions/pending-fulfillments/" in content
+        assert "RequisicaoItemFulfillInput" in content
+        assert "quantidade_entregue" in content
+        assert "justificativa_atendimento_parcial" in content

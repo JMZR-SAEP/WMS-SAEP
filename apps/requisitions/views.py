@@ -24,8 +24,10 @@ from apps.requisitions.serializers import (
     RequisicaoRefuseInputSerializer,
 )
 from apps.requisitions.services import (
+    ItemAtendimentoData,
     ItemAutorizacaoData,
     ItemRascunhoData,
+    atender_requisicao_com_itens,
     atender_requisicao_completa,
     autorizar_requisicao,
     cancelar_pre_autorizacao,
@@ -211,12 +213,25 @@ class RequisicaoViewSet(GenericViewSet):
     def fulfill(self, request, pk=None):
         serializer = RequisicaoFulfillInputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        requisicao = atender_requisicao_completa(
-            requisicao=get_object_or_404(Requisicao, pk=pk),
-            ator=request.user,
-            retirante_fisico=serializer.validated_data["retirante_fisico"],
-            observacao_atendimento=serializer.validated_data["observacao_atendimento"],
-        )
+        requisicao_atendimento = get_object_or_404(Requisicao, pk=pk)
+        if "itens" in serializer.validated_data:
+            requisicao = atender_requisicao_com_itens(
+                requisicao=requisicao_atendimento,
+                ator=request.user,
+                itens=[
+                    ItemAtendimentoData(**item_data)
+                    for item_data in serializer.validated_data["itens"]
+                ],
+                retirante_fisico=serializer.validated_data["retirante_fisico"],
+                observacao_atendimento=serializer.validated_data["observacao_atendimento"],
+            )
+        else:
+            requisicao = atender_requisicao_completa(
+                requisicao=requisicao_atendimento,
+                ator=request.user,
+                retirante_fisico=serializer.validated_data["retirante_fisico"],
+                observacao_atendimento=serializer.validated_data["observacao_atendimento"],
+            )
         return Response(RequisicaoDetailOutputSerializer(requisicao).data)
 
     @extend_schema(

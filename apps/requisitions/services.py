@@ -25,6 +25,7 @@ from apps.requisitions.policies import (
 )
 from apps.stock.models import EstoqueMaterial
 from apps.stock.services import (
+    registrar_liberacao_reserva_por_atendimento,
     registrar_reserva_por_autorizacao,
     registrar_saida_por_atendimento,
 )
@@ -49,6 +50,13 @@ class ItemAutorizacaoData:
     item_id: int
     quantidade_autorizada: Decimal
     justificativa_autorizacao_parcial: str = ""
+
+
+@dataclass(frozen=True)
+class ItemAtendimentoData:
+    item_id: int
+    quantidade_entregue: Decimal
+    justificativa_atendimento_parcial: str = ""
 
 
 def _side_effect_reservar_itens_autorizados(
@@ -106,6 +114,19 @@ TRANSICOES_REQUISICAO: dict[str, dict[str, object]] = {
         "from_status": (StatusRequisicao.AUTORIZADA,),
         "to_status": StatusRequisicao.ATENDIDA,
         "timeline_event_type": TipoEvento.ATENDIMENTO,
+        "audit_fields_to_set": (
+            "responsavel_atendimento",
+            "data_finalizacao",
+            "retirante_fisico",
+            "observacao_atendimento",
+            "status",
+        ),
+        "side_effects": (),
+    },
+    "atender_parcial": {
+        "from_status": (StatusRequisicao.AUTORIZADA,),
+        "to_status": StatusRequisicao.ATENDIDA_PARCIALMENTE,
+        "timeline_event_type": TipoEvento.ATENDIMENTO_PARCIAL,
         "audit_fields_to_set": (
             "responsavel_atendimento",
             "data_finalizacao",
@@ -798,6 +819,152 @@ def atender_requisicao_completa(
         _apply_requisicao_transition(
             requisicao=requisicao,
             transition_name="atender_total",
+            actor=ator,
+            payload={
+                "responsavel_atendimento": ator,
+                "data_finalizacao": timezone.now(),
+                "retirante_fisico": retirante_fisico.strip(),
+                "observacao_atendimento": observacao_atendimento.strip(),
+            },
+        )
+
+    return (
+        Requisicao.objects.select_related(
+            "criador",
+            "beneficiario",
+            "setor_beneficiario",
+            "chefe_autorizador",
+            "responsavel_atendimento",
+        )
+        .prefetch_related("itens__material__estoque", "eventos__usuario")
+        .get(pk=requisicao.pk)
+    )
+
+
+def atender_requisicao_com_itens(
+    *,
+    requisicao: Requisicao,
+    ator: User,
+    itens: list[ItemAtendimentoData],
+    retirante_fisico: str = "",
+    observacao_atendimento: str = "",
+) -> Requisicao:
+    with transaction.atomic():
+        requisicao = _recarregar_requisicao_para_atendimento(requisicao)
+        if not pode_atender_requisicao(ator, requisicao):
+            raise PermissionDenied("Usuário sem permissão para atender esta requisição.")
+
+        if requisicao.status != StatusRequisicao.AUTORIZADA:
+            raise DomainConflict(
+                "Somente requisições autorizadas podem ser atendidas.",
+                details={"status_atual": requisicao.status},
+            )
+
+        itens_requisicao = list(
+            ItemRequisicao.objects.select_for_update()
+            .select_related("material")
+            .filter(requisicao=requisicao)
+            .order_by("material_id", "id")
+        )
+        itens_autorizados = [item for item in itens_requisicao if item.quantidade_autorizada > 0]
+        if not itens_autorizados:
+            raise DomainConflict(
+                "Requisição autorizada não possui itens com quantidade autorizada.",
+                details={"requisicao_id": requisicao.id},
+            )
+
+        item_ids_recebidos = [item.item_id for item in itens]
+        item_ids_unicos = set(item_ids_recebidos)
+        if len(item_ids_unicos) != len(item_ids_recebidos):
+            raise DomainConflict("Payload de atendimento não pode repetir item_id.")
+
+        item_ids_esperados = {item.id for item in itens_autorizados}
+        item_ids_desconhecidos = item_ids_unicos - item_ids_esperados
+        if item_ids_desconhecidos:
+            raise DomainConflict(
+                "Payload de atendimento contém item inválido para esta requisição.",
+                details={"item_ids": sorted(item_ids_desconhecidos)},
+            )
+
+        item_ids_omitidos = item_ids_esperados - item_ids_unicos
+        if item_ids_omitidos:
+            raise DomainConflict(
+                "Payload de atendimento deve informar todos os itens autorizados.",
+                details={"item_ids": sorted(item_ids_omitidos)},
+            )
+
+        dados_por_item_id = {item.item_id: item for item in itens}
+        possui_entrega = False
+        atendimento_parcial = False
+
+        for item in itens_autorizados:
+            item_data = dados_por_item_id[item.id]
+            quantidade_entregue = item_data.quantidade_entregue
+            quantidade_autorizada = item.quantidade_autorizada
+            justificativa = item_data.justificativa_atendimento_parcial.strip()
+
+            if quantidade_entregue < 0:
+                raise DomainConflict(
+                    "Quantidade entregue não pode ser negativa.",
+                    details={"item_id": item.id, "quantidade_entregue": str(quantidade_entregue)},
+                )
+            if quantidade_entregue > quantidade_autorizada:
+                raise DomainConflict(
+                    "Quantidade entregue não pode ser maior que a autorizada.",
+                    details={
+                        "item_id": item.id,
+                        "quantidade_entregue": str(quantidade_entregue),
+                        "quantidade_autorizada": str(quantidade_autorizada),
+                    },
+                )
+            if quantidade_entregue < quantidade_autorizada and not justificativa:
+                raise DomainConflict(
+                    "Justificativa é obrigatória para atendimento parcial ou zero.",
+                    details={"item_id": item.id},
+                )
+
+            possui_entrega = possui_entrega or quantidade_entregue > 0
+            atendimento_parcial = atendimento_parcial or quantidade_entregue < quantidade_autorizada
+
+        if not possui_entrega:
+            raise DomainConflict("Atendimento parcial deve entregar ao menos um item.")
+
+        for item in itens_autorizados:
+            item_data = dados_por_item_id[item.id]
+            quantidade_entregue = item_data.quantidade_entregue
+            quantidade_nao_entregue = item.quantidade_autorizada - quantidade_entregue
+
+            if quantidade_entregue > 0:
+                registrar_saida_por_atendimento(
+                    requisicao=requisicao,
+                    item=item,
+                    quantidade=quantidade_entregue,
+                )
+            if quantidade_nao_entregue > 0:
+                registrar_liberacao_reserva_por_atendimento(
+                    requisicao=requisicao,
+                    item=item,
+                    quantidade=quantidade_nao_entregue,
+                )
+
+            item.quantidade_entregue = quantidade_entregue
+            item.justificativa_atendimento_parcial = (
+                item_data.justificativa_atendimento_parcial.strip()
+                if quantidade_nao_entregue > 0
+                else ""
+            )
+            item.full_clean()
+            item.save(
+                update_fields=[
+                    "quantidade_entregue",
+                    "justificativa_atendimento_parcial",
+                    "updated_at",
+                ]
+            )
+
+        _apply_requisicao_transition(
+            requisicao=requisicao,
+            transition_name="atender_parcial" if atendimento_parcial else "atender_total",
             actor=ator,
             payload={
                 "responsavel_atendimento": ator,

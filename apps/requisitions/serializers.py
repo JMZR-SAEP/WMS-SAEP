@@ -63,9 +63,28 @@ class RequisicaoRefuseInputSerializer(serializers.Serializer):
     motivo_recusa = serializers.CharField(allow_blank=False)
 
 
+class RequisicaoItemFulfillInputSerializer(serializers.Serializer):
+    item_id = serializers.IntegerField()
+    quantidade_entregue = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=3,
+        min_value=Decimal("0"),
+    )
+    justificativa_atendimento_parcial = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        default="",
+    )
+
+
 class RequisicaoFulfillInputSerializer(serializers.Serializer):
     retirante_fisico = serializers.CharField(required=False, allow_blank=True, default="")
     observacao_atendimento = serializers.CharField(required=False, allow_blank=True, default="")
+    itens = RequisicaoItemFulfillInputSerializer(
+        many=True,
+        required=False,
+        allow_empty=False,
+    )
 
 
 class RequisicaoActionOutputSerializer(serializers.ModelSerializer):
