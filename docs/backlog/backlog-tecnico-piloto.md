@@ -100,6 +100,11 @@ Observação de escopo atual:
 - Tarefas identificadas como `FE` ou `fullstack`, bem como entregáveis descritos como telas, formulários ou componentes visuais, devem ser tratadas como postergadas.
 - Enquanto esta diretriz estiver vigente, o backlog ativo deve priorizar apenas backend, API, autenticação, autorização, importação, estoque, auditoria e testes.
 
+Observação de estado atual:
+
+- A base funcional do piloto já está entregue até `PIL-BE-ATE-004` e `PIL-BE-ATE-006`, incluindo acesso, materiais/importação, requisições, autorização, reserva, fila de atendimento, atendimento completo/parcial, saída de estoque, liberação de reserva e metadados de retirada.
+- A próxima fronteira backend/API deve priorizar o restante de `PIL-BE-ATE-005` e o desenho de cancelamento pós-autorização quando não houver saldo físico para atendimento.
+
 ## 4.1 Piloto inicial
 
 Objetivo: validar o fluxo principal de requisição, autorização e retirada com usuários reais, usando materiais de consumo cotidiano e mantendo controle em papel em paralelo.
@@ -163,7 +168,7 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
 
 ### PIL-BE-ACE-001 — Criar modelo de usuário customizado
 
-- **Status atual:** não iniciada.
+- **Status atual:** concluída.
 - **Fase:** Piloto inicial
 - **Tipo:** Backend / Banco de dados
 - **Agente sugerido:** Agente backend
@@ -198,7 +203,7 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
 
 ### PIL-BE-ACE-002 — Criar modelo de setor
 
-- **Status atual:** não iniciada.
+- **Status atual:** concluída.
 - **Fase:** Piloto inicial
 - **Tipo:** Backend / Banco de dados
 - **Agente sugerido:** Agente backend
@@ -221,7 +226,7 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
 
 ### PIL-BE-ACE-003 — Criar papéis e permissões mínimas do piloto
 
-- **Status atual:** não iniciada.
+- **Status atual:** concluída.
 - **Fase:** Piloto inicial
 - **Tipo:** Backend
 - **Agente sugerido:** Agente backend
@@ -247,7 +252,7 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
 
 ### PIL-BE-ACE-004 — Consolidar login por matrícula funcional
 
-- **Status atual:** não iniciada.
+- **Status atual:** concluída.
 - **Fase:** Piloto inicial
 - **Tipo:** Backend / API
 - **Agente sugerido:** Agente backend
@@ -275,7 +280,7 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
 
 ### PIL-BE-ACE-005 — Implementar criação em nome de terceiros no piloto
 
-- **Status atual:** não iniciada.
+- **Status atual:** concluída.
 - **Fase:** Piloto inicial
 - **Tipo:** Backend
 - **Agente sugerido:** Agente backend
@@ -484,7 +489,7 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
 
 ### PIL-BE-REQ-002 — Implementar numeração anual da requisição
 
-- **Status atual:** não iniciada.
+- **Status atual:** concluída.
 - **Fase:** Piloto inicial
 - **Tipo:** Backend
 - **Agente sugerido:** Agente backend
@@ -510,7 +515,7 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
 
 ### PIL-BE-REQ-003 — Implementar criação de requisição em rascunho
 
-- **Status atual:** não iniciada.
+- **Status atual:** concluída.
 - **Fase:** Piloto inicial
 - **Tipo:** Backend
 - **Agente sugerido:** Agente backend
@@ -538,7 +543,7 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
 
 ### PIL-BE-REQ-004 — Implementar criação para si mesmo e em nome de terceiros
 
-- **Status atual:** não iniciada.
+- **Status atual:** concluída.
 - **Fase:** Piloto inicial
 - **Tipo:** Backend
 - **Agente sugerido:** Agente backend de permissões
@@ -564,7 +569,7 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
 
 ### PIL-BE-REQ-005 — Implementar envio para autorização
 
-- **Status atual:** não iniciada.
+- **Status atual:** concluída.
 - **Fase:** Piloto inicial
 - **Tipo:** Backend
 - **Agente sugerido:** Agente backend
@@ -615,7 +620,7 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
 
 ### PIL-BE-REQ-007 — Implementar retorno para rascunho
 
-- **Status atual:** não iniciada.
+- **Status atual:** concluída.
 - **Fase:** Piloto inicial
 - **Tipo:** Backend
 - **Agente sugerido:** Agente backend
@@ -638,7 +643,7 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
 
 ### PIL-BE-REQ-008 — Implementar cancelamento em rascunho e aguardando autorização
 
-- **Status atual:** não iniciada.
+- **Status atual:** concluída.
 - **Fase:** Piloto inicial
 - **Tipo:** Backend
 - **Agente sugerido:** Agente backend
@@ -690,7 +695,7 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
 
 ### PIL-BE-AUT-001 — Implementar fila de autorizações pendentes
 
-- **Status atual:** não iniciada.
+- **Status atual:** concluída.
 - **Fase:** Piloto inicial
 - **Tipo:** Backend
 - **Agente sugerido:** Agente backend
@@ -735,7 +740,7 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
 
 ### PIL-BE-AUT-003 — Implementar autorização total e parcial
 
-- **Status atual:** não iniciada.
+- **Status atual:** concluída.
 - **Fase:** Piloto inicial
 - **Tipo:** Backend
 - **Agente sugerido:** Agente backend de regras de negócio
@@ -762,7 +767,7 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
 
 ### PIL-BE-AUT-004 — Implementar recusa da requisição inteira
 
-- **Status atual:** não iniciada.
+- **Status atual:** concluída.
 - **Fase:** Piloto inicial
 - **Tipo:** Backend
 - **Agente sugerido:** Agente backend
@@ -785,7 +790,7 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
 
 ### PIL-BE-AUT-005 — Implementar movimentação de reserva por autorização
 
-- **Status atual:** não iniciada.
+- **Status atual:** concluída.
 - **Fase:** Piloto inicial
 - **Tipo:** Backend / Estoque
 - **Agente sugerido:** Agente backend de estoque
@@ -807,7 +812,7 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
 
 ### PIL-BE-AUT-006 — Implementar recálculo e lock de saldo na autorização
 
-- **Status atual:** não iniciada.
+- **Status atual:** concluída.
 - **Fase:** Piloto inicial
 - **Tipo:** Backend / Banco de dados
 - **Agente sugerido:** Agente backend especialista em concorrência
@@ -830,7 +835,7 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
 
 ### PIL-BE-ATE-001 — Implementar fila de atendimento do Almoxarifado
 
-- **Status atual:** não iniciada.
+- **Status atual:** concluída.
 - **Fase:** Piloto inicial
 - **Tipo:** Backend
 - **Agente sugerido:** Agente backend
@@ -875,7 +880,7 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
 
 ### PIL-BE-ATE-003 — Implementar atendimento completo
 
-- **Status atual:** não iniciada.
+- **Status atual:** concluída.
 - **Fase:** Piloto inicial
 - **Tipo:** Backend / Estoque
 - **Agente sugerido:** Agente backend de estoque
@@ -900,7 +905,7 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
 
 ### PIL-BE-ATE-004 — Implementar atendimento parcial e entrega zero por item
 
-- **Status atual:** não iniciada.
+- **Status atual:** concluída.
 - **Fase:** Piloto inicial
 - **Tipo:** Backend / Estoque
 - **Agente sugerido:** Agente backend de estoque
@@ -926,7 +931,7 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
 
 ### PIL-BE-ATE-005 — Validar saldo físico no atendimento
 
-- **Status atual:** não iniciada.
+- **Status atual:** parcialmente implementada no atendimento completo e parcial/zero; pendente a orientação/fluxo de cancelamento quando não houver saldo físico para nenhum item.
 - **Fase:** Piloto inicial
 - **Tipo:** Backend / Estoque
 - **Agente sugerido:** Agente backend de regras de estoque
@@ -948,7 +953,7 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
 
 ### PIL-BE-ATE-006 — Registrar dados da retirada
 
-- **Status atual:** não iniciada.
+- **Status atual:** concluída.
 - **Fase:** Piloto inicial
 - **Tipo:** Backend
 - **Agente sugerido:** Agente backend
@@ -1039,7 +1044,7 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
 
 ### PIL-BE-AUD-001 — Criar linha do tempo básica da requisição
 
-- **Status atual:** não iniciada.
+- **Status atual:** concluída.
 - **Fase:** Piloto inicial
 - **Tipo:** Backend / Banco de dados
 - **Agente sugerido:** Agente backend
@@ -1081,7 +1086,7 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
 
 ### PIL-BE-AUD-003 — Registrar movimentações principais de estoque
 
-- **Status atual:** não iniciada.
+- **Status atual:** concluída.
 - **Fase:** Piloto inicial
 - **Tipo:** Backend / Estoque
 - **Agente sugerido:** Agente backend de estoque
@@ -1177,6 +1182,8 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
 10. PIL-BE-IMP-002 — Registrar saldo inicial via QUAN3.
 11. PIL-BE-MAT-003 — Implementar busca de materiais para requisição via API/serviço.
 
+Status: concluída.
+
 ### Fase 2 — Fluxo principal do piloto
 
 1. PIL-BE-REQ-001 — Criar modelos de requisição e item da requisição.
@@ -1193,19 +1200,23 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
 12. PIL-BE-AUT-006 — Implementar recálculo e lock de saldo na autorização.
 13. PIL-BE-ATE-001 — Implementar fila de atendimento do Almoxarifado.
 14. PIL-BE-ATE-003 — Implementar atendimento completo.
-15. PIL-BE-ATE-004 — Implementar atendimento parcial e entrega zero por item.
-16. PIL-BE-ATE-005 — Validar saldo físico no atendimento.
-17. PIL-BE-ATE-006 — Registrar dados da retirada.
+15. PIL-BE-ATE-006 — Registrar dados da retirada.
+16. PIL-BE-ATE-004 — Implementar atendimento parcial e entrega zero por item.
+17. PIL-BE-ATE-005 — Validar saldo físico no atendimento.
+
+Status: itens 1 a 16 concluídos. Próxima fatia recomendada: concluir `PIL-BE-ATE-005`, especialmente o caminho operacional quando não houver saldo físico para nenhum item.
 
 ### Fase 3 — Notificações, rastreabilidade e validação do piloto
 
-1. PIL-BE-NOT-001 — Criar modelo de notificação interna.
-2. PIL-BE-NOT-002 — Gerar notificações essenciais do fluxo principal.
-3. PIL-BE-AUD-001 — Criar linha do tempo básica da requisição.
-4. PIL-BE-AUD-003 — Registrar movimentações principais de estoque.
+1. PIL-BE-AUD-001 — Criar linha do tempo básica da requisição.
+2. PIL-BE-AUD-003 — Registrar movimentações principais de estoque.
+3. PIL-BE-NOT-001 — Criar modelo de notificação interna.
+4. PIL-BE-NOT-002 — Gerar notificações essenciais do fluxo principal.
 5. PIL-DOC-IMP-001 — Definir lista inicial de materiais do piloto.
 6. PIL-DOC-IMP-002 — Preparar operação paralela em papel.
 7. PIL-DOC-IMP-003 — Treinar usuários do piloto.
+
+Status: `PIL-BE-AUD-001` e `PIL-BE-AUD-003` concluídas. Notificações devem continuar como side effects pós-commit, não como fonte de verdade do domínio.
 
 ### Tarefas postergadas de frontend/fullstack
 
