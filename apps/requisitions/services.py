@@ -17,14 +17,22 @@ from apps.requisitions.models import (
     TipoEvento,
 )
 from apps.requisitions.policies import (
+    pode_atender_requisicao,
     pode_autorizar_requisicao,
     pode_manipular_pre_autorizacao,
+    queryset_fila_atendimento,
     queryset_fila_autorizacao,
 )
 from apps.stock.models import EstoqueMaterial
-from apps.stock.services import registrar_reserva_por_autorizacao
+from apps.stock.services import (
+    registrar_reserva_por_autorizacao,
+    registrar_saida_por_atendimento,
+)
 from apps.users.models import PapelChoices
-from apps.users.policies import pode_criar_requisicao_para
+from apps.users.policies import (
+    pode_criar_requisicao_para,
+    pode_ver_fila_atendimento,
+)
 
 User = get_user_model()
 
@@ -90,6 +98,19 @@ TRANSICOES_REQUISICAO: dict[str, dict[str, object]] = {
             "chefe_autorizador",
             "data_autorizacao_ou_recusa",
             "motivo_recusa",
+            "status",
+        ),
+        "side_effects": (),
+    },
+    "atender_total": {
+        "from_status": (StatusRequisicao.AUTORIZADA,),
+        "to_status": StatusRequisicao.ATENDIDA,
+        "timeline_event_type": TipoEvento.ATENDIMENTO,
+        "audit_fields_to_set": (
+            "responsavel_atendimento",
+            "data_finalizacao",
+            "retirante_fisico",
+            "observacao_atendimento",
             "status",
         ),
         "side_effects": (),
@@ -257,6 +278,15 @@ def _material_e_estoque_validos(*, material: Material, quantidade_solicitada: De
 
 
 def _recarregar_requisicao_para_autorizacao(requisicao: Requisicao) -> Requisicao:
+    return (
+        Requisicao.objects.select_for_update()
+        .select_related("criador", "beneficiario", "setor_beneficiario")
+        .prefetch_related("itens__material__estoque", "eventos__usuario")
+        .get(pk=requisicao.pk)
+    )
+
+
+def _recarregar_requisicao_para_atendimento(requisicao: Requisicao) -> Requisicao:
     return (
         Requisicao.objects.select_for_update()
         .select_related("criador", "beneficiario", "setor_beneficiario")
@@ -694,4 +724,97 @@ def listar_fila_autorizacao(*, ator: User):
         .select_related("criador", "beneficiario", "setor_beneficiario")
         .prefetch_related("itens__material")
         .order_by("data_envio_autorizacao", "id")
+    )
+
+
+def listar_fila_atendimento(*, ator: User):
+    if not ator.is_authenticated:
+        raise PermissionDenied("Usuário precisa estar autenticado para ver a fila de atendimento.")
+    if not pode_ver_fila_atendimento(ator):
+        raise PermissionDenied("Usuário sem permissão para acessar a fila de atendimento.")
+
+    return (
+        queryset_fila_atendimento(ator)
+        .select_related(
+            "criador",
+            "beneficiario",
+            "setor_beneficiario",
+            "chefe_autorizador",
+        )
+        .prefetch_related("itens__material")
+        .order_by("data_autorizacao_ou_recusa", "id")
+    )
+
+
+def atender_requisicao_completa(
+    *,
+    requisicao: Requisicao,
+    ator: User,
+    retirante_fisico: str = "",
+    observacao_atendimento: str = "",
+) -> Requisicao:
+    with transaction.atomic():
+        requisicao = _recarregar_requisicao_para_atendimento(requisicao)
+        if not pode_atender_requisicao(ator, requisicao):
+            raise PermissionDenied("Usuário sem permissão para atender esta requisição.")
+
+        if requisicao.status != StatusRequisicao.AUTORIZADA:
+            raise DomainConflict(
+                "Somente requisições autorizadas podem ser atendidas.",
+                details={"status_atual": requisicao.status},
+            )
+
+        itens_requisicao = list(
+            ItemRequisicao.objects.select_for_update()
+            .select_related("material")
+            .filter(requisicao=requisicao)
+            .order_by("material_id", "id")
+        )
+        itens_autorizados = [item for item in itens_requisicao if item.quantidade_autorizada > 0]
+        if not itens_autorizados:
+            raise DomainConflict(
+                "Requisição autorizada não possui itens com quantidade autorizada.",
+                details={"requisicao_id": requisicao.id},
+            )
+
+        for item in itens_autorizados:
+            quantidade_entregue = item.quantidade_autorizada
+            registrar_saida_por_atendimento(
+                requisicao=requisicao,
+                item=item,
+                quantidade=quantidade_entregue,
+            )
+            item.quantidade_entregue = quantidade_entregue
+            item.justificativa_atendimento_parcial = ""
+            item.full_clean()
+            item.save(
+                update_fields=[
+                    "quantidade_entregue",
+                    "justificativa_atendimento_parcial",
+                    "updated_at",
+                ]
+            )
+
+        _apply_requisicao_transition(
+            requisicao=requisicao,
+            transition_name="atender_total",
+            actor=ator,
+            payload={
+                "responsavel_atendimento": ator,
+                "data_finalizacao": timezone.now(),
+                "retirante_fisico": retirante_fisico.strip(),
+                "observacao_atendimento": observacao_atendimento.strip(),
+            },
+        )
+
+    return (
+        Requisicao.objects.select_related(
+            "criador",
+            "beneficiario",
+            "setor_beneficiario",
+            "chefe_autorizador",
+            "responsavel_atendimento",
+        )
+        .prefetch_related("itens__material__estoque", "eventos__usuario")
+        .get(pk=requisicao.pk)
     )

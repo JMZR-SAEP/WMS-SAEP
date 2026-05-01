@@ -63,6 +63,11 @@ class RequisicaoRefuseInputSerializer(serializers.Serializer):
     motivo_recusa = serializers.CharField(allow_blank=False)
 
 
+class RequisicaoFulfillInputSerializer(serializers.Serializer):
+    retirante_fisico = serializers.CharField(required=False, allow_blank=True, default="")
+    observacao_atendimento = serializers.CharField(required=False, allow_blank=True, default="")
+
+
 class RequisicaoActionOutputSerializer(serializers.ModelSerializer):
     material = RequisicaoMaterialOutputSerializer(read_only=True)
 
@@ -87,6 +92,7 @@ class RequisicaoDetailOutputSerializer(serializers.ModelSerializer):
     beneficiario = RequisicaoUserOutputSerializer(read_only=True)
     setor_beneficiario = RequisicaoSetorOutputSerializer(read_only=True)
     chefe_autorizador = RequisicaoUserOutputSerializer(read_only=True)
+    responsavel_atendimento = RequisicaoUserOutputSerializer(read_only=True)
     itens = RequisicaoActionOutputSerializer(many=True, read_only=True)
 
     class Meta:
@@ -99,12 +105,15 @@ class RequisicaoDetailOutputSerializer(serializers.ModelSerializer):
             "beneficiario",
             "setor_beneficiario",
             "chefe_autorizador",
+            "responsavel_atendimento",
             "data_criacao",
             "data_envio_autorizacao",
             "data_autorizacao_ou_recusa",
             "motivo_recusa",
             "data_finalizacao",
+            "retirante_fisico",
             "observacao",
+            "observacao_atendimento",
             "itens",
         ]
         read_only_fields = fields
@@ -139,3 +148,34 @@ class RequisicaoPendingApprovalPaginatedSerializer(serializers.Serializer):
     next = serializers.URLField(allow_null=True, read_only=True)
     previous = serializers.URLField(allow_null=True, read_only=True)
     results = RequisicaoPendingApprovalOutputSerializer(many=True, read_only=True)
+
+
+class RequisicaoPendingFulfillmentOutputSerializer(serializers.ModelSerializer):
+    beneficiario = RequisicaoUserOutputSerializer(read_only=True)
+    setor_beneficiario = RequisicaoSetorOutputSerializer(read_only=True)
+    chefe_autorizador = RequisicaoUserOutputSerializer(read_only=True)
+    total_itens = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = Requisicao
+        fields = [
+            "id",
+            "numero_publico",
+            "status",
+            "beneficiario",
+            "setor_beneficiario",
+            "chefe_autorizador",
+            "data_autorizacao_ou_recusa",
+            "total_itens",
+        ]
+        read_only_fields = fields
+
+
+class RequisicaoPendingFulfillmentPaginatedSerializer(serializers.Serializer):
+    count = serializers.IntegerField(read_only=True)
+    page = serializers.IntegerField(read_only=True)
+    page_size = serializers.IntegerField(read_only=True)
+    total_pages = serializers.IntegerField(read_only=True)
+    next = serializers.URLField(allow_null=True, read_only=True)
+    previous = serializers.URLField(allow_null=True, read_only=True)
+    results = RequisicaoPendingFulfillmentOutputSerializer(many=True, read_only=True)

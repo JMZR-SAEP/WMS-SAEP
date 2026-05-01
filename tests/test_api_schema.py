@@ -66,4 +66,6 @@ class TestOpenAPISchema:
         assert "/api/v1/requisitions/{id}/cancel/" in content
         assert "/api/v1/requisitions/{id}/authorize/" in content
         assert "/api/v1/requisitions/{id}/refuse/" in content
+        assert "/api/v1/requisitions/{id}/fulfill/" in content
         assert "/api/v1/requisitions/pending-approvals/" in content
+        assert "/api/v1/requisitions/pending-fulfillments/" in content

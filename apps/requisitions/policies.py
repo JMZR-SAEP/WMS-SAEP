@@ -2,7 +2,11 @@ from django.db.models import Q, QuerySet
 
 from apps.requisitions.models import Requisicao, StatusRequisicao
 from apps.users.models import PapelChoices
-from apps.users.policies import pode_autorizar_setor
+from apps.users.policies import (
+    pode_autorizar_setor,
+    pode_operar_estoque,
+    pode_ver_fila_atendimento,
+)
 
 
 def _usuario_operacional_ativo(user) -> bool:
@@ -71,6 +75,10 @@ def pode_autorizar_requisicao(user, requisicao: Requisicao) -> bool:
     )
 
 
+def pode_atender_requisicao(user, requisicao: Requisicao) -> bool:
+    return pode_operar_estoque(user) and pode_visualizar_requisicao(user, requisicao)
+
+
 def queryset_fila_autorizacao(user) -> QuerySet[Requisicao]:
     if not _usuario_operacional_ativo(user):
         return Requisicao.objects.none()
@@ -93,3 +101,10 @@ def queryset_fila_autorizacao(user) -> QuerySet[Requisicao]:
         )
 
     return Requisicao.objects.none()
+
+
+def queryset_fila_atendimento(user) -> QuerySet[Requisicao]:
+    if not pode_ver_fila_atendimento(user):
+        return Requisicao.objects.none()
+
+    return Requisicao.objects.filter(status=StatusRequisicao.AUTORIZADA)

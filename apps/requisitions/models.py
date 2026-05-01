@@ -153,6 +153,11 @@ class Requisicao(models.Model):
         default="",
         help_text="Observações gerais",
     )
+    observacao_atendimento = models.TextField(
+        blank=True,
+        default="",
+        help_text="Observações gerais do atendimento",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
