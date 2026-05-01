@@ -15,18 +15,23 @@ from apps.requisitions.serializers import (
     RequisicaoAuthorizeInputSerializer,
     RequisicaoCreateInputSerializer,
     RequisicaoDetailOutputSerializer,
+    RequisicaoFulfillInputSerializer,
     RequisicaoPendingApprovalOutputSerializer,
     RequisicaoPendingApprovalPaginatedSerializer,
+    RequisicaoPendingFulfillmentOutputSerializer,
+    RequisicaoPendingFulfillmentPaginatedSerializer,
     RequisicaoRefuseInputSerializer,
 )
 from apps.requisitions.services import (
     ItemAutorizacaoData,
     ItemRascunhoData,
+    atender_requisicao_completa,
     autorizar_requisicao,
     cancelar_pre_autorizacao,
     criar_rascunho_requisicao,
     descartar_rascunho_nunca_enviado,
     enviar_para_autorizacao,
+    listar_fila_atendimento,
     listar_fila_autorizacao,
     recusar_requisicao,
     retornar_para_rascunho,
@@ -190,6 +195,30 @@ class RequisicaoViewSet(GenericViewSet):
         return Response(RequisicaoDetailOutputSerializer(requisicao).data)
 
     @extend_schema(
+        operation_id="requisitions_fulfill",
+        tags=["requisitions"],
+        request=RequisicaoFulfillInputSerializer,
+        responses={
+            200: RequisicaoDetailOutputSerializer(),
+            400: ErrorResponseSerializer(),
+            403: ErrorResponseSerializer(),
+            404: ErrorResponseSerializer(),
+            409: ErrorResponseSerializer(),
+        },
+    )
+    @action(detail=True, methods=["post"], url_path="fulfill")
+    def fulfill(self, request, pk=None):
+        serializer = RequisicaoFulfillInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        requisicao = atender_requisicao_completa(
+            requisicao=self.get_object(),
+            ator=request.user,
+            retirante_fisico=serializer.validated_data["retirante_fisico"],
+            observacao_atendimento=serializer.validated_data["observacao_atendimento"],
+        )
+        return Response(RequisicaoDetailOutputSerializer(requisicao).data)
+
+    @extend_schema(
         operation_id="requisitions_pending_approvals",
         tags=["requisitions"],
         parameters=[
@@ -218,4 +247,35 @@ class RequisicaoViewSet(GenericViewSet):
         queryset = listar_fila_autorizacao(ator=request.user).annotate(total_itens=Count("itens"))
         page = self.paginate_queryset(queryset)
         serializer = RequisicaoPendingApprovalOutputSerializer(page, many=True)
+        return self.get_paginated_response(serializer.data)
+
+    @extend_schema(
+        operation_id="requisitions_pending_fulfillments",
+        tags=["requisitions"],
+        parameters=[
+            OpenApiParameter(
+                name="page",
+                description="Número da página (padrão: 1)",
+                required=False,
+                type=int,
+                location=OpenApiParameter.QUERY,
+            ),
+            OpenApiParameter(
+                name="page_size",
+                description="Quantidade de resultados por página (padrão: 20, máximo: 100)",
+                required=False,
+                type=int,
+                location=OpenApiParameter.QUERY,
+            ),
+        ],
+        responses={
+            200: RequisicaoPendingFulfillmentPaginatedSerializer(),
+            403: ErrorResponseSerializer(),
+        },
+    )
+    @action(detail=False, methods=["get"], url_path="pending-fulfillments")
+    def pending_fulfillments(self, request):
+        queryset = listar_fila_atendimento(ator=request.user).annotate(total_itens=Count("itens"))
+        page = self.paginate_queryset(queryset)
+        serializer = RequisicaoPendingFulfillmentOutputSerializer(page, many=True)
         return self.get_paginated_response(serializer.data)

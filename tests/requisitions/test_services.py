@@ -4,7 +4,7 @@ from threading import Barrier
 
 import pytest
 from django.db import close_old_connections
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from apps.core.api.exceptions import DomainConflict
 from apps.materials.models import GrupoMaterial, Material, SubgrupoMaterial
@@ -17,6 +17,7 @@ from apps.requisitions.models import (
 from apps.requisitions.services import (
     ItemAutorizacaoData,
     _gerar_numero_publico,
+    atender_requisicao_completa,
     autorizar_requisicao,
     recusar_requisicao,
 )
@@ -472,3 +473,307 @@ class TestAutorizacaoRequisicaoService:
             StatusRequisicao.AGUARDANDO_AUTORIZACAO,
             StatusRequisicao.AUTORIZADA,
         }
+
+
+@pytest.mark.django_db(transaction=True)
+class TestAtendimentoRequisicaoService:
+    @staticmethod
+    def _criar_setor(nome: str, chefe_matricula: str) -> Setor:
+        chefe = User.objects.create(
+            matricula_funcional=chefe_matricula,
+            nome_completo=f"Chefe {nome}",
+            papel=PapelChoices.CHEFE_SETOR,
+            is_active=True,
+        )
+        setor = Setor.objects.create(nome=nome, chefe_responsavel=chefe)
+        chefe.setor = setor
+        chefe.save(update_fields=["setor"])
+        return setor
+
+    @staticmethod
+    def _criar_usuario(
+        matricula: str,
+        nome: str,
+        *,
+        papel=PapelChoices.SOLICITANTE,
+        setor: Setor | None = None,
+        is_active: bool = True,
+    ) -> User:
+        return User.objects.create(
+            matricula_funcional=matricula,
+            nome_completo=nome,
+            papel=papel,
+            setor=setor,
+            is_active=is_active,
+        )
+
+    @staticmethod
+    def _criar_material_com_estoque(
+        codigo: str,
+        *,
+        saldo_fisico: Decimal = Decimal("10"),
+        saldo_reservado: Decimal = Decimal("0"),
+    ) -> Material:
+        grupo_codigo, subgrupo_codigo, sequencial = codigo.split(".")
+        grupo, _ = GrupoMaterial.objects.get_or_create(
+            codigo_grupo=grupo_codigo,
+            defaults={"nome": f"Grupo {grupo_codigo}"},
+        )
+        subgrupo, _ = SubgrupoMaterial.objects.get_or_create(
+            grupo=grupo,
+            codigo_subgrupo=subgrupo_codigo,
+            defaults={"nome": f"Subgrupo {subgrupo_codigo}"},
+        )
+        material = Material.objects.create(
+            subgrupo=subgrupo,
+            codigo_completo=codigo,
+            sequencial=sequencial,
+            nome=f"Material {codigo}",
+            unidade_medida="UN",
+            is_active=True,
+        )
+        EstoqueMaterial.objects.create(
+            material=material,
+            saldo_fisico=saldo_fisico,
+            saldo_reservado=saldo_reservado,
+        )
+        return material
+
+    @staticmethod
+    def _criar_requisicao_autorizada(
+        *,
+        criador: User,
+        beneficiario: User,
+        numero_publico: str,
+        material: Material,
+        quantidade_autorizada: Decimal,
+    ) -> tuple[Requisicao, ItemRequisicao]:
+        requisicao = Requisicao.objects.create(
+            criador=criador,
+            beneficiario=beneficiario,
+            setor_beneficiario=beneficiario.setor,
+            numero_publico=numero_publico,
+            status=StatusRequisicao.AUTORIZADA,
+            data_envio_autorizacao="2026-04-30T10:00:00Z",
+            data_autorizacao_ou_recusa="2026-04-30T11:00:00Z",
+        )
+        item = requisicao.itens.create(
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=quantidade_autorizada,
+            quantidade_autorizada=quantidade_autorizada,
+        )
+        return requisicao, item
+
+    def test_atendimento_completo_baixa_fisico_consumindo_reserva_e_timeline(self):
+        setor = self._criar_setor("Operacional", "92001")
+        requisitante = self._criar_usuario("12001", "Solicitante Operacional", setor=setor)
+        atendente = self._criar_usuario(
+            "12002",
+            "Auxiliar Almoxarifado",
+            papel=PapelChoices.AUXILIAR_ALMOXARIFADO,
+            setor=setor,
+        )
+        material = self._criar_material_com_estoque(
+            "001.003.001",
+            saldo_fisico=Decimal("10"),
+            saldo_reservado=Decimal("4"),
+        )
+        requisicao, item = self._criar_requisicao_autorizada(
+            criador=requisitante,
+            beneficiario=requisitante,
+            numero_publico="REQ-2026-200001",
+            material=material,
+            quantidade_autorizada=Decimal("4"),
+        )
+
+        atendida = atender_requisicao_completa(
+            requisicao=requisicao,
+            ator=atendente,
+            retirante_fisico="Servidor retirante",
+            observacao_atendimento="Retirada no balcão",
+        )
+
+        item.refresh_from_db()
+        material.estoque.refresh_from_db()
+        assert atendida.status == StatusRequisicao.ATENDIDA
+        assert atendida.responsavel_atendimento_id == atendente.id
+        assert atendida.retirante_fisico == "Servidor retirante"
+        assert atendida.observacao_atendimento == "Retirada no balcão"
+        assert atendida.eventos.filter(tipo_evento=TipoEvento.ATENDIMENTO).exists()
+        assert item.quantidade_entregue == Decimal("4")
+        assert material.estoque.saldo_fisico == Decimal("6")
+        assert material.estoque.saldo_reservado == Decimal("0")
+        assert MovimentacaoEstoque.objects.filter(
+            requisicao=atendida,
+            item_requisicao=item,
+            tipo=TipoMovimentacao.SAIDA_POR_ATENDIMENTO,
+        ).exists()
+
+    def test_atendimento_completo_ignora_item_autorizado_zero(self):
+        setor = self._criar_setor("Oficina", "92002")
+        requisitante = self._criar_usuario("12003", "Solicitante Oficina", setor=setor)
+        atendente = self._criar_usuario(
+            "12004",
+            "Chefe Almoxarifado",
+            papel=PapelChoices.CHEFE_ALMOXARIFADO,
+            setor=setor,
+        )
+        material_a = self._criar_material_com_estoque(
+            "001.003.002",
+            saldo_fisico=Decimal("8"),
+            saldo_reservado=Decimal("3"),
+        )
+        material_b = self._criar_material_com_estoque("001.003.003", saldo_fisico=Decimal("8"))
+        requisicao, item_a = self._criar_requisicao_autorizada(
+            criador=requisitante,
+            beneficiario=requisitante,
+            numero_publico="REQ-2026-200002",
+            material=material_a,
+            quantidade_autorizada=Decimal("3"),
+        )
+        item_b = requisicao.itens.create(
+            material=material_b,
+            unidade_medida=material_b.unidade_medida,
+            quantidade_solicitada=Decimal("2"),
+            quantidade_autorizada=Decimal("0"),
+            justificativa_autorizacao_parcial="Não autorizado",
+        )
+
+        atender_requisicao_completa(requisicao=requisicao, ator=atendente)
+
+        item_a.refresh_from_db()
+        item_b.refresh_from_db()
+        material_a.estoque.refresh_from_db()
+        material_b.estoque.refresh_from_db()
+        assert item_a.quantidade_entregue == Decimal("3")
+        assert item_b.quantidade_entregue == Decimal("0")
+        assert material_a.estoque.saldo_fisico == Decimal("5")
+        assert material_a.estoque.saldo_reservado == Decimal("0")
+        assert material_b.estoque.saldo_fisico == Decimal("8")
+        assert material_b.estoque.saldo_reservado == Decimal("0")
+
+    def test_atendimento_bloqueia_usuario_sem_permissao_e_status_invalido(self):
+        setor = self._criar_setor("Financeiro", "92003")
+        solicitante = self._criar_usuario("12005", "Solicitante Financeiro", setor=setor)
+        material = self._criar_material_com_estoque(
+            "001.003.004",
+            saldo_fisico=Decimal("5"),
+            saldo_reservado=Decimal("2"),
+        )
+        requisicao, _ = self._criar_requisicao_autorizada(
+            criador=solicitante,
+            beneficiario=solicitante,
+            numero_publico="REQ-2026-200003",
+            material=material,
+            quantidade_autorizada=Decimal("2"),
+        )
+
+        with pytest.raises(PermissionDenied):
+            atender_requisicao_completa(requisicao=requisicao, ator=solicitante)
+
+        atendente = self._criar_usuario(
+            "12006",
+            "Auxiliar Almoxarifado",
+            papel=PapelChoices.AUXILIAR_ALMOXARIFADO,
+            setor=setor,
+        )
+        requisicao.status = StatusRequisicao.ATENDIDA
+        requisicao.save(update_fields=["status", "updated_at"])
+
+        with pytest.raises(DomainConflict):
+            atender_requisicao_completa(requisicao=requisicao, ator=atendente)
+
+    def test_atendimento_bloqueia_saldo_fisico_insuficiente(self):
+        setor = self._criar_setor("Logistica", "92004")
+        requisitante = self._criar_usuario("12007", "Solicitante Logistica", setor=setor)
+        atendente = self._criar_usuario(
+            "12008",
+            "Auxiliar Almoxarifado",
+            papel=PapelChoices.AUXILIAR_ALMOXARIFADO,
+            setor=setor,
+        )
+        material = self._criar_material_com_estoque(
+            "001.003.005",
+            saldo_fisico=Decimal("1"),
+            saldo_reservado=Decimal("3"),
+        )
+        requisicao, item = self._criar_requisicao_autorizada(
+            criador=requisitante,
+            beneficiario=requisitante,
+            numero_publico="REQ-2026-200004",
+            material=material,
+            quantidade_autorizada=Decimal("3"),
+        )
+
+        with pytest.raises(DomainConflict):
+            atender_requisicao_completa(requisicao=requisicao, ator=atendente)
+
+        item.refresh_from_db()
+        material.estoque.refresh_from_db()
+        assert item.quantidade_entregue == Decimal("0")
+        assert material.estoque.saldo_fisico == Decimal("1")
+        assert material.estoque.saldo_reservado == Decimal("3")
+        assert MovimentacaoEstoque.objects.count() == 0
+
+    @pytest.mark.postgres
+    def test_atendimentos_concorrentes_nao_duplicam_baixa(self):
+        setor = self._criar_setor("Almoxarifado", "92005")
+        requisitante = self._criar_usuario("12009", "Solicitante Almoxarifado", setor=setor)
+        atendente = self._criar_usuario(
+            "12010",
+            "Auxiliar Almoxarifado",
+            papel=PapelChoices.AUXILIAR_ALMOXARIFADO,
+            setor=setor,
+        )
+        material = self._criar_material_com_estoque(
+            "001.003.006",
+            saldo_fisico=Decimal("5"),
+            saldo_reservado=Decimal("5"),
+        )
+        requisicao, _ = self._criar_requisicao_autorizada(
+            criador=requisitante,
+            beneficiario=requisitante,
+            numero_publico="REQ-2026-200005",
+            material=material,
+            quantidade_autorizada=Decimal("5"),
+        )
+
+        barrier = Barrier(2)
+
+        def atender(req_id: int):
+            close_old_connections()
+            try:
+                barrier.wait()
+                requisicao_atendimento = Requisicao.objects.get(pk=req_id)
+                atender_requisicao_completa(
+                    requisicao=requisicao_atendimento,
+                    ator=atendente,
+                )
+                return "ok"
+            except Exception as exc:  # noqa: BLE001
+                return type(exc).__name__
+            finally:
+                close_old_connections()
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            resultado_a = executor.submit(atender, requisicao.id)
+            resultado_b = executor.submit(atender, requisicao.id)
+
+        resultados = {resultado_a.result(), resultado_b.result()}
+        close_old_connections()
+
+        material.estoque.refresh_from_db()
+        requisicao.refresh_from_db()
+
+        assert resultados == {"ok", "DomainConflict"}
+        assert requisicao.status == StatusRequisicao.ATENDIDA
+        assert material.estoque.saldo_fisico == Decimal("0")
+        assert material.estoque.saldo_reservado == Decimal("0")
+        assert (
+            MovimentacaoEstoque.objects.filter(
+                requisicao=requisicao,
+                tipo=TipoMovimentacao.SAIDA_POR_ATENDIMENTO,
+            ).count()
+            == 1
+        )
