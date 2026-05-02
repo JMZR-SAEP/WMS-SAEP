@@ -471,7 +471,11 @@ def _gerar_numero_publico(*, ano: int | None = None) -> str:
             sequencia = SequenciaNumeroRequisicao.objects.select_for_update().get(ano=ano)
         except SequenciaNumeroRequisicao.DoesNotExist:
             try:
-                sequencia = SequenciaNumeroRequisicao.objects.create(ano=ano, ultimo_numero=0)
+                with transaction.atomic():
+                    sequencia = SequenciaNumeroRequisicao.objects.create(
+                        ano=ano,
+                        ultimo_numero=0,
+                    )
             except IntegrityError:
                 sequencia = SequenciaNumeroRequisicao.objects.select_for_update().get(ano=ano)
 
@@ -792,7 +796,7 @@ def autorizar_requisicao(
             ItemRequisicao.objects.select_for_update()
             .select_related("material")
             .filter(requisicao=requisicao)
-            .order_by("id")
+            .order_by("material_id", "id")
         )
         itens_por_id = _validar_itens_autorizacao(itens_requisicao=itens_requisicao, itens=itens)
         estoque_por_material_id = {

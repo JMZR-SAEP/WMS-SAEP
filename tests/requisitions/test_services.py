@@ -11,6 +11,7 @@ from apps.materials.models import GrupoMaterial, Material, SubgrupoMaterial
 from apps.requisitions.models import (
     ItemRequisicao,
     Requisicao,
+    SequenciaNumeroRequisicao,
     StatusRequisicao,
     TipoEvento,
 )
@@ -44,6 +45,30 @@ class TestSequenciaNumeroRequisicaoService:
 
         assert numero_2026 == "REQ-2026-000001"
         assert numero_2027 == "REQ-2027-000001"
+
+    @pytest.mark.postgres
+    def test_gera_numeros_distintos_quando_duas_threads_criam_mesmo_ano_inaugural(self):
+        barrier = Barrier(2)
+
+        def gerar():
+            close_old_connections()
+            try:
+                barrier.wait()
+                return _gerar_numero_publico(ano=2028)
+            finally:
+                close_old_connections()
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futuro_a = executor.submit(gerar)
+            futuro_b = executor.submit(gerar)
+
+        resultados = {futuro_a.result(), futuro_b.result()}
+        close_old_connections()
+
+        sequencia = SequenciaNumeroRequisicao.objects.get(ano=2028)
+
+        assert resultados == {"REQ-2028-000001", "REQ-2028-000002"}
+        assert sequencia.ultimo_numero == 2
 
 
 @pytest.mark.django_db(transaction=True)
@@ -477,6 +502,99 @@ class TestAutorizacaoRequisicaoService:
             StatusRequisicao.AGUARDANDO_AUTORIZACAO,
             StatusRequisicao.AUTORIZADA,
         }
+
+    @pytest.mark.postgres
+    def test_autorizacoes_concorrentes_multi_item_respeitam_lock_order_canonico(self):
+        setor = self._criar_setor("Lock Order", "91010")
+        chefe = setor.chefe_responsavel
+        requisitante_a = self._criar_usuario("11010", "Solicitante Lock A", setor=setor)
+        requisitante_b = self._criar_usuario("11011", "Solicitante Lock B", setor=setor)
+        material_a = self._criar_material_com_estoque("001.002.010", saldo_fisico=Decimal("4"))
+        material_b = self._criar_material_com_estoque("001.002.011", saldo_fisico=Decimal("4"))
+
+        requisicao_a = Requisicao.objects.create(
+            criador=requisitante_a,
+            beneficiario=requisitante_a,
+            setor_beneficiario=requisitante_a.setor,
+            numero_publico="REQ-2026-100010",
+            status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
+            data_envio_autorizacao="2026-04-30T10:00:00Z",
+        )
+        item_a1 = requisicao_a.itens.create(
+            material=material_b,
+            unidade_medida=material_b.unidade_medida,
+            quantidade_solicitada=Decimal("2"),
+        )
+        item_a2 = requisicao_a.itens.create(
+            material=material_a,
+            unidade_medida=material_a.unidade_medida,
+            quantidade_solicitada=Decimal("2"),
+        )
+
+        requisicao_b = Requisicao.objects.create(
+            criador=requisitante_b,
+            beneficiario=requisitante_b,
+            setor_beneficiario=requisitante_b.setor,
+            numero_publico="REQ-2026-100011",
+            status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
+            data_envio_autorizacao="2026-04-30T10:00:00Z",
+        )
+        item_b1 = requisicao_b.itens.create(
+            material=material_a,
+            unidade_medida=material_a.unidade_medida,
+            quantidade_solicitada=Decimal("2"),
+        )
+        item_b2 = requisicao_b.itens.create(
+            material=material_b,
+            unidade_medida=material_b.unidade_medida,
+            quantidade_solicitada=Decimal("2"),
+        )
+
+        barrier = Barrier(2)
+
+        def autorizar(req_id: int, item_ids: tuple[int, int]):
+            close_old_connections()
+            try:
+                barrier.wait()
+                requisicao = Requisicao.objects.get(pk=req_id)
+                autorizar_requisicao(
+                    requisicao=requisicao,
+                    ator=chefe,
+                    itens=[
+                        ItemAutorizacaoData(
+                            item_id=item_ids[0],
+                            quantidade_autorizada=Decimal("2"),
+                        ),
+                        ItemAutorizacaoData(
+                            item_id=item_ids[1],
+                            quantidade_autorizada=Decimal("2"),
+                        ),
+                    ],
+                )
+                return "ok"
+            except Exception as exc:  # noqa: BLE001
+                return type(exc).__name__
+            finally:
+                close_old_connections()
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futuro_a = executor.submit(autorizar, requisicao_a.id, (item_a1.id, item_a2.id))
+            futuro_b = executor.submit(autorizar, requisicao_b.id, (item_b1.id, item_b2.id))
+
+        resultados = {futuro_a.result(), futuro_b.result()}
+        close_old_connections()
+
+        requisicao_a.refresh_from_db()
+        requisicao_b.refresh_from_db()
+        material_a.estoque.refresh_from_db()
+        material_b.estoque.refresh_from_db()
+
+        # Both authorizations should succeed because each material has stock for both requests.
+        assert resultados == {"ok"}
+        assert requisicao_a.status == StatusRequisicao.AUTORIZADA
+        assert requisicao_b.status == StatusRequisicao.AUTORIZADA
+        assert material_a.estoque.saldo_reservado == Decimal("4")
+        assert material_b.estoque.saldo_reservado == Decimal("4")
 
 
 @pytest.mark.django_db(transaction=True)
@@ -1320,6 +1438,166 @@ class TestAtendimentoRequisicaoService:
                 item_requisicao=item,
                 tipo=TipoMovimentacao.LIBERACAO_RESERVA_ATENDIMENTO,
                 quantidade=Decimal("4"),
+            ).count()
+            == 1
+        )
+
+    @pytest.mark.postgres
+    def test_atendimentos_parciais_concorrentes_nao_duplicam_saida_ou_liberacao(self):
+        setor = self._criar_setor("Atendimento Parcial", "92048")
+        requisitante = self._criar_usuario("12048", "Solicitante Parcial", setor=setor)
+        atendente = self._criar_usuario(
+            "12049",
+            "Atendente Parcial",
+            papel=PapelChoices.AUXILIAR_ALMOXARIFADO,
+            setor=setor,
+        )
+        material = self._criar_material_com_estoque(
+            "001.003.046",
+            saldo_fisico=Decimal("5"),
+            saldo_reservado=Decimal("5"),
+        )
+        requisicao, item = self._criar_requisicao_autorizada(
+            criador=requisitante,
+            beneficiario=requisitante,
+            numero_publico="REQ-2026-200046",
+            material=material,
+            quantidade_autorizada=Decimal("5"),
+        )
+
+        barrier = Barrier(2)
+
+        def atender(req_id: int, item_id: int):
+            close_old_connections()
+            try:
+                barrier.wait()
+                requisicao_atendimento = Requisicao.objects.get(pk=req_id)
+                atender_requisicao_com_itens(
+                    requisicao=requisicao_atendimento,
+                    ator=atendente,
+                    itens=[
+                        ItemAtendimentoData(
+                            item_id=item_id,
+                            quantidade_entregue=Decimal("3"),
+                            justificativa_atendimento_parcial="Saldo parcial liberado",
+                        )
+                    ],
+                )
+                return "ok"
+            except Exception as exc:  # noqa: BLE001
+                return type(exc).__name__
+            finally:
+                close_old_connections()
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futuro_a = executor.submit(atender, requisicao.id, item.id)
+            futuro_b = executor.submit(atender, requisicao.id, item.id)
+
+        resultados = {futuro_a.result(), futuro_b.result()}
+        close_old_connections()
+
+        requisicao.refresh_from_db()
+        item.refresh_from_db()
+        material.estoque.refresh_from_db()
+
+        assert resultados == {"ok", "DomainConflict"}
+        assert requisicao.status == StatusRequisicao.ATENDIDA_PARCIALMENTE
+        assert item.quantidade_entregue == Decimal("3")
+        assert material.estoque.saldo_fisico == Decimal("2")
+        assert material.estoque.saldo_reservado == Decimal("0")
+        assert material.estoque.saldo_fisico >= 0
+        assert material.estoque.saldo_reservado >= 0
+        assert (
+            MovimentacaoEstoque.objects.filter(
+                requisicao=requisicao,
+                item_requisicao=item,
+                tipo=TipoMovimentacao.SAIDA_POR_ATENDIMENTO,
+                quantidade=Decimal("3"),
+            ).count()
+            == 1
+        )
+        assert (
+            MovimentacaoEstoque.objects.filter(
+                requisicao=requisicao,
+                item_requisicao=item,
+                tipo=TipoMovimentacao.LIBERACAO_RESERVA_ATENDIMENTO,
+                quantidade=Decimal("2"),
+            ).count()
+            == 1
+        )
+
+    @pytest.mark.postgres
+    def test_atendimentos_concorrentes_de_requisicoes_distintas_nao_dividem_mesmo_saldo(self):
+        setor = self._criar_setor("Atendimento Distinto", "92049")
+        requisitante_a = self._criar_usuario("12050", "Solicitante Distinto A", setor=setor)
+        requisitante_b = self._criar_usuario("12051", "Solicitante Distinto B", setor=setor)
+        atendente = self._criar_usuario(
+            "12052",
+            "Atendente Distinto",
+            papel=PapelChoices.AUXILIAR_ALMOXARIFADO,
+            setor=setor,
+        )
+        material = self._criar_material_com_estoque(
+            "001.003.047",
+            saldo_fisico=Decimal("5"),
+            saldo_reservado=Decimal("10"),
+        )
+        requisicao_a, _ = self._criar_requisicao_autorizada(
+            criador=requisitante_a,
+            beneficiario=requisitante_a,
+            numero_publico="REQ-2026-200047",
+            material=material,
+            quantidade_autorizada=Decimal("5"),
+        )
+        requisicao_b, _ = self._criar_requisicao_autorizada(
+            criador=requisitante_b,
+            beneficiario=requisitante_b,
+            numero_publico="REQ-2026-200048",
+            material=material,
+            quantidade_autorizada=Decimal("5"),
+        )
+
+        barrier = Barrier(2)
+
+        def atender(req_id: int):
+            close_old_connections()
+            try:
+                barrier.wait()
+                requisicao_atendimento = Requisicao.objects.get(pk=req_id)
+                atender_requisicao_completa(
+                    requisicao=requisicao_atendimento,
+                    ator=atendente,
+                )
+                return "ok"
+            except Exception as exc:  # noqa: BLE001
+                return type(exc).__name__
+            finally:
+                close_old_connections()
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futuro_a = executor.submit(atender, requisicao_a.id)
+            futuro_b = executor.submit(atender, requisicao_b.id)
+
+        resultados = {futuro_a.result(), futuro_b.result()}
+        close_old_connections()
+
+        requisicao_a.refresh_from_db()
+        requisicao_b.refresh_from_db()
+        material.estoque.refresh_from_db()
+
+        assert resultados == {"ok", "DomainConflict"}
+        assert {requisicao_a.status, requisicao_b.status} == {
+            StatusRequisicao.AUTORIZADA,
+            StatusRequisicao.ATENDIDA,
+        }
+        assert material.estoque.saldo_fisico == Decimal("0")
+        assert material.estoque.saldo_reservado == Decimal("5")
+        assert material.estoque.saldo_fisico >= 0
+        assert material.estoque.saldo_reservado >= 0
+        assert (
+            MovimentacaoEstoque.objects.filter(
+                material=material,
+                tipo=TipoMovimentacao.SAIDA_POR_ATENDIMENTO,
             ).count()
             == 1
         )
