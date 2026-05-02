@@ -1,6 +1,7 @@
 from collections.abc import Iterable
 
 from django.contrib.contenttypes.models import ContentType
+from rest_framework.exceptions import PermissionDenied
 
 from apps.notifications.models import Notificacao, TipoNotificacao
 from apps.users.models import PapelChoices, User
@@ -81,6 +82,6 @@ def criar_notificacoes_usuarios_unicos(
 
 def marcar_notificacao_como_lida(*, notificacao: Notificacao, usuario: User) -> Notificacao:
     if notificacao.destinatario_id != usuario.pk:
-        raise PermissionError("Usuário não é destinatário desta notificação.")
+        raise PermissionDenied("Usuário não é destinatário desta notificação.")
     notificacao.marcar_como_lida()
     return notificacao

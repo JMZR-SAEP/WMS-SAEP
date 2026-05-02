@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 import pytest
+from rest_framework.exceptions import PermissionDenied
 
 from apps.materials.models import GrupoMaterial, Material, SubgrupoMaterial
 from apps.notifications.models import Notificacao, TipoNotificacao
@@ -77,7 +78,7 @@ class TestNotificacoes:
         EstoqueMaterial.objects.create(material=material, saldo_fisico=saldo_fisico)
         return material
 
-    def test_cria_notificacao_individual_com_objeto_relacionado_e_marca_como_lida(self):
+    def test_cria_notificacao_individual_e_marca_como_lida(self):
         usuario = self._criar_usuario("30001", "Usuario Notificado")
         notificacao = criar_notificacao_usuario(
             destinatario=usuario,
@@ -95,6 +96,19 @@ class TestNotificacoes:
         notificacao.refresh_from_db()
         assert notificacao.lida is True
         assert notificacao.lida_em is not None
+
+    def test_marcar_como_lida_rejeita_usuario_nao_destinatario(self):
+        destinatario = self._criar_usuario("30099", "Destinatario")
+        outro = self._criar_usuario("30098", "Outro")
+        notificacao = criar_notificacao_usuario(
+            destinatario=destinatario,
+            tipo=TipoNotificacao.REQUISICAO_CANCELADA,
+            titulo="Teste",
+            mensagem="Teste.",
+        )
+
+        with pytest.raises(PermissionDenied):
+            marcar_notificacao_como_lida(notificacao=notificacao, usuario=outro)
 
     def test_cria_notificacao_para_papel_operacional(self):
         notificacao = criar_notificacao_papel(
