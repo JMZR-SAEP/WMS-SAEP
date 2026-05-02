@@ -22,7 +22,7 @@ from apps.requisitions.services import (
     atender_requisicao_com_itens,
     atender_requisicao_completa,
     autorizar_requisicao,
-    cancelar_autorizada_sem_saldo,
+    cancelar_requisicao,
     recusar_requisicao,
 )
 from apps.stock.models import EstoqueMaterial, MovimentacaoEstoque, TipoMovimentacao
@@ -889,7 +889,7 @@ class TestAtendimentoRequisicaoService:
             quantidade_autorizada=Decimal("3"),
         )
 
-        cancelada = cancelar_autorizada_sem_saldo(
+        cancelada = cancelar_requisicao(
             requisicao=requisicao,
             ator=atendente,
             motivo_cancelamento="Divergência física total no atendimento",
@@ -934,7 +934,7 @@ class TestAtendimentoRequisicaoService:
         )
 
         with pytest.raises(DomainConflict):
-            cancelar_autorizada_sem_saldo(
+            cancelar_requisicao(
                 requisicao=requisicao,
                 ator=atendente,
                 motivo_cancelamento="Ainda existe saldo",
@@ -966,13 +966,13 @@ class TestAtendimentoRequisicaoService:
         )
 
         with pytest.raises(ValidationError):
-            cancelar_autorizada_sem_saldo(
+            cancelar_requisicao(
                 requisicao=requisicao,
                 ator=solicitante,
                 motivo_cancelamento="   ",
             )
         with pytest.raises(PermissionDenied):
-            cancelar_autorizada_sem_saldo(
+            cancelar_requisicao(
                 requisicao=requisicao,
                 ator=solicitante,
                 motivo_cancelamento="Sem saldo físico",

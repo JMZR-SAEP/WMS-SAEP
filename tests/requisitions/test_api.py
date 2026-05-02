@@ -1425,6 +1425,59 @@ class TestRequisicaoAPI:
         assert requisicao.status == StatusRequisicao.AUTORIZADA
         assert material.estoque.saldo_reservado == Decimal("2")
 
+    def test_cancel_autorizada_sem_saldo_unauthenticated(self):
+        setor = self._criar_setor("Cancelamento Auth", "90059")
+        solicitante = self._criar_usuario("10075", "Solicitante Auth", setor=setor)
+        material = self._criar_material_com_estoque(
+            "001.001.061",
+            saldo_fisico=Decimal("0"),
+            saldo_reservado=Decimal("2"),
+        )
+        requisicao = Requisicao.objects.create(
+            criador=solicitante,
+            beneficiario=solicitante,
+            setor_beneficiario=setor,
+            numero_publico="REQ-2026-000519",
+            status=StatusRequisicao.AUTORIZADA,
+            data_envio_autorizacao="2026-04-30T10:00:00Z",
+            data_autorizacao_ou_recusa="2026-04-30T11:00:00Z",
+        )
+        requisicao.itens.create(
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal("2"),
+            quantidade_autorizada=Decimal("2"),
+        )
+
+        client = APIClient()
+        response = client.post(
+            reverse("requisicao-cancel", args=[requisicao.id]),
+            {"motivo_cancelamento": "Sem credenciais"},
+            format="json",
+        )
+
+        assert response.status_code == 403
+        assert response.data["error"]["code"] == "not_authenticated"
+
+    def test_cancel_autorizada_sem_saldo_not_found(self):
+        setor = self._criar_setor("Cancelamento Not Found", "90060")
+        almoxarife = self._criar_usuario(
+            "10076",
+            "Auxiliar Almoxarifado Not Found",
+            papel=PapelChoices.AUXILIAR_ALMOXARIFADO,
+            setor=setor,
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=almoxarife)
+        response = client.post(
+            reverse("requisicao-cancel", args=[999999]),
+            {"motivo_cancelamento": "Requisição inexistente"},
+            format="json",
+        )
+
+        assert response.status_code == 404
+
     def test_fulfill_payload_incompleto_retorna_validation_error(self):
         setor = self._criar_setor("Manutencao Payload", "90054")
         solicitante = self._criar_usuario("10066", "Solicitante Payload", setor=setor)

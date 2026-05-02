@@ -10,7 +10,6 @@ from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 
 from apps.core.api.serializers import ErrorResponseSerializer
-from apps.requisitions.models import StatusRequisicao
 from apps.requisitions.policies import queryset_requisicoes_visiveis
 from apps.requisitions.serializers import (
     RequisicaoAuthorizeInputSerializer,
@@ -29,8 +28,7 @@ from apps.requisitions.services import (
     ItemRascunhoData,
     atender_requisicao,
     autorizar_requisicao,
-    cancelar_autorizada_sem_saldo,
-    cancelar_pre_autorizacao,
+    cancelar_requisicao,
     criar_rascunho_requisicao,
     descartar_rascunho_nunca_enviado,
     enviar_para_autorizacao,
@@ -149,15 +147,11 @@ class RequisicaoViewSet(GenericViewSet):
     def cancel(self, request, pk=None):
         serializer = RequisicaoCancelInputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        requisicao = self.get_object()
-        if requisicao.status == StatusRequisicao.AUTORIZADA:
-            requisicao = cancelar_autorizada_sem_saldo(
-                requisicao=requisicao,
-                ator=request.user,
-                motivo_cancelamento=serializer.validated_data["motivo_cancelamento"],
-            )
-        else:
-            requisicao = cancelar_pre_autorizacao(requisicao=requisicao, ator=request.user)
+        requisicao = cancelar_requisicao(
+            requisicao=self.get_object(),
+            ator=request.user,
+            motivo_cancelamento=serializer.validated_data["motivo_cancelamento"],
+        )
         return Response(RequisicaoDetailOutputSerializer(requisicao).data)
 
     @extend_schema(
