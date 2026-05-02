@@ -572,6 +572,8 @@ class TestAutorizacaoRequisicaoService:
                     ],
                 )
                 return "ok"
+            except Exception as exc:  # noqa: BLE001
+                return type(exc).__name__
             finally:
                 close_old_connections()
 
@@ -587,6 +589,7 @@ class TestAutorizacaoRequisicaoService:
         material_a.estoque.refresh_from_db()
         material_b.estoque.refresh_from_db()
 
+        # Both authorizations should succeed because each material has stock for both requests.
         assert resultados == {"ok"}
         assert requisicao_a.status == StatusRequisicao.AUTORIZADA
         assert requisicao_b.status == StatusRequisicao.AUTORIZADA
