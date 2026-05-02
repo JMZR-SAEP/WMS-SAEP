@@ -44,3 +44,6 @@ Thumbs.db
 
 # Local Claude worktree artifacts
 .claude/worktrees/
+
+# Code review artefacts
+docs/code-reviews/
