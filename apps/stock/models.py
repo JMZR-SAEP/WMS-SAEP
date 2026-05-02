@@ -16,6 +16,10 @@ class TipoMovimentacao(models.TextChoices):
         "SAIDA_POR_ATENDIMENTO",
         "Saída por atendimento",
     )
+    LIBERACAO_RESERVA_ATENDIMENTO = (
+        "LIBERACAO_RESERVA_ATENDIMENTO",
+        "Liberação de reserva por atendimento",
+    )
 
 
 class MovimentacaoEstoqueQuerySet(models.QuerySet):
@@ -181,6 +185,7 @@ class MovimentacaoEstoque(models.Model):
                         TipoMovimentacao.SALDO_INICIAL,
                         TipoMovimentacao.RESERVA_POR_AUTORIZACAO,
                         TipoMovimentacao.SAIDA_POR_ATENDIMENTO,
+                        TipoMovimentacao.LIBERACAO_RESERVA_ATENDIMENTO,
                     ]
                 ),
                 name="check_movimentacao_tipo_valido",
@@ -231,6 +236,21 @@ class MovimentacaoEstoque(models.Model):
                 | ~models.Q(tipo=TipoMovimentacao.SAIDA_POR_ATENDIMENTO),
                 name="check_movimentacao_saida_atendimento_coerente",
             ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(tipo=TipoMovimentacao.LIBERACAO_RESERVA_ATENDIMENTO)
+                    & models.Q(saldo_posterior=models.F("saldo_anterior"))
+                    & models.Q(
+                        saldo_reservado_posterior=(
+                            models.F("saldo_reservado_anterior") - models.F("quantidade")
+                        )
+                    )
+                    & models.Q(requisicao__isnull=False)
+                    & models.Q(item_requisicao__isnull=False)
+                )
+                | ~models.Q(tipo=TipoMovimentacao.LIBERACAO_RESERVA_ATENDIMENTO),
+                name="check_movimentacao_liberacao_reserva_atendimento_coerente",
+            ),
         ]
 
     def __str__(self):
@@ -276,6 +296,21 @@ class MovimentacaoEstoque(models.Model):
                 errors["requisicao"] = "Saída por atendimento exige requisição."
             if self.item_requisicao_id is None:
                 errors["item_requisicao"] = "Saída por atendimento exige item."
+            if self.item_requisicao_id is not None:
+                item = self.item_requisicao
+                if self.requisicao_id is not None and item.requisicao_id != self.requisicao_id:
+                    errors["requisicao"] = "Requisição deve ser a mesma do item da movimentação."
+                if self.material_id != item.material_id:
+                    errors["material"] = "Material deve ser o mesmo do item da movimentação."
+            if errors:
+                raise ValidationError(errors)
+
+        if self.tipo == TipoMovimentacao.LIBERACAO_RESERVA_ATENDIMENTO:
+            errors = {}
+            if self.requisicao_id is None:
+                errors["requisicao"] = "Liberação de reserva por atendimento exige requisição."
+            if self.item_requisicao_id is None:
+                errors["item_requisicao"] = "Liberação de reserva por atendimento exige item."
             if self.item_requisicao_id is not None:
                 item = self.item_requisicao
                 if self.requisicao_id is not None and item.requisicao_id != self.requisicao_id:

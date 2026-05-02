@@ -15,8 +15,11 @@ from apps.requisitions.models import (
     TipoEvento,
 )
 from apps.requisitions.services import (
+    ItemAtendimentoData,
     ItemAutorizacaoData,
     _gerar_numero_publico,
+    atender_requisicao,
+    atender_requisicao_com_itens,
     atender_requisicao_completa,
     autorizar_requisicao,
     recusar_requisicao,
@@ -653,6 +656,292 @@ class TestAtendimentoRequisicaoService:
         assert material_b.estoque.saldo_fisico == Decimal("8")
         assert material_b.estoque.saldo_reservado == Decimal("0")
 
+    def test_atendimento_parcial_entrega_item_e_libera_reserva_nao_entregue(self):
+        setor = self._criar_setor("Atendimento Parcial", "92020")
+        requisitante = self._criar_usuario("12020", "Solicitante Parcial", setor=setor)
+        atendente = self._criar_usuario(
+            "12021",
+            "Auxiliar Almoxarifado Parcial",
+            papel=PapelChoices.AUXILIAR_ALMOXARIFADO,
+            setor=setor,
+        )
+        material = self._criar_material_com_estoque(
+            "001.003.020",
+            saldo_fisico=Decimal("10"),
+            saldo_reservado=Decimal("5"),
+        )
+        requisicao, item = self._criar_requisicao_autorizada(
+            criador=requisitante,
+            beneficiario=requisitante,
+            numero_publico="REQ-2026-200020",
+            material=material,
+            quantidade_autorizada=Decimal("5"),
+        )
+
+        atendida = atender_requisicao_com_itens(
+            requisicao=requisicao,
+            ator=atendente,
+            itens=[
+                ItemAtendimentoData(
+                    item_id=item.id,
+                    quantidade_entregue=Decimal("3"),
+                    justificativa_atendimento_parcial="Estoque físico divergente",
+                )
+            ],
+            retirante_fisico="Servidor parcial",
+        )
+
+        item.refresh_from_db()
+        material.estoque.refresh_from_db()
+        assert atendida.status == StatusRequisicao.ATENDIDA_PARCIALMENTE
+        assert atendida.eventos.filter(tipo_evento=TipoEvento.ATENDIMENTO_PARCIAL).exists()
+        assert item.quantidade_entregue == Decimal("3")
+        assert item.justificativa_atendimento_parcial == "Estoque físico divergente"
+        assert material.estoque.saldo_fisico == Decimal("7")
+        assert material.estoque.saldo_reservado == Decimal("0")
+        assert MovimentacaoEstoque.objects.filter(
+            requisicao=atendida,
+            item_requisicao=item,
+            tipo=TipoMovimentacao.SAIDA_POR_ATENDIMENTO,
+            quantidade=Decimal("3"),
+        ).exists()
+        assert MovimentacaoEstoque.objects.filter(
+            requisicao=atendida,
+            item_requisicao=item,
+            tipo=TipoMovimentacao.LIBERACAO_RESERVA_ATENDIMENTO,
+            quantidade=Decimal("2"),
+        ).exists()
+
+    def test_atendimento_parcial_multi_item_mistura_entrega_total_e_parcial(self):
+        setor = self._criar_setor("Atendimento Multi Item", "92030")
+        requisitante = self._criar_usuario("12030", "Solicitante Multi", setor=setor)
+        atendente = self._criar_usuario(
+            "12031",
+            "Auxiliar Almoxarifado Multi",
+            papel=PapelChoices.AUXILIAR_ALMOXARIFADO,
+            setor=setor,
+        )
+        material_total = self._criar_material_com_estoque(
+            "001.003.030",
+            saldo_fisico=Decimal("10"),
+            saldo_reservado=Decimal("4"),
+        )
+        material_parcial = self._criar_material_com_estoque(
+            "001.003.031",
+            saldo_fisico=Decimal("10"),
+            saldo_reservado=Decimal("5"),
+        )
+        requisicao, item_total = self._criar_requisicao_autorizada(
+            criador=requisitante,
+            beneficiario=requisitante,
+            numero_publico="REQ-2026-200030",
+            material=material_total,
+            quantidade_autorizada=Decimal("4"),
+        )
+        item_parcial = requisicao.itens.create(
+            material=material_parcial,
+            unidade_medida=material_parcial.unidade_medida,
+            quantidade_solicitada=Decimal("5"),
+            quantidade_autorizada=Decimal("5"),
+        )
+
+        atendida = atender_requisicao(
+            requisicao=requisicao,
+            ator=atendente,
+            itens=[
+                ItemAtendimentoData(item_id=item_total.id, quantidade_entregue=Decimal("4")),
+                ItemAtendimentoData(
+                    item_id=item_parcial.id,
+                    quantidade_entregue=Decimal("2"),
+                    justificativa_atendimento_parcial="Retirada parcial solicitada",
+                ),
+            ],
+        )
+
+        item_total.refresh_from_db()
+        item_parcial.refresh_from_db()
+        material_total.estoque.refresh_from_db()
+        material_parcial.estoque.refresh_from_db()
+        assert atendida.status == StatusRequisicao.ATENDIDA_PARCIALMENTE
+        assert atendida.eventos.filter(tipo_evento=TipoEvento.ATENDIMENTO_PARCIAL).exists()
+        assert item_total.quantidade_entregue == Decimal("4")
+        assert item_total.justificativa_atendimento_parcial == ""
+        assert item_parcial.quantidade_entregue == Decimal("2")
+        assert item_parcial.justificativa_atendimento_parcial == "Retirada parcial solicitada"
+        assert material_total.estoque.saldo_fisico == Decimal("6")
+        assert material_total.estoque.saldo_reservado == Decimal("0")
+        assert material_parcial.estoque.saldo_fisico == Decimal("8")
+        assert material_parcial.estoque.saldo_reservado == Decimal("0")
+        assert not MovimentacaoEstoque.objects.filter(
+            requisicao=atendida,
+            item_requisicao=item_total,
+            tipo=TipoMovimentacao.LIBERACAO_RESERVA_ATENDIMENTO,
+        ).exists()
+        assert MovimentacaoEstoque.objects.filter(
+            requisicao=atendida,
+            item_requisicao=item_parcial,
+            tipo=TipoMovimentacao.LIBERACAO_RESERVA_ATENDIMENTO,
+            quantidade=Decimal("3"),
+        ).exists()
+
+    def test_atendimento_com_itens_integral_preserva_status_atendida(self):
+        setor = self._criar_setor("Atendimento Integral", "92022")
+        requisitante = self._criar_usuario("12022", "Solicitante Integral", setor=setor)
+        atendente = self._criar_usuario(
+            "12023",
+            "Auxiliar Almoxarifado Integral",
+            papel=PapelChoices.AUXILIAR_ALMOXARIFADO,
+            setor=setor,
+        )
+        material = self._criar_material_com_estoque(
+            "001.003.021",
+            saldo_fisico=Decimal("6"),
+            saldo_reservado=Decimal("2"),
+        )
+        requisicao, item = self._criar_requisicao_autorizada(
+            criador=requisitante,
+            beneficiario=requisitante,
+            numero_publico="REQ-2026-200021",
+            material=material,
+            quantidade_autorizada=Decimal("2"),
+        )
+
+        atendida = atender_requisicao_com_itens(
+            requisicao=requisicao,
+            ator=atendente,
+            itens=[ItemAtendimentoData(item_id=item.id, quantidade_entregue=Decimal("2"))],
+        )
+
+        item.refresh_from_db()
+        assert atendida.status == StatusRequisicao.ATENDIDA
+        assert atendida.eventos.filter(tipo_evento=TipoEvento.ATENDIMENTO).exists()
+        assert item.quantidade_entregue == Decimal("2")
+        assert item.justificativa_atendimento_parcial == ""
+
+    def test_atendimento_parcial_exige_justificativa_e_alguma_entrega(self):
+        setor = self._criar_setor("Atendimento Zero", "92024")
+        requisitante = self._criar_usuario("12024", "Solicitante Zero", setor=setor)
+        atendente = self._criar_usuario(
+            "12025",
+            "Auxiliar Almoxarifado Zero",
+            papel=PapelChoices.AUXILIAR_ALMOXARIFADO,
+            setor=setor,
+        )
+        material = self._criar_material_com_estoque(
+            "001.003.022",
+            saldo_fisico=Decimal("6"),
+            saldo_reservado=Decimal("2"),
+        )
+        requisicao, item = self._criar_requisicao_autorizada(
+            criador=requisitante,
+            beneficiario=requisitante,
+            numero_publico="REQ-2026-200022",
+            material=material,
+            quantidade_autorizada=Decimal("2"),
+        )
+
+        with pytest.raises(DomainConflict):
+            atender_requisicao_com_itens(
+                requisicao=requisicao,
+                ator=atendente,
+                itens=[ItemAtendimentoData(item_id=item.id, quantidade_entregue=Decimal("1"))],
+            )
+        with pytest.raises(DomainConflict):
+            atender_requisicao_com_itens(
+                requisicao=requisicao,
+                ator=atendente,
+                itens=[
+                    ItemAtendimentoData(
+                        item_id=item.id,
+                        quantidade_entregue=Decimal("0"),
+                        justificativa_atendimento_parcial="Sem retirada",
+                    )
+                ],
+            )
+
+        item.refresh_from_db()
+        material.estoque.refresh_from_db()
+        assert item.quantidade_entregue == Decimal("0")
+        assert material.estoque.saldo_fisico == Decimal("6")
+        assert material.estoque.saldo_reservado == Decimal("2")
+        assert MovimentacaoEstoque.objects.count() == 0
+
+    def test_atendimento_com_itens_rejeita_payload_incompleto_duplicado_ou_excessivo(self):
+        setor = self._criar_setor("Atendimento Payload", "92026")
+        requisitante = self._criar_usuario("12026", "Solicitante Payload", setor=setor)
+        atendente = self._criar_usuario(
+            "12027",
+            "Auxiliar Almoxarifado Payload",
+            papel=PapelChoices.AUXILIAR_ALMOXARIFADO,
+            setor=setor,
+        )
+        material_a = self._criar_material_com_estoque(
+            "001.003.023",
+            saldo_fisico=Decimal("6"),
+            saldo_reservado=Decimal("2"),
+        )
+        material_b = self._criar_material_com_estoque(
+            "001.003.024",
+            saldo_fisico=Decimal("6"),
+            saldo_reservado=Decimal("2"),
+        )
+        requisicao, item_a = self._criar_requisicao_autorizada(
+            criador=requisitante,
+            beneficiario=requisitante,
+            numero_publico="REQ-2026-200023",
+            material=material_a,
+            quantidade_autorizada=Decimal("2"),
+        )
+        item_b = requisicao.itens.create(
+            material=material_b,
+            unidade_medida=material_b.unidade_medida,
+            quantidade_solicitada=Decimal("2"),
+            quantidade_autorizada=Decimal("2"),
+        )
+
+        cenarios_validation_error = [
+            [ItemAtendimentoData(item_id=item_a.id, quantidade_entregue=Decimal("2"))],
+            [
+                ItemAtendimentoData(item_id=item_a.id, quantidade_entregue=Decimal("2")),
+                ItemAtendimentoData(item_id=item_a.id, quantidade_entregue=Decimal("2")),
+            ],
+            [
+                ItemAtendimentoData(item_id=item_a.id, quantidade_entregue=Decimal("2")),
+                ItemAtendimentoData(item_id=item_b.id + 999, quantidade_entregue=Decimal("2")),
+            ],
+        ]
+        for itens in cenarios_validation_error:
+            with pytest.raises(ValidationError):
+                atender_requisicao_com_itens(
+                    requisicao=requisicao,
+                    ator=atendente,
+                    itens=itens,
+                )
+
+        cenarios_domain_conflict = [
+            [
+                ItemAtendimentoData(item_id=item_a.id, quantidade_entregue=Decimal("3")),
+                ItemAtendimentoData(item_id=item_b.id, quantidade_entregue=Decimal("2")),
+            ],
+        ]
+        for itens in cenarios_domain_conflict:
+            with pytest.raises(DomainConflict):
+                atender_requisicao_com_itens(
+                    requisicao=requisicao,
+                    ator=atendente,
+                    itens=itens,
+                )
+
+        item_a.refresh_from_db()
+        item_b.refresh_from_db()
+        material_a.estoque.refresh_from_db()
+        material_b.estoque.refresh_from_db()
+        assert item_a.quantidade_entregue == Decimal("0")
+        assert item_b.quantidade_entregue == Decimal("0")
+        assert material_a.estoque.saldo_reservado == Decimal("2")
+        assert material_b.estoque.saldo_reservado == Decimal("2")
+        assert MovimentacaoEstoque.objects.count() == 0
+
     def test_atendimento_bloqueia_usuario_sem_permissao_e_status_invalido(self):
         setor = self._criar_setor("Financeiro", "92003")
         solicitante = self._criar_usuario("12005", "Solicitante Financeiro", setor=setor)
@@ -671,6 +960,12 @@ class TestAtendimentoRequisicaoService:
 
         with pytest.raises(PermissionDenied):
             atender_requisicao_completa(requisicao=requisicao, ator=solicitante)
+        with pytest.raises(PermissionDenied):
+            atender_requisicao_com_itens(
+                requisicao=requisicao,
+                ator=solicitante,
+                itens=[ItemAtendimentoData(item_id=_.id, quantidade_entregue=Decimal("2"))],
+            )
 
         atendente = self._criar_usuario(
             "12006",

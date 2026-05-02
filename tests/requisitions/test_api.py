@@ -6,7 +6,7 @@ from rest_framework.test import APIClient
 
 from apps.materials.models import GrupoMaterial, Material, SubgrupoMaterial
 from apps.requisitions.models import EventoTimeline, Requisicao, StatusRequisicao, TipoEvento
-from apps.stock.models import EstoqueMaterial
+from apps.stock.models import EstoqueMaterial, MovimentacaoEstoque, TipoMovimentacao
 from apps.users.models import PapelChoices, Setor, User
 
 
@@ -926,6 +926,375 @@ class TestRequisicaoAPI:
         assert material.estoque.saldo_fisico == Decimal("4")
         assert material.estoque.saldo_reservado == Decimal("0")
 
+    def test_fulfill_com_itens_registra_atendimento_parcial_e_libera_reserva(self):
+        setor = self._criar_setor("Manutencao Parcial", "90039")
+        solicitante = self._criar_usuario("10044", "Solicitante Manutencao Parcial", setor=setor)
+        almoxarife = self._criar_usuario(
+            "10045",
+            "Auxiliar Almoxarifado Parcial",
+            papel=PapelChoices.AUXILIAR_ALMOXARIFADO,
+            setor=setor,
+        )
+        material = self._criar_material_com_estoque(
+            "001.001.036",
+            saldo_fisico=Decimal("7"),
+            saldo_reservado=Decimal("3"),
+        )
+        requisicao = Requisicao.objects.create(
+            criador=solicitante,
+            beneficiario=solicitante,
+            setor_beneficiario=setor,
+            numero_publico="REQ-2026-000507",
+            status=StatusRequisicao.AUTORIZADA,
+            data_envio_autorizacao="2026-04-30T10:00:00Z",
+            data_autorizacao_ou_recusa="2026-04-30T11:00:00Z",
+        )
+        item = requisicao.itens.create(
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal("3"),
+            quantidade_autorizada=Decimal("3"),
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=almoxarife)
+        response = client.post(
+            reverse("requisicao-fulfill", args=[requisicao.id]),
+            {
+                "retirante_fisico": "Servidor Parcial",
+                "itens": [
+                    {
+                        "item_id": item.id,
+                        "quantidade_entregue": "1.000",
+                        "justificativa_atendimento_parcial": "Saldo físico divergente",
+                    }
+                ],
+            },
+            format="json",
+        )
+
+        assert response.status_code == 200
+        assert response.data["status"] == StatusRequisicao.ATENDIDA_PARCIALMENTE
+        assert response.data["retirante_fisico"] == "Servidor Parcial"
+        assert response.data["itens"][0]["quantidade_entregue"] == "1.000"
+        assert (
+            response.data["itens"][0]["justificativa_atendimento_parcial"]
+            == "Saldo físico divergente"
+        )
+        requisicao.refresh_from_db()
+        item.refresh_from_db()
+        material.estoque.refresh_from_db()
+        assert requisicao.eventos.filter(tipo_evento=TipoEvento.ATENDIMENTO_PARCIAL).exists()
+        assert item.quantidade_entregue == Decimal("1")
+        assert material.estoque.saldo_fisico == Decimal("6")
+        assert material.estoque.saldo_reservado == Decimal("0")
+        assert MovimentacaoEstoque.objects.filter(
+            requisicao=requisicao,
+            tipo=TipoMovimentacao.SAIDA_POR_ATENDIMENTO,
+            quantidade=Decimal("1"),
+        ).exists()
+        assert MovimentacaoEstoque.objects.filter(
+            requisicao=requisicao,
+            tipo=TipoMovimentacao.LIBERACAO_RESERVA_ATENDIMENTO,
+            quantidade=Decimal("2"),
+        ).exists()
+
+    def test_fulfill_com_itens_multi_item_mistura_entrega_total_e_parcial(self):
+        setor = self._criar_setor("Manutencao Multi Item", "90052")
+        solicitante = self._criar_usuario("10062", "Solicitante Multi Item", setor=setor)
+        almoxarife = self._criar_usuario(
+            "10063",
+            "Auxiliar Almoxarifado Multi Item",
+            papel=PapelChoices.AUXILIAR_ALMOXARIFADO,
+            setor=setor,
+        )
+        material_total = self._criar_material_com_estoque(
+            "001.001.052",
+            saldo_fisico=Decimal("10"),
+            saldo_reservado=Decimal("4"),
+        )
+        material_parcial = self._criar_material_com_estoque(
+            "001.001.053",
+            saldo_fisico=Decimal("10"),
+            saldo_reservado=Decimal("5"),
+        )
+        requisicao = Requisicao.objects.create(
+            criador=solicitante,
+            beneficiario=solicitante,
+            setor_beneficiario=setor,
+            numero_publico="REQ-2026-000512",
+            status=StatusRequisicao.AUTORIZADA,
+            data_envio_autorizacao="2026-04-30T10:00:00Z",
+            data_autorizacao_ou_recusa="2026-04-30T11:00:00Z",
+        )
+        item_total = requisicao.itens.create(
+            material=material_total,
+            unidade_medida=material_total.unidade_medida,
+            quantidade_solicitada=Decimal("4"),
+            quantidade_autorizada=Decimal("4"),
+        )
+        item_parcial = requisicao.itens.create(
+            material=material_parcial,
+            unidade_medida=material_parcial.unidade_medida,
+            quantidade_solicitada=Decimal("5"),
+            quantidade_autorizada=Decimal("5"),
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=almoxarife)
+        response = client.post(
+            reverse("requisicao-fulfill", args=[requisicao.id]),
+            {
+                "itens": [
+                    {"item_id": item_total.id, "quantidade_entregue": "4.000"},
+                    {
+                        "item_id": item_parcial.id,
+                        "quantidade_entregue": "2.000",
+                        "justificativa_atendimento_parcial": "Retirada parcial solicitada",
+                    },
+                ],
+            },
+            format="json",
+        )
+
+        assert response.status_code == 200
+        assert response.data["status"] == StatusRequisicao.ATENDIDA_PARCIALMENTE
+        requisicao.refresh_from_db()
+        item_total.refresh_from_db()
+        item_parcial.refresh_from_db()
+        material_total.estoque.refresh_from_db()
+        material_parcial.estoque.refresh_from_db()
+        assert requisicao.eventos.filter(tipo_evento=TipoEvento.ATENDIMENTO_PARCIAL).exists()
+        assert item_total.quantidade_entregue == Decimal("4")
+        assert item_total.justificativa_atendimento_parcial == ""
+        assert item_parcial.quantidade_entregue == Decimal("2")
+        assert item_parcial.justificativa_atendimento_parcial == "Retirada parcial solicitada"
+        assert material_total.estoque.saldo_fisico == Decimal("6")
+        assert material_total.estoque.saldo_reservado == Decimal("0")
+        assert material_parcial.estoque.saldo_fisico == Decimal("8")
+        assert material_parcial.estoque.saldo_reservado == Decimal("0")
+        assert not MovimentacaoEstoque.objects.filter(
+            requisicao=requisicao,
+            item_requisicao=item_total,
+            tipo=TipoMovimentacao.LIBERACAO_RESERVA_ATENDIMENTO,
+        ).exists()
+        assert MovimentacaoEstoque.objects.filter(
+            requisicao=requisicao,
+            item_requisicao=item_parcial,
+            tipo=TipoMovimentacao.LIBERACAO_RESERVA_ATENDIMENTO,
+            quantidade=Decimal("3"),
+        ).exists()
+
+    def test_fulfill_com_itens_rejeita_parcial_sem_justificativa(self):
+        setor = self._criar_setor("Manutencao Sem Justificativa", "90040")
+        solicitante = self._criar_usuario("10046", "Solicitante Sem Justificativa", setor=setor)
+        almoxarife = self._criar_usuario(
+            "10047",
+            "Auxiliar Almoxarifado Sem Justificativa",
+            papel=PapelChoices.AUXILIAR_ALMOXARIFADO,
+            setor=setor,
+        )
+        material = self._criar_material_com_estoque(
+            "001.001.037",
+            saldo_fisico=Decimal("7"),
+            saldo_reservado=Decimal("3"),
+        )
+        requisicao = Requisicao.objects.create(
+            criador=solicitante,
+            beneficiario=solicitante,
+            setor_beneficiario=setor,
+            numero_publico="REQ-2026-000508",
+            status=StatusRequisicao.AUTORIZADA,
+            data_envio_autorizacao="2026-04-30T10:00:00Z",
+            data_autorizacao_ou_recusa="2026-04-30T11:00:00Z",
+        )
+        item = requisicao.itens.create(
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal("3"),
+            quantidade_autorizada=Decimal("3"),
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=almoxarife)
+        response = client.post(
+            reverse("requisicao-fulfill", args=[requisicao.id]),
+            {"itens": [{"item_id": item.id, "quantidade_entregue": "1.000"}]},
+            format="json",
+        )
+
+        assert response.status_code == 409
+        assert response.data["error"]["code"] == "domain_conflict"
+        item.refresh_from_db()
+        material.estoque.refresh_from_db()
+        assert item.quantidade_entregue == Decimal("0")
+        assert material.estoque.saldo_fisico == Decimal("7")
+        assert material.estoque.saldo_reservado == Decimal("3")
+        assert not MovimentacaoEstoque.objects.filter(requisicao=requisicao).exists()
+
+    def test_fulfill_com_itens_rejeita_entrega_acima_do_autorizado(self):
+        setor = self._criar_setor("Manutencao Excesso", "90041")
+        solicitante = self._criar_usuario("10048", "Solicitante Excesso", setor=setor)
+        almoxarife = self._criar_usuario(
+            "10049",
+            "Auxiliar Almoxarifado Excesso",
+            papel=PapelChoices.AUXILIAR_ALMOXARIFADO,
+            setor=setor,
+        )
+        material = self._criar_material_com_estoque(
+            "001.001.038",
+            saldo_fisico=Decimal("10"),
+            saldo_reservado=Decimal("3"),
+        )
+        requisicao = Requisicao.objects.create(
+            criador=solicitante,
+            beneficiario=solicitante,
+            setor_beneficiario=setor,
+            numero_publico="REQ-2026-000509",
+            status=StatusRequisicao.AUTORIZADA,
+            data_envio_autorizacao="2026-04-30T10:00:00Z",
+            data_autorizacao_ou_recusa="2026-04-30T11:00:00Z",
+        )
+        item = requisicao.itens.create(
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal("3"),
+            quantidade_autorizada=Decimal("3"),
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=almoxarife)
+        response = client.post(
+            reverse("requisicao-fulfill", args=[requisicao.id]),
+            {
+                "itens": [
+                    {
+                        "item_id": item.id,
+                        "quantidade_entregue": "5.000",
+                        "justificativa_atendimento_parcial": "Erro de quantidade",
+                    }
+                ]
+            },
+            format="json",
+        )
+
+        assert response.status_code == 409
+        assert response.data["error"]["code"] == "domain_conflict"
+        item.refresh_from_db()
+        material.estoque.refresh_from_db()
+        assert item.quantidade_entregue == Decimal("0")
+        assert material.estoque.saldo_fisico == Decimal("10")
+        assert material.estoque.saldo_reservado == Decimal("3")
+        assert not MovimentacaoEstoque.objects.filter(requisicao=requisicao).exists()
+
+    def test_fulfill_todos_itens_zerados_rejeita_sem_efeitos(self):
+        setor = self._criar_setor("Manutencao Zero Total", "90053")
+        solicitante = self._criar_usuario("10064", "Solicitante Zero Total", setor=setor)
+        almoxarife = self._criar_usuario(
+            "10065",
+            "Auxiliar Almoxarifado Zero Total",
+            papel=PapelChoices.AUXILIAR_ALMOXARIFADO,
+            setor=setor,
+        )
+        material = self._criar_material_com_estoque(
+            "001.001.054",
+            saldo_fisico=Decimal("7"),
+            saldo_reservado=Decimal("3"),
+        )
+        requisicao = Requisicao.objects.create(
+            criador=solicitante,
+            beneficiario=solicitante,
+            setor_beneficiario=setor,
+            numero_publico="REQ-2026-000513",
+            status=StatusRequisicao.AUTORIZADA,
+            data_envio_autorizacao="2026-04-30T10:00:00Z",
+            data_autorizacao_ou_recusa="2026-04-30T11:00:00Z",
+        )
+        item = requisicao.itens.create(
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal("3"),
+            quantidade_autorizada=Decimal("3"),
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=almoxarife)
+        response = client.post(
+            reverse("requisicao-fulfill", args=[requisicao.id]),
+            {
+                "itens": [
+                    {
+                        "item_id": item.id,
+                        "quantidade_entregue": "0.000",
+                        "justificativa_atendimento_parcial": "Sem saldo físico",
+                    }
+                ]
+            },
+            format="json",
+        )
+
+        assert response.status_code == 409
+        assert response.data["error"]["code"] == "domain_conflict"
+        item.refresh_from_db()
+        material.estoque.refresh_from_db()
+        assert item.quantidade_entregue == Decimal("0")
+        assert material.estoque.saldo_fisico == Decimal("7")
+        assert material.estoque.saldo_reservado == Decimal("3")
+        assert not MovimentacaoEstoque.objects.filter(requisicao=requisicao).exists()
+
+    def test_fulfill_payload_incompleto_retorna_validation_error(self):
+        setor = self._criar_setor("Manutencao Payload", "90054")
+        solicitante = self._criar_usuario("10066", "Solicitante Payload", setor=setor)
+        almoxarife = self._criar_usuario(
+            "10067",
+            "Auxiliar Almoxarifado Payload",
+            papel=PapelChoices.AUXILIAR_ALMOXARIFADO,
+            setor=setor,
+        )
+        material_a = self._criar_material_com_estoque(
+            "001.001.055",
+            saldo_fisico=Decimal("7"),
+            saldo_reservado=Decimal("2"),
+        )
+        material_b = self._criar_material_com_estoque(
+            "001.001.056",
+            saldo_fisico=Decimal("7"),
+            saldo_reservado=Decimal("2"),
+        )
+        requisicao = Requisicao.objects.create(
+            criador=solicitante,
+            beneficiario=solicitante,
+            setor_beneficiario=setor,
+            numero_publico="REQ-2026-000514",
+            status=StatusRequisicao.AUTORIZADA,
+            data_envio_autorizacao="2026-04-30T10:00:00Z",
+            data_autorizacao_ou_recusa="2026-04-30T11:00:00Z",
+        )
+        item_a = requisicao.itens.create(
+            material=material_a,
+            unidade_medida=material_a.unidade_medida,
+            quantidade_solicitada=Decimal("2"),
+            quantidade_autorizada=Decimal("2"),
+        )
+        item_b = requisicao.itens.create(
+            material=material_b,
+            unidade_medida=material_b.unidade_medida,
+            quantidade_solicitada=Decimal("2"),
+            quantidade_autorizada=Decimal("2"),
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=almoxarife)
+        response = client.post(
+            reverse("requisicao-fulfill", args=[requisicao.id]),
+            {"itens": [{"item_id": item_a.id, "quantidade_entregue": "2.000"}]},
+            format="json",
+        )
+
+        assert response.status_code == 400
+        assert response.data["error"]["code"] == "validation_error"
+        assert response.data["error"]["details"]["item_ids"] == [str(item_b.id)]
+
     def test_fulfill_bloqueia_usuario_sem_permissao(self):
         setor = self._criar_setor("Controle", "90033")
         solicitante = self._criar_usuario("10035", "Solicitante Controle", setor=setor)
@@ -957,6 +1326,38 @@ class TestRequisicaoAPI:
         assert response.status_code == 403
         assert response.data["error"]["code"] == "permission_denied"
 
+    def test_fulfill_requisicao_fora_do_escopo_visivel_retorna_404(self):
+        setor_origem = self._criar_setor("Controle Origem", "90042")
+        setor_externo = self._criar_setor("Controle Externo", "90043")
+        solicitante = self._criar_usuario("10050", "Solicitante Origem", setor=setor_origem)
+        usuario_externo = self._criar_usuario("10051", "Solicitante Externo", setor=setor_externo)
+        material = self._criar_material_com_estoque(
+            "001.001.039",
+            saldo_fisico=Decimal("5"),
+            saldo_reservado=Decimal("2"),
+        )
+        requisicao = Requisicao.objects.create(
+            criador=solicitante,
+            beneficiario=solicitante,
+            setor_beneficiario=setor_origem,
+            numero_publico="REQ-2026-000510",
+            status=StatusRequisicao.AUTORIZADA,
+            data_envio_autorizacao="2026-04-30T10:00:00Z",
+            data_autorizacao_ou_recusa="2026-04-30T11:00:00Z",
+        )
+        requisicao.itens.create(
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal("2"),
+            quantidade_autorizada=Decimal("2"),
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=usuario_externo)
+        response = client.post(reverse("requisicao-fulfill", args=[requisicao.id]), {})
+
+        assert response.status_code == 404
+
     def test_fulfill_bloqueia_superuser(self):
         setor = self._criar_setor("Controle Superior", "90035")
         solicitante = self._criar_usuario("10038", "Solicitante Controle Superior", setor=setor)
@@ -981,7 +1382,7 @@ class TestRequisicaoAPI:
             data_envio_autorizacao="2026-04-30T10:00:00Z",
             data_autorizacao_ou_recusa="2026-04-30T11:00:00Z",
         )
-        requisicao.itens.create(
+        item = requisicao.itens.create(
             material=material,
             unidade_medida=material.unidade_medida,
             quantidade_solicitada=Decimal("2"),
@@ -990,7 +1391,11 @@ class TestRequisicaoAPI:
 
         client = APIClient()
         client.force_authenticate(user=superuser)
-        response = client.post(reverse("requisicao-fulfill", args=[requisicao.id]), {})
+        response = client.post(
+            reverse("requisicao-fulfill", args=[requisicao.id]),
+            {"itens": [{"item_id": item.id, "quantidade_entregue": "2.000"}]},
+            format="json",
+        )
 
         assert response.status_code == 403
         assert response.data["error"]["code"] == "permission_denied"
@@ -1029,8 +1434,7 @@ class TestRequisicaoAPI:
         client.force_authenticate(user=usuario_inativo)
         response = client.post(reverse("requisicao-fulfill", args=[requisicao.id]), {})
 
-        assert response.status_code == 403
-        assert response.data["error"]["code"] == "permission_denied"
+        assert response.status_code == 404
 
     def test_fulfill_bloqueia_status_invalido(self):
         setor = self._criar_setor("Planejamento Campo", "90034")

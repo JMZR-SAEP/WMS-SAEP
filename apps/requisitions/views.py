@@ -10,7 +10,6 @@ from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 
 from apps.core.api.serializers import ErrorResponseSerializer
-from apps.requisitions.models import Requisicao
 from apps.requisitions.policies import queryset_requisicoes_visiveis
 from apps.requisitions.serializers import (
     RequisicaoAuthorizeInputSerializer,
@@ -26,7 +25,7 @@ from apps.requisitions.serializers import (
 from apps.requisitions.services import (
     ItemAutorizacaoData,
     ItemRascunhoData,
-    atender_requisicao_completa,
+    atender_requisicao,
     autorizar_requisicao,
     cancelar_pre_autorizacao,
     criar_rascunho_requisicao,
@@ -211,9 +210,10 @@ class RequisicaoViewSet(GenericViewSet):
     def fulfill(self, request, pk=None):
         serializer = RequisicaoFulfillInputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        requisicao = atender_requisicao_completa(
-            requisicao=get_object_or_404(Requisicao, pk=pk),
+        requisicao = atender_requisicao(
+            requisicao=self.get_object(),
             ator=request.user,
+            itens=serializer.validated_data.get("itens"),
             retirante_fisico=serializer.validated_data["retirante_fisico"],
             observacao_atendimento=serializer.validated_data["observacao_atendimento"],
         )

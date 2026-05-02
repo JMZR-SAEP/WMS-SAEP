@@ -68,6 +68,21 @@ Padrão de status:
 
 Qualquer exceção a esse padrão deve ser documentada no `@extend_schema`, nos testes de contrato e, quando afetar contrato público, no documento de domínio ou backlog correspondente.
 
+### 3.1. `POST /api/v1/requisitions/{id}/fulfill/`
+
+Contrato do atendimento de requisição autorizada:
+
+- autenticação: sessão Django padrão;
+- autorização geral: usuário autenticado;
+- autorização contextual: `queryset_requisicoes_visiveis()` na view e `pode_atender_requisicao()` no service;
+- entrada: `retirante_fisico` opcional, `observacao_atendimento` opcional e `itens` opcional;
+- sem `itens`: registra atendimento completo de todos os itens autorizados;
+- com `itens`: cada item autorizado deve ser informado com `item_id`, `quantidade_entregue` e, quando `quantidade_entregue < quantidade_autorizada`, `justificativa_atendimento_parcial`;
+- com `itens`, pelo menos um item autorizado deve ter `quantidade_entregue > 0`; payload com todos os itens zerados retorna `409 domain_conflict` e não transiciona a requisição;
+- saída: `200` com `RequisicaoDetailOutputSerializer`;
+- erros esperados: `400 validation_error`, `403 permission_denied`, `404 not_found` e `409 domain_conflict`;
+- efeitos de domínio: quando há ao menos uma entrega `> 0`, baixa física somente da quantidade entregue, consumo da reserva entregue, liberação da reserva não entregue e status `atendida` ou `atendida_parcialmente`.
+
 ## 4. Paginação, filtros, busca e ordenação
 
 Listas devem usar paginação padrão:

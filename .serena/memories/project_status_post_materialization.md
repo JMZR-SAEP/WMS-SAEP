@@ -1,8 +1,8 @@
 # Project Status — Post-Materialization
 
-**Date:** 2026-05-01
-**Status:** Django materialization COMPLETE; PIL-BE-ACE foundation COMPLETE through `PIL-BE-ACE-005`; PIL-BE-MAT-001 COMPLETE; PIL-BE-MAT-002 COMPLETE; PIL-BE-EST-001 COMPLETE; PIL-BE-MAT-003 COMPLETE; PIL-BE-IMP-001 COMPLETE; PIL-BE-IMP-002 COMPLETE; PIL-BE-REQ-001 COMPLETE; `PIL-BE-REQ-002/003/004/005/007/008` COMPLETE; `PIL-BE-AUT-001/003/004/005/006` COMPLETE; `PIL-BE-ATE-001/003/006` COMPLETE
-**Current branch:** `main` (updated after merge of PR #25 on 2026-05-01)
+**Date:** 2026-05-02
+**Status:** Django materialization COMPLETE; PIL-BE-ACE foundation COMPLETE through `PIL-BE-ACE-005`; PIL-BE-MAT-001 COMPLETE; PIL-BE-MAT-002 COMPLETE; PIL-BE-EST-001 COMPLETE; PIL-BE-MAT-003 COMPLETE; PIL-BE-IMP-001 COMPLETE; PIL-BE-IMP-002 COMPLETE; PIL-BE-REQ-001 COMPLETE; `PIL-BE-REQ-002/003/004/005/007/008` COMPLETE; `PIL-BE-AUT-001/003/004/005/006` COMPLETE; `PIL-BE-ATE-001/003/004/006` COMPLETE in PR #26 branch `feat/atendimento-parcial`
+**Current branch context:** PR #26 branch `feat/atendimento-parcial` pushed through commit `200777a`; main was last noted updated after merge of PR #25 on 2026-05-01.
 
 ## Current Baseline
 
@@ -11,9 +11,9 @@ The separate materialization backlog was removed after completion.
 Functional foundation complete:
 - `apps/users/`: custom user by `matricula_funcional`, setores, papéis, centralized policies, and third-party request creation support from `PIL-BE-ACE-005`
 - `apps/materials/`: `GrupoMaterial`, `SubgrupoMaterial`, `Material`, material list/search API, SCPI CSV parser, and import orchestration services
-- `apps/stock/`: `EstoqueMaterial`, immutable `MovimentacaoEstoque`, initial-balance registration service, reservation movement on requisition authorization, and full-fulfillment stock exit movement
+- `apps/stock/`: `EstoqueMaterial`, immutable `MovimentacaoEstoque`, initial-balance registration service, reservation movement on requisition authorization, fulfillment stock exit movement, and reserve-release movement for undelivered partial-fulfillment quantities
 - `apps/core/`: DRF/OpenAPI infrastructure, pagination, and standard error envelope
-- `apps/requisitions/`: draft creation, submit/return/discard/cancel before authorization, pending-approvals queue, authorize/refuse actions, pending-fulfillments queue, full fulfillment action, declarative transition applier, timeline events, authorization reservation side effect, and full-fulfillment stock exit side effect
+- `apps/requisitions/`: draft creation, submit/return/discard/cancel before authorization, pending-approvals queue, authorize/refuse actions, pending-fulfillments queue, full and partial fulfillment actions through the unified `atender_requisicao()` service entry point, declarative transition applier, timeline events, authorization reservation side effect, fulfillment stock exit side effect, and partial-fulfillment reserve-release side effect
 
 Technical baseline:
 - Django 6.0.4 + DRF + drf-spectacular + django-filter
@@ -34,9 +34,10 @@ Technical baseline:
 - `saldo_disponivel = saldo_fisico - saldo_reservado`
 - Initial SCPI stock load creates immutable `SALDO_INICIAL` stock movements
 - `MovimentacaoEstoque` remains immutable; `bulk_update`, queryset `update/delete`, instance `save` overwrite, and now `bulk_create` bypasses are blocked or validated through model invariants
-- `RESERVA_POR_AUTORIZACAO` and `SAIDA_POR_ATENDIMENTO` are the current operational stock movements and must keep `requisicao`, `item_requisicao`, and `material` coherent through `clean()/full_clean()` plus ORM regression coverage
+- `RESERVA_POR_AUTORIZACAO`, `SAIDA_POR_ATENDIMENTO`, and `LIBERACAO_RESERVA_ATENDIMENTO` are the current operational stock movements and must keep `requisicao`, `item_requisicao`, and `material` coherent through `clean()/full_clean()` plus ORM regression coverage
 - Reservation write path rejects `quantidade <= 0` and revalidates `quantidade <= saldo_disponivel` under lock in the stock service itself
-- Full-fulfillment stock exit rejects `quantidade <= 0`, revalidates both `saldo_fisico` and `saldo_reservado` under lock, decrements both balances, and records immutable `SAIDA_POR_ATENDIMENTO`
+- Fulfillment stock exit rejects `quantidade <= 0`, revalidates both `saldo_fisico` and `saldo_reservado` under lock, decrements both balances, and records immutable `SAIDA_POR_ATENDIMENTO`
+- Partial-fulfillment reserve release rejects `quantidade <= 0`, requires an active transaction when using `estoque_travado`, validates that the resulting reserved balance does not exceed physical balance, decrements only `saldo_reservado`, and records immutable `LIBERACAO_RESERVA_ATENDIMENTO`
 - Requisition public numbers start only on first submission for authorization, never on draft creation
 - Requisition public numbering is annual and concurrency-safe
 - A returned-to-draft requisition keeps its existing `numero_publico`
@@ -47,6 +48,8 @@ Technical baseline:
 - Refusal requires non-blank trimmed `motivo_recusa`, records `RECUSA`, and must not reserve stock
 - Pending-fulfillments listing is global for Almoxarifado roles: `matriz-permissoes.md` says Almoxarifado sees requests from all sectors and the fulfillment queue
 - Full fulfillment transitions `autorizada` to `atendida`, sets `quantidade_entregue = quantidade_autorizada` for positive authorized items, records `ATENDIMENTO`, consumes reservation, decrements physical stock, and stores `responsavel_atendimento`, `data_finalizacao`, `retirante_fisico`, and `observacao_atendimento`
+- Partial fulfillment transitions `autorizada` to `atendida_parcialmente`, requires all authorized items in the payload, requires at least one item delivered with quantity greater than zero, requires justification for each item delivered below authorized quantity, records `ATENDIMENTO_PARCIAL`, consumes/decrements delivered quantities, and releases reservations for undelivered quantities
+- Fulfillment payload-shape/coherence problems are `400 validation_error`; domain-rule failures such as all quantities zero or quantity above authorized remain `409 domain_conflict`
 - Fulfillment permission checks run in services against the `select_for_update()`-locked requisition via object-aware policy `pode_atender_requisicao`
 - Pre-authorization discard is physical only for never-formalized drafts; pre-authorization cancel is logical
 
@@ -61,16 +64,17 @@ Technical baseline:
   - `rtk pytest tests/requisitions/test_api.py tests/requisitions/test_services.py tests/stock/test_services_estoque.py`
   - `rtk pytest tests/test_api_schema.py::TestOpenAPISchema::test_schema_contem_rotas_de_requisicoes`
   - `rtk ruff check` for touched requisitions/stock files
-- The repository now contains API, service, stock, PostgreSQL-concurrency, and OpenAPI tests covering the delivered requisition authorization and full-fulfillment endpoints and invariants
+- The repository now contains API, service, stock, PostgreSQL-concurrency, and OpenAPI tests covering the delivered requisition authorization, full-fulfillment, and partial-fulfillment endpoints and invariants
+- PR #26 local validation passed after review fixes with `rtk make test` collecting 292 tests; focused requisitions/stock validation passed with `rtk proxy pytest tests/stock/test_services_estoque.py tests/requisitions/test_services.py tests/requisitions/test_api.py -q` collecting 84 tests
 
 ## Recommended Next PR Sequence
 
-1. Partial fulfillment and zero-delivery handling
-   - Build on top of the full-fulfillment write path; require per-item justification and at least one delivered item greater than zero
-2. Reservation release for undelivered quantities and authorized-request cancellation
-   - Needed to close the loop once stock is reserved but later partially served, canceled, or otherwise reversed
+1. Finish `PIL-BE-ATE-005` around the operational path when no physical stock can be delivered for any item
+   - Partial fulfillment already rejects all-zero delivery with `409 domain_conflict`; the remaining slice should guide/codify the cancellation-or-operational-resolution path
+2. Authorized-request cancellation with reservation release
+   - Needed to close the loop once stock is reserved but later canceled before fulfillment; reuse the PR #26 lock order and `LIBERACAO_RESERVA_ATENDIMENTO` semantics or introduce an explicit cancellation-release movement if the domain needs a separate type
 3. Return / estorno / exceptional stock-exit flows
-   - Must define one canonical lock acquisition order across requisition, items, and stock before adding new stock writers
+   - Must reuse one canonical lock acquisition order across requisition, items, and stock before adding new stock writers
 4. Post-authorization/post-fulfillment notifications and ancillary side effects
    - Should remain post-commit side effects, never source of truth
 
