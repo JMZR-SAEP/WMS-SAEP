@@ -1296,6 +1296,45 @@ class TestRequisicaoAPI:
             quantidade=Decimal("3"),
         ).exists()
 
+    def test_cancel_autorizada_sem_saldo_permite_criador(self):
+        setor = self._criar_setor("Cancelamento Criador", "90061")
+        solicitante = self._criar_usuario("10077", "Solicitante Criador", setor=setor)
+        material = self._criar_material_com_estoque(
+            "001.001.062",
+            saldo_fisico=Decimal("0"),
+            saldo_reservado=Decimal("2"),
+        )
+        requisicao = Requisicao.objects.create(
+            criador=solicitante,
+            beneficiario=solicitante,
+            setor_beneficiario=setor,
+            numero_publico="REQ-2026-000520",
+            status=StatusRequisicao.AUTORIZADA,
+            data_envio_autorizacao="2026-04-30T10:00:00Z",
+            data_autorizacao_ou_recusa="2026-04-30T11:00:00Z",
+        )
+        requisicao.itens.create(
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal("2"),
+            quantidade_autorizada=Decimal("2"),
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=solicitante)
+        response = client.post(
+            reverse("requisicao-cancel", args=[requisicao.id]),
+            {"motivo_cancelamento": "Sem saldo fisico para retirada"},
+            format="json",
+        )
+
+        assert response.status_code == 200
+        assert response.data["status"] == StatusRequisicao.CANCELADA
+        requisicao.refresh_from_db()
+        material.estoque.refresh_from_db()
+        assert requisicao.responsavel_atendimento_id == solicitante.id
+        assert material.estoque.saldo_reservado == Decimal("0")
+
     def test_cancel_autorizada_sem_saldo_exige_motivo(self):
         setor = self._criar_setor("Cancelamento Motivo", "90056")
         solicitante = self._criar_usuario("10070", "Solicitante Motivo", setor=setor)
@@ -1389,6 +1428,7 @@ class TestRequisicaoAPI:
     def test_cancel_autorizada_sem_saldo_bloqueia_usuario_sem_permissao(self):
         setor = self._criar_setor("Cancelamento Permissao", "90058")
         solicitante = self._criar_usuario("10074", "Solicitante Permissao", setor=setor)
+        chefe_setor = setor.chefe_responsavel
         material = self._criar_material_com_estoque(
             "001.001.060",
             saldo_fisico=Decimal("0"),
@@ -1411,7 +1451,7 @@ class TestRequisicaoAPI:
         )
 
         client = APIClient()
-        client.force_authenticate(user=solicitante)
+        client.force_authenticate(user=chefe_setor)
         response = client.post(
             reverse("requisicao-cancel", args=[requisicao.id]),
             {"motivo_cancelamento": "Sem saldo físico"},

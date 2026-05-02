@@ -64,6 +64,7 @@ class RequisicaoRefuseInputSerializer(serializers.Serializer):
 
 
 class RequisicaoCancelInputSerializer(serializers.Serializer):
+    # O requisito de motivo nao e global: so o cancelamento pos-autorizacao exige texto nao vazio.
     motivo_cancelamento = serializers.CharField(required=False, allow_blank=True, default="")
 
 

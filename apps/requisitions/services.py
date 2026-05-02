@@ -19,6 +19,7 @@ from apps.requisitions.models import (
 from apps.requisitions.policies import (
     pode_atender_requisicao,
     pode_autorizar_requisicao,
+    pode_cancelar_autorizada,
     pode_manipular_pre_autorizacao,
     queryset_fila_atendimento,
     queryset_fila_autorizacao,
@@ -184,6 +185,19 @@ TRANSICOES_REQUISICAO: dict[str, dict[str, object]] = {
             "status",
         ),
         "side_effects": (_side_effect_liberar_reservas_cancelamento,),
+    },
+    "cancelar_pre_autorizacao": {
+        "from_status": (
+            StatusRequisicao.RASCUNHO,
+            StatusRequisicao.AGUARDANDO_AUTORIZACAO,
+        ),
+        "to_status": StatusRequisicao.CANCELADA,
+        "timeline_event_type": TipoEvento.CANCELAMENTO,
+        "audit_fields_to_set": (
+            "data_finalizacao",
+            "status",
+        ),
+        "side_effects": (),
     },
 }
 
@@ -639,15 +653,14 @@ def _cancelar_pre_autorizacao(*, requisicao: Requisicao, ator: User) -> Requisic
             details={"status_atual": requisicao.status},
         )
 
-    requisicao.status = StatusRequisicao.CANCELADA
-    requisicao.data_finalizacao = timezone.now()
-    requisicao.save(update_fields=["status", "data_finalizacao", "updated_at"])
-    EventoTimeline.objects.create(
+    return _apply_requisicao_transition(
         requisicao=requisicao,
-        tipo_evento=TipoEvento.CANCELAMENTO,
-        usuario=ator,
+        transition_name="cancelar_pre_autorizacao",
+        actor=ator,
+        payload={
+            "data_finalizacao": timezone.now(),
+        },
     )
-    return requisicao
 
 
 def _cancelar_autorizada_sem_saldo(
@@ -657,7 +670,7 @@ def _cancelar_autorizada_sem_saldo(
     if not motivo_cancelamento:
         raise ValidationError({"motivo_cancelamento": ["Motivo do cancelamento é obrigatório."]})
 
-    if not pode_atender_requisicao(ator, requisicao):
+    if not pode_cancelar_autorizada(ator, requisicao):
         raise PermissionDenied("Usuário sem permissão para cancelar esta requisição.")
 
     if requisicao.status != StatusRequisicao.AUTORIZADA:
@@ -711,13 +724,13 @@ def cancelar_requisicao(
     with transaction.atomic():
         requisicao = _recarregar_requisicao_para_atendimento(requisicao)
         if requisicao.status == StatusRequisicao.AUTORIZADA:
-            _cancelar_autorizada_sem_saldo(
+            requisicao = _cancelar_autorizada_sem_saldo(
                 requisicao=requisicao,
                 ator=ator,
                 motivo_cancelamento=motivo_cancelamento,
             )
         else:
-            _cancelar_pre_autorizacao(requisicao=requisicao, ator=ator)
+            requisicao = _cancelar_pre_autorizacao(requisicao=requisicao, ator=ator)
 
     return (
         Requisicao.objects.select_related(

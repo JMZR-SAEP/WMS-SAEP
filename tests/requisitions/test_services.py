@@ -911,6 +911,35 @@ class TestAtendimentoRequisicaoService:
             quantidade=Decimal("3"),
         ).exists()
 
+    def test_cancelamento_autorizada_sem_saldo_permite_criador(self):
+        setor = self._criar_setor("Cancelamento Criador", "92041")
+        requisitante = self._criar_usuario("12045", "Solicitante Cancelamento", setor=setor)
+        material = self._criar_material_com_estoque(
+            "001.003.043",
+            saldo_fisico=Decimal("0"),
+            saldo_reservado=Decimal("2"),
+        )
+        requisicao, item = self._criar_requisicao_autorizada(
+            criador=requisitante,
+            beneficiario=requisitante,
+            numero_publico="REQ-2026-200043",
+            material=material,
+            quantidade_autorizada=Decimal("2"),
+        )
+
+        cancelada = cancelar_requisicao(
+            requisicao=requisicao,
+            ator=requisitante,
+            motivo_cancelamento="Sem saldo fisico para retirada",
+        )
+
+        material.estoque.refresh_from_db()
+        item.refresh_from_db()
+        assert cancelada.status == StatusRequisicao.CANCELADA
+        assert cancelada.responsavel_atendimento_id == requisitante.id
+        assert material.estoque.saldo_fisico == Decimal("0")
+        assert material.estoque.saldo_reservado == Decimal("0")
+
     def test_cancelamento_autorizada_sem_saldo_bloqueia_se_ainda_ha_saldo_fisico(self):
         setor = self._criar_setor("Cancelamento Com Saldo", "92042")
         requisitante = self._criar_usuario("12042", "Solicitante Com Saldo", setor=setor)
@@ -949,7 +978,7 @@ class TestAtendimentoRequisicaoService:
         assert material.estoque.saldo_reservado == Decimal("3")
         assert MovimentacaoEstoque.objects.count() == 0
 
-    def test_cancelamento_autorizada_sem_saldo_exige_motivo_e_permissao_operacional(self):
+    def test_cancelamento_autorizada_sem_saldo_exige_motivo(self):
         setor = self._criar_setor("Cancelamento Permissao", "92044")
         solicitante = self._criar_usuario("12044", "Solicitante Permissao", setor=setor)
         material = self._criar_material_com_estoque(
@@ -971,10 +1000,28 @@ class TestAtendimentoRequisicaoService:
                 ator=solicitante,
                 motivo_cancelamento="   ",
             )
+
+    def test_cancelamento_autorizada_sem_saldo_bloqueia_usuario_visivel_sem_permissao(self):
+        setor = self._criar_setor("Cancelamento Sem Permissao", "92046")
+        solicitante = self._criar_usuario("12046", "Solicitante Sem Permissao", setor=setor)
+        chefe_setor = setor.chefe_responsavel
+        material = self._criar_material_com_estoque(
+            "001.003.044",
+            saldo_fisico=Decimal("0"),
+            saldo_reservado=Decimal("2"),
+        )
+        requisicao, _ = self._criar_requisicao_autorizada(
+            criador=solicitante,
+            beneficiario=solicitante,
+            numero_publico="REQ-2026-200044",
+            material=material,
+            quantidade_autorizada=Decimal("2"),
+        )
+
         with pytest.raises(PermissionDenied):
             cancelar_requisicao(
                 requisicao=requisicao,
-                ator=solicitante,
+                ator=chefe_setor,
                 motivo_cancelamento="Sem saldo físico",
             )
 
@@ -1213,6 +1260,66 @@ class TestAtendimentoRequisicaoService:
             MovimentacaoEstoque.objects.filter(
                 requisicao=requisicao,
                 tipo=TipoMovimentacao.SAIDA_POR_ATENDIMENTO,
+            ).count()
+            == 1
+        )
+
+    @pytest.mark.postgres
+    def test_cancelamentos_concorrentes_nao_duplicam_liberacao_reserva(self):
+        setor = self._criar_setor("Cancelamento Concorrente", "92047")
+        requisitante = self._criar_usuario("12047", "Solicitante Concorrente", setor=setor)
+        material = self._criar_material_com_estoque(
+            "001.003.045",
+            saldo_fisico=Decimal("0"),
+            saldo_reservado=Decimal("4"),
+        )
+        requisicao, item = self._criar_requisicao_autorizada(
+            criador=requisitante,
+            beneficiario=requisitante,
+            numero_publico="REQ-2026-200045",
+            material=material,
+            quantidade_autorizada=Decimal("4"),
+        )
+
+        barrier = Barrier(2)
+
+        def cancelar(req_id: int):
+            close_old_connections()
+            try:
+                barrier.wait()
+                requisicao_cancelamento = Requisicao.objects.get(pk=req_id)
+                cancelar_requisicao(
+                    requisicao=requisicao_cancelamento,
+                    ator=requisitante,
+                    motivo_cancelamento="Sem saldo fisico",
+                )
+                return "ok"
+            except Exception as exc:  # noqa: BLE001
+                return type(exc).__name__
+            finally:
+                close_old_connections()
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            resultado_a = executor.submit(cancelar, requisicao.id)
+            resultado_b = executor.submit(cancelar, requisicao.id)
+
+        resultados = {resultado_a.result(), resultado_b.result()}
+        close_old_connections()
+
+        requisicao.refresh_from_db()
+        item.refresh_from_db()
+        material.estoque.refresh_from_db()
+
+        assert resultados == {"ok", "DomainConflict"}
+        assert requisicao.status == StatusRequisicao.CANCELADA
+        assert material.estoque.saldo_fisico == Decimal("0")
+        assert material.estoque.saldo_reservado == Decimal("0")
+        assert (
+            MovimentacaoEstoque.objects.filter(
+                requisicao=requisicao,
+                item_requisicao=item,
+                tipo=TipoMovimentacao.LIBERACAO_RESERVA_ATENDIMENTO,
+                quantidade=Decimal("4"),
             ).count()
             == 1
         )
