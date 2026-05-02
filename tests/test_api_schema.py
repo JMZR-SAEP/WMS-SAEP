@@ -3,6 +3,7 @@
 import json
 
 import pytest
+from django.test import override_settings
 from django.urls import reverse
 from rest_framework.test import APIClient
 
@@ -27,6 +28,19 @@ class TestOpenAPISchema:
         return usuario
 
     @staticmethod
+    def _criar_usuario_nao_staff():
+        usuario = User.objects.create(
+            matricula_funcional="990002",
+            nome_completo="Usuario Schema",
+            is_active=True,
+            is_staff=False,
+        )
+        setor = Setor.objects.create(nome="Operacao", chefe_responsavel=usuario)
+        usuario.setor = setor
+        usuario.save()
+        return usuario
+
+    @staticmethod
     def _schema_json(response):
         return json.loads(response.content.decode())
 
@@ -38,10 +52,20 @@ class TestOpenAPISchema:
         assert response.status_code == 200
         return self._schema_json(response)
 
+    @override_settings(DEBUG=False)
     def test_schema_endpoint_requires_staff(self):
         """Verify /api/v1/schema/ requires staff outside DEBUG override."""
         client = APIClient()
         response = client.get(reverse("schema"))
+        assert response.status_code == 403
+
+    @override_settings(DEBUG=False)
+    def test_schema_endpoint_non_staff_is_denied(self):
+        """Verify authenticated non-staff users cannot access /api/v1/schema/."""
+        usuario = self._criar_usuario_nao_staff()
+        client = APIClient()
+        client.force_authenticate(user=usuario)
+        response = client.get(reverse("schema"), HTTP_ACCEPT="application/vnd.oai.openapi+json")
         assert response.status_code == 403
 
     def test_schema_endpoint_staff_can_access(self):
@@ -52,9 +76,19 @@ class TestOpenAPISchema:
         response = client.get(reverse("schema"), HTTP_ACCEPT="application/vnd.oai.openapi+json")
         assert response.status_code == 200
 
+    @override_settings(DEBUG=False)
     def test_swagger_ui_requires_staff(self):
         """Verify Swagger UI endpoint requires staff outside DEBUG override."""
         client = APIClient()
+        response = client.get(reverse("swagger-ui"))
+        assert response.status_code == 403
+
+    @override_settings(DEBUG=False)
+    def test_swagger_ui_non_staff_is_denied(self):
+        """Verify authenticated non-staff users cannot access Swagger UI."""
+        usuario = self._criar_usuario_nao_staff()
+        client = APIClient()
+        client.force_authenticate(user=usuario)
         response = client.get(reverse("swagger-ui"))
         assert response.status_code == 403
 
