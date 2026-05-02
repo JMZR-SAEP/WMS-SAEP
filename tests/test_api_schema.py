@@ -1,27 +1,54 @@
 """Smoke tests for DRF/OpenAPI configuration."""
 
+import pytest
 from django.urls import reverse
 from rest_framework.test import APIClient
 
+from apps.users.models import Setor, User
 
+
+@pytest.mark.django_db
 class TestOpenAPISchema:
     """Test OpenAPI schema generation and accessibility."""
 
-    def test_schema_endpoint_is_accessible(self):
-        """Verify /api/v1/schema/ endpoint is accessible."""
+    @staticmethod
+    def _criar_staff():
+        usuario = User.objects.create(
+            matricula_funcional="990001",
+            nome_completo="Staff Schema",
+            is_active=True,
+            is_staff=True,
+        )
+        setor = Setor.objects.create(nome="Tecnologia", chefe_responsavel=usuario)
+        usuario.setor = setor
+        usuario.save()
+        return usuario
+
+    def test_schema_endpoint_requires_staff(self):
+        """Verify /api/v1/schema/ requires staff outside DEBUG override."""
         client = APIClient()
+        response = client.get(reverse("schema"))
+        assert response.status_code == 403
+
+    def test_schema_endpoint_staff_can_access(self):
+        """Verify staff users can access /api/v1/schema/."""
+        usuario = self._criar_staff()
+        client = APIClient()
+        client.force_authenticate(user=usuario)
         response = client.get(reverse("schema"))
         assert response.status_code == 200
 
-    def test_swagger_ui_is_accessible(self):
-        """Verify Swagger UI endpoint is accessible."""
+    def test_swagger_ui_requires_staff(self):
+        """Verify Swagger UI endpoint requires staff outside DEBUG override."""
         client = APIClient()
         response = client.get(reverse("swagger-ui"))
-        assert response.status_code == 200
+        assert response.status_code == 403
 
-    def test_swagger_ui_returns_html(self):
-        """Verify Swagger UI returns HTML content."""
+    def test_swagger_ui_returns_html_for_staff(self):
+        """Verify Swagger UI returns HTML content for staff users."""
+        usuario = self._criar_staff()
         client = APIClient()
+        client.force_authenticate(user=usuario)
         response = client.get(reverse("swagger-ui"))
         assert response.status_code == 200
         assert b"<!DOCTYPE html>" in response.content or b"<!DOCTYPE" in response.content
@@ -54,11 +81,14 @@ class TestOpenAPISchema:
 
     def test_schema_contem_rotas_de_requisicoes(self):
         """Verify requisitions routes are exposed in OpenAPI."""
+        usuario = self._criar_staff()
         client = APIClient()
+        client.force_authenticate(user=usuario)
         response = client.get(reverse("schema"))
 
         assert response.status_code == 200
         content = response.content.decode()
+        assert "/api/v1/materials/{id}/" in content
         assert "/api/v1/requisitions/" in content
         assert "/api/v1/requisitions/{id}/submit/" in content
         assert "/api/v1/requisitions/{id}/return-to-draft/" in content
@@ -69,6 +99,7 @@ class TestOpenAPISchema:
         assert "/api/v1/requisitions/{id}/fulfill/" in content
         assert "/api/v1/requisitions/pending-approvals/" in content
         assert "/api/v1/requisitions/pending-fulfillments/" in content
+        assert "materials_retrieve" in content
         assert "RequisicaoItemFulfillInput" in content
         assert "quantidade_entregue" in content
         assert "justificativa_atendimento_parcial" in content

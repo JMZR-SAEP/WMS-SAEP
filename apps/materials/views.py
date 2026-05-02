@@ -1,6 +1,6 @@
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.openapi import OpenApiParameter
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import extend_schema, extend_schema_view
 from rest_framework import filters
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.viewsets import ReadOnlyModelViewSet
@@ -14,6 +14,18 @@ from apps.materials.serializers import (
 )
 
 
+@extend_schema_view(
+    retrieve=extend_schema(
+        operation_id="materials_retrieve",
+        tags=["materials"],
+        description="Detalha um material ativo pelo identificador, incluindo o saldo disponível calculado.",
+        responses={
+            200: MaterialListOutputSerializer(),
+            403: ErrorResponseSerializer(),
+            404: ErrorResponseSerializer(),
+        },
+    ),
+)
 class MaterialViewSet(ReadOnlyModelViewSet):
     """API de busca de materiais para seleção em requisições.
 

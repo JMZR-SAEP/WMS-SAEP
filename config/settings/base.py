@@ -116,7 +116,7 @@ SPECTACULAR_SETTINGS = {
     "TITLE": "WMS-SAEP API",
     "DESCRIPTION": "API do Sistema de Requisição de Materiais",
     "VERSION": "0.1.0",
-    "SERVE_PERMISSIONS": ["rest_framework.permissions.IsAuthenticated"],
+    "SERVE_PERMISSIONS": ["rest_framework.permissions.IsAdminUser"],
     "CONTACT": {"email": "contato@saep.local"},
 }
 
