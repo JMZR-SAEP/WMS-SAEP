@@ -5,6 +5,7 @@ class ErrorDetailSerializer(serializers.Serializer):
     code = serializers.CharField()
     message = serializers.CharField()
     details = serializers.JSONField(required=False, allow_null=True)
+    trace_id = serializers.CharField(required=False, allow_null=True)
 
 
 class ErrorResponseSerializer(serializers.Serializer):
