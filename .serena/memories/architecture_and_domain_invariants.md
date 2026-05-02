@@ -20,17 +20,19 @@ API response invariant:
 
 Stock invariants:
 - `MovimentacaoEstoque` is immutable. Do not update/delete/overwrite movements; corrections must be modeled as new movements when new movement types are introduced.
-- The currently implemented movement types are `SALDO_INICIAL` for SCPI bootstrap load, `RESERVA_POR_AUTORIZACAO` for approved requisition reservation, and `SAIDA_POR_ATENDIMENTO` for full warehouse fulfillment.
+- The currently implemented movement types are `SALDO_INICIAL` for SCPI bootstrap load, `RESERVA_POR_AUTORIZACAO` for approved requisition reservation, `SAIDA_POR_ATENDIMENTO` for delivered fulfillment quantities, and `LIBERACAO_RESERVA_ATENDIMENTO` for authorized quantities not delivered during partial fulfillment.
 - Any operation altering stock uses `transaction.atomic()` and row locking such as `select_for_update()` on stock rows.
 - Keep `EstoqueMaterial.saldo_fisico`, `saldo_reservado`, `saldo_disponivel`, and movement balances consistent.
 - Avoid double increment/decrement, unauthorized negative stock, race conditions, and movement/balance divergence.
 - The stock reservation write path must reject `quantidade <= 0` and must revalidate available balance inside the locked stock service itself, even if the caller already checked before.
-- The full-fulfillment stock exit write path must reject `quantidade <= 0`, revalidate both `saldo_fisico` and `saldo_reservado` after locking stock, decrement both balances, and record immutable `SAIDA_POR_ATENDIMENTO`.
+- The fulfillment stock exit write path must reject `quantidade <= 0`, revalidate both `saldo_fisico` and `saldo_reservado` after locking stock, decrement both balances, and record immutable `SAIDA_POR_ATENDIMENTO`.
+- The fulfillment reserve-release write path must reject `quantidade <= 0`, revalidate reserved balance under an active transaction, preserve `saldo_fisico`, prevent `saldo_fisico < saldo_reservado_posterior`, decrement only `saldo_reservado`, and record immutable `LIBERACAO_RESERVA_ATENDIMENTO`.
+- Stock service shortcuts that receive an already locked `EstoqueMaterial` through `estoque_travado` must only run inside an active `transaction.atomic()` block; callers outside an orchestrating transaction must let the stock service acquire the lock itself.
 - `MovimentacaoEstoque.save()` calls `full_clean()`, and manager-level bulk paths must not bypass critical invariants; `bulk_create()` is now expected to validate each object before insert.
 - Current cross-field consistency between `requisicao`, `item_requisicao`, and `material` for operational stock movements is enforced at the ORM/model level with `clean()/full_clean()` plus regression tests; if durable DB-level enforcement becomes required later, add it explicitly and document the migration decision.
 
 Technical debt to revisit before adding new stock writers:
-- The current fulfillment path locks `Requisicao` / `ItemRequisicao` before `EstoqueMaterial`. This is acceptable while it is the only operational stock-exit writer, but future flows such as exceptional exits, reversals, returns, reservation release, or partial fulfillment must define and reuse one canonical lock acquisition order across requisitions, items, and stock rows to avoid deadlocks. Add PostgreSQL concurrency coverage when introducing another writer that can touch the same stock rows.
+- PR #26 established the current fulfillment lock order: lock `Requisicao`, then authorized `ItemRequisicao` rows ordered by `material_id, id`, then all related `EstoqueMaterial` rows in deterministic `material_id` order before calling stock writers with `estoque_travado`. Future flows such as exceptional exits, reversals, returns, or cancellation release must reuse a canonical lock order and add PostgreSQL concurrency coverage rather than introducing a parallel sequence.
 
 Request/requisition invariants:
 - `Requisicao.setor_beneficiario` is a historical snapshot and must not be recalculated from `beneficiario.setor` after creation.
@@ -44,7 +46,9 @@ Request/requisition invariants:
 - Authorization records either `AUTORIZACAO_TOTAL` or `AUTORIZACAO_PARCIAL`, persists authorized quantities on items, and reserves stock without changing physical balance.
 - Refusal requires non-blank trimmed `motivo_recusa`, records `RECUSA`, and must not reserve stock.
 - The fulfillment queue is global for Almoxarifado roles by design: `docs/design-acesso-rapido/matriz-permissoes.md` says Almoxarifado sees requests from all sectors and the fulfillment queue.
-- Full fulfillment is currently full-only: it transitions `autorizada` to `atendida`, sets delivered quantity equal to authorized quantity for positive authorized items, records `ATENDIMENTO`, consumes reservation, decrements physical stock, and stores fulfillment metadata.
+- Full fulfillment transitions `autorizada` to `atendida`, sets delivered quantity equal to authorized quantity for positive authorized items, records `ATENDIMENTO`, consumes reservation, decrements physical stock, and stores fulfillment metadata.
+- Partial fulfillment transitions `autorizada` to `atendida_parcialmente`, requires the payload to cover every authorized item exactly once, requires a non-blank justification for every item delivered below the authorized quantity including zero, requires at least one delivered quantity greater than zero, records `ATENDIMENTO_PARCIAL`, decrements stock only for delivered quantities, and releases the reservation for undelivered quantities.
+- Fulfillment payload coherence errors such as duplicated, unknown, or omitted `item_id` are `ValidationError` / HTTP `400 validation_error`; domain state/rule conflicts such as all delivered quantities equal to zero, delivery above authorized quantity, insufficient physical/reserved stock, or invalid status remain `409 domain_conflict`.
 - Fulfillment writes must revalidate object-aware permission in services against the `select_for_update()`-locked requisition through `pode_atender_requisicao`; global role checks alone are insufficient for writes.
 
 Notifications:
