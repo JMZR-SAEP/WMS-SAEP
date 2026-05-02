@@ -215,6 +215,22 @@ class TestRequisicaoAPI:
         assert response.status_code == 409
         assert response.data["error"]["code"] == "domain_conflict"
 
+    def test_criacao_com_beneficiario_inexistente_retorna_not_found(self):
+        setor = self._criar_setor("Cadastro", "900071")
+        usuario = self._criar_usuario("100081", "Solicitante Cadastro", setor=setor)
+        material = self._criar_material_com_estoque("001.001.051")
+
+        client = APIClient()
+        client.force_authenticate(user=usuario)
+        response = client.post(
+            reverse("requisicao-list"),
+            self._payload_requisicao(beneficiario_id=999999, material_id=material.id),
+            format="json",
+        )
+
+        assert response.status_code == 404
+        assert response.data["error"]["code"] == "not_found"
+
     def test_submit_gera_numero_publico_e_entrada_na_fila(self):
         setor = self._criar_setor("Planejamento", "90008")
         usuario = self._criar_usuario("10009", "Solicitante Planejamento", setor=setor)

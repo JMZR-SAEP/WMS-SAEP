@@ -62,6 +62,7 @@ class RequisicaoViewSet(GenericViewSet):
             201: RequisicaoDetailOutputSerializer(),
             400: ErrorResponseSerializer(),
             403: ErrorResponseSerializer(),
+            404: ErrorResponseSerializer(),
             409: ErrorResponseSerializer(),
         },
     )

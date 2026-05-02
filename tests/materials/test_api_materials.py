@@ -1,4 +1,4 @@
-"""Tests for material list API endpoint."""
+"""Tests for materials API endpoints."""
 
 from decimal import Decimal
 
@@ -52,6 +52,7 @@ class TestMaterialListAPI:
         client = APIClient()
         response = client.get(reverse("material-list"))
         assert response.status_code == 403
+        assert response.data["error"]["code"] == "not_authenticated"
 
     def test_lista_materiais_retorna_apenas_ativos(self):
         """Material inativo não deve aparecer na lista."""
@@ -260,3 +261,45 @@ class TestMaterialListAPI:
         assert response.data["page_size"] == 5
         assert response.data["total_pages"] == 2
         assert len(response.data["results"]) == 5
+
+    def test_retrieve_material_por_id(self):
+        """Busca de detalhe deve retornar o material ativo solicitado."""
+        usuario = self._criar_usuario()
+        subgrupo = self._criar_subgrupo()
+        material = self._criar_material(subgrupo)
+        EstoqueMaterial.objects.create(
+            material=material,
+            saldo_fisico=100,
+            saldo_reservado=25,
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=usuario)
+        response = client.get(reverse("material-detail", args=[material.id]))
+
+        assert response.status_code == 200
+        assert response.data["id"] == material.id
+        assert response.data["codigo_completo"] == material.codigo_completo
+        assert Decimal(response.data["saldo_disponivel"]) == Decimal("75")
+
+    def test_retrieve_material_nao_encontrado(self):
+        """ID inexistente deve retornar 404 no envelope padronizado."""
+        usuario = self._criar_usuario()
+
+        client = APIClient()
+        client.force_authenticate(user=usuario)
+        response = client.get(reverse("material-detail", args=[999999]))
+
+        assert response.status_code == 404
+        assert response.data["error"]["code"] == "not_found"
+
+    def test_retrieve_material_requer_autenticacao(self):
+        """Sem autenticação o detalhe também deve retornar 403."""
+        subgrupo = self._criar_subgrupo()
+        material = self._criar_material(subgrupo)
+
+        client = APIClient()
+        response = client.get(reverse("material-detail", args=[material.id]))
+
+        assert response.status_code == 403
+        assert response.data["error"]["code"] == "not_authenticated"
