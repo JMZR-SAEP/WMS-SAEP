@@ -1,7 +1,10 @@
+from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal
+from threading import Barrier
 
 import pytest
 from django.core.exceptions import ValidationError
+from django.db import close_old_connections
 
 from apps.core.api.exceptions import DomainConflict
 from apps.materials.models import GrupoMaterial, Material, SubgrupoMaterial
@@ -633,3 +636,229 @@ class TestRegistrarSaldoInicial:
         assert estoque.saldo_fisico == Decimal("3")
         assert estoque.saldo_reservado == Decimal("5")
         assert MovimentacaoEstoque.objects.count() == 0
+
+    @pytest.mark.django_db(transaction=True)
+    @pytest.mark.postgres
+    def test_registrar_reserva_por_autorizacao_concorrente_nao_duplica_saldo_reservado(self):
+        chefe = User.objects.create(
+            matricula_funcional="99010",
+            nome_completo="Chefe Estoque 10",
+            papel=PapelChoices.CHEFE_SETOR,
+            is_active=True,
+        )
+        setor = Setor.objects.create(nome="Setor Estoque 10", chefe_responsavel=chefe)
+        chefe.setor = setor
+        chefe.save(update_fields=["setor"])
+        material = self._criar_material()
+        estoque = EstoqueMaterial.objects.create(
+            material=material,
+            saldo_fisico=Decimal("5"),
+            saldo_reservado=Decimal("0"),
+        )
+        requisicao_a = Requisicao.objects.create(
+            criador=chefe,
+            beneficiario=chefe,
+            setor_beneficiario=setor,
+            status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
+        )
+        requisicao_b = Requisicao.objects.create(
+            criador=chefe,
+            beneficiario=chefe,
+            setor_beneficiario=setor,
+            status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
+        )
+        item_a = ItemRequisicao.objects.create(
+            requisicao=requisicao_a,
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal("5"),
+            quantidade_autorizada=Decimal("5"),
+        )
+        item_b = ItemRequisicao.objects.create(
+            requisicao=requisicao_b,
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal("5"),
+            quantidade_autorizada=Decimal("5"),
+        )
+
+        barrier = Barrier(2)
+
+        def reservar(requisicao_id: int, item_id: int):
+            close_old_connections()
+            try:
+                barrier.wait()
+                registrar_reserva_por_autorizacao(
+                    requisicao=Requisicao.objects.get(pk=requisicao_id),
+                    item=ItemRequisicao.objects.get(pk=item_id),
+                    quantidade=Decimal("5"),
+                )
+                return "ok"
+            except Exception as exc:  # noqa: BLE001
+                return type(exc).__name__
+            finally:
+                close_old_connections()
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futuro_a = executor.submit(reservar, requisicao_a.id, item_a.id)
+            futuro_b = executor.submit(reservar, requisicao_b.id, item_b.id)
+
+        resultados = {futuro_a.result(), futuro_b.result()}
+        close_old_connections()
+
+        estoque.refresh_from_db()
+
+        assert resultados == {"ok", "DomainConflict"}
+        assert estoque.saldo_fisico == Decimal("5")
+        assert estoque.saldo_reservado == Decimal("5")
+        assert (
+            MovimentacaoEstoque.objects.filter(
+                material=material,
+                tipo=TipoMovimentacao.RESERVA_POR_AUTORIZACAO,
+            ).count()
+            == 1
+        )
+
+    @pytest.mark.django_db(transaction=True)
+    @pytest.mark.postgres
+    def test_registrar_saida_por_atendimento_concorrente_nao_duplica_baixa(self):
+        chefe = User.objects.create(
+            matricula_funcional="99011",
+            nome_completo="Chefe Estoque 11",
+            papel=PapelChoices.CHEFE_SETOR,
+            is_active=True,
+        )
+        setor = Setor.objects.create(nome="Setor Estoque 11", chefe_responsavel=chefe)
+        chefe.setor = setor
+        chefe.save(update_fields=["setor"])
+        material = self._criar_material()
+        estoque = EstoqueMaterial.objects.create(
+            material=material,
+            saldo_fisico=Decimal("5"),
+            saldo_reservado=Decimal("5"),
+        )
+        requisicao = Requisicao.objects.create(
+            criador=chefe,
+            beneficiario=chefe,
+            setor_beneficiario=setor,
+            status=StatusRequisicao.AUTORIZADA,
+        )
+        item = ItemRequisicao.objects.create(
+            requisicao=requisicao,
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal("5"),
+            quantidade_autorizada=Decimal("5"),
+        )
+
+        barrier = Barrier(2)
+
+        def registrar_saida():
+            close_old_connections()
+            try:
+                barrier.wait()
+                registrar_saida_por_atendimento(
+                    requisicao=Requisicao.objects.get(pk=requisicao.id),
+                    item=ItemRequisicao.objects.get(pk=item.id),
+                    quantidade=Decimal("5"),
+                )
+                return "ok"
+            except Exception as exc:  # noqa: BLE001
+                return type(exc).__name__
+            finally:
+                close_old_connections()
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futuro_a = executor.submit(registrar_saida)
+            futuro_b = executor.submit(registrar_saida)
+
+        resultados = {futuro_a.result(), futuro_b.result()}
+        close_old_connections()
+
+        estoque.refresh_from_db()
+
+        assert resultados == {"ok", "DomainConflict"}
+        assert estoque.saldo_fisico == Decimal("0")
+        assert estoque.saldo_reservado == Decimal("0")
+        assert estoque.saldo_fisico >= 0
+        assert estoque.saldo_reservado >= 0
+        assert (
+            MovimentacaoEstoque.objects.filter(
+                requisicao=requisicao,
+                item_requisicao=item,
+                tipo=TipoMovimentacao.SAIDA_POR_ATENDIMENTO,
+            ).count()
+            == 1
+        )
+
+    @pytest.mark.django_db(transaction=True)
+    @pytest.mark.postgres
+    def test_registrar_liberacao_reserva_concorrente_nao_duplica_movimentacao(self):
+        chefe = User.objects.create(
+            matricula_funcional="99012",
+            nome_completo="Chefe Estoque 12",
+            papel=PapelChoices.CHEFE_SETOR,
+            is_active=True,
+        )
+        setor = Setor.objects.create(nome="Setor Estoque 12", chefe_responsavel=chefe)
+        chefe.setor = setor
+        chefe.save(update_fields=["setor"])
+        material = self._criar_material()
+        estoque = EstoqueMaterial.objects.create(
+            material=material,
+            saldo_fisico=Decimal("10"),
+            saldo_reservado=Decimal("4"),
+        )
+        requisicao = Requisicao.objects.create(
+            criador=chefe,
+            beneficiario=chefe,
+            setor_beneficiario=setor,
+            status=StatusRequisicao.AUTORIZADA,
+        )
+        item = ItemRequisicao.objects.create(
+            requisicao=requisicao,
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal("4"),
+            quantidade_autorizada=Decimal("4"),
+        )
+
+        barrier = Barrier(2)
+
+        def liberar():
+            close_old_connections()
+            try:
+                barrier.wait()
+                registrar_liberacao_reserva_por_atendimento(
+                    requisicao=Requisicao.objects.get(pk=requisicao.id),
+                    item=ItemRequisicao.objects.get(pk=item.id),
+                    quantidade=Decimal("4"),
+                )
+                return "ok"
+            except Exception as exc:  # noqa: BLE001
+                return type(exc).__name__
+            finally:
+                close_old_connections()
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futuro_a = executor.submit(liberar)
+            futuro_b = executor.submit(liberar)
+
+        resultados = {futuro_a.result(), futuro_b.result()}
+        close_old_connections()
+
+        estoque.refresh_from_db()
+
+        assert resultados == {"ok", "DomainConflict"}
+        assert estoque.saldo_fisico == Decimal("10")
+        assert estoque.saldo_reservado == Decimal("0")
+        assert estoque.saldo_fisico >= 0
+        assert estoque.saldo_reservado >= 0
+        assert (
+            MovimentacaoEstoque.objects.filter(
+                requisicao=requisicao,
+                item_requisicao=item,
+                tipo=TipoMovimentacao.LIBERACAO_RESERVA_ATENDIMENTO,
+            ).count()
+            == 1
+        )
