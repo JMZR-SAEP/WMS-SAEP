@@ -103,7 +103,7 @@ Observação de escopo atual:
 Observação de estado atual:
 
 - A base funcional do piloto já está entregue até `PIL-BE-ATE-004` e `PIL-BE-ATE-006`, incluindo acesso, materiais/importação, requisições, autorização, reserva, fila de atendimento, atendimento completo/parcial, saída de estoque, liberação de reserva e metadados de retirada.
-- A próxima fronteira backend/API deve priorizar o restante de `PIL-BE-ATE-005` e o desenho de cancelamento pós-autorização quando não houver saldo físico para atendimento.
+- A base de atendimento do piloto inclui a validação de saldo físico e o cancelamento de requisição autorizada quando não houver saldo físico para nenhum item; a próxima fronteira backend/API deve priorizar a importação documental do piloto.
 
 ## 4.1 Piloto inicial
 
@@ -933,7 +933,7 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
 
 ### PIL-BE-ATE-005 — Validar saldo físico no atendimento
 
-- **Status atual:** parcialmente implementada no atendimento completo e parcial/zero; pendente a orientação/fluxo de cancelamento quando não houver saldo físico para nenhum item.
+- **Status atual:** implementada no branch `feat/notificacoes-fluxo`. O atendimento completo/parcial valida saldo físico, bloqueia entrega acima do saldo disponível e impede atendimento sem nenhum item entregue; o cancelamento de requisição autorizada sem saldo físico para nenhum item já existe via endpoint de cancelamento com justificativa.
 - **Fase:** Piloto inicial
 - **Tipo:** Backend / Estoque
 - **Agente sugerido:** Agente backend de regras de estoque
