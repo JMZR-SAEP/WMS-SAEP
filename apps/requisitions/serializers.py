@@ -63,6 +63,10 @@ class RequisicaoRefuseInputSerializer(serializers.Serializer):
     motivo_recusa = serializers.CharField(allow_blank=False)
 
 
+class RequisicaoCancelInputSerializer(serializers.Serializer):
+    motivo_cancelamento = serializers.CharField(required=False, allow_blank=True, default="")
+
+
 class RequisicaoItemFulfillInputSerializer(serializers.Serializer):
     item_id = serializers.IntegerField()
     quantidade_entregue = serializers.DecimalField(
@@ -129,6 +133,7 @@ class RequisicaoDetailOutputSerializer(serializers.ModelSerializer):
             "data_envio_autorizacao",
             "data_autorizacao_ou_recusa",
             "motivo_recusa",
+            "motivo_cancelamento",
             "data_finalizacao",
             "retirante_fisico",
             "observacao",

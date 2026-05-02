@@ -22,6 +22,7 @@ from apps.requisitions.services import (
     atender_requisicao_com_itens,
     atender_requisicao_completa,
     autorizar_requisicao,
+    cancelar_autorizada_sem_saldo,
     recusar_requisicao,
 )
 from apps.stock.models import EstoqueMaterial, MovimentacaoEstoque, TipoMovimentacao
@@ -865,6 +866,117 @@ class TestAtendimentoRequisicaoService:
         assert material.estoque.saldo_fisico == Decimal("6")
         assert material.estoque.saldo_reservado == Decimal("2")
         assert MovimentacaoEstoque.objects.count() == 0
+
+    def test_cancelamento_autorizada_sem_saldo_libera_reserva_e_registra_motivo(self):
+        setor = self._criar_setor("Cancelamento Sem Saldo", "92040")
+        requisitante = self._criar_usuario("12040", "Solicitante Sem Saldo", setor=setor)
+        atendente = self._criar_usuario(
+            "12041",
+            "Auxiliar Almoxarifado Sem Saldo",
+            papel=PapelChoices.AUXILIAR_ALMOXARIFADO,
+            setor=setor,
+        )
+        material = self._criar_material_com_estoque(
+            "001.003.040",
+            saldo_fisico=Decimal("0"),
+            saldo_reservado=Decimal("3"),
+        )
+        requisicao, item = self._criar_requisicao_autorizada(
+            criador=requisitante,
+            beneficiario=requisitante,
+            numero_publico="REQ-2026-200040",
+            material=material,
+            quantidade_autorizada=Decimal("3"),
+        )
+
+        cancelada = cancelar_autorizada_sem_saldo(
+            requisicao=requisicao,
+            ator=atendente,
+            motivo_cancelamento="Divergência física total no atendimento",
+        )
+
+        material.estoque.refresh_from_db()
+        item.refresh_from_db()
+        assert cancelada.status == StatusRequisicao.CANCELADA
+        assert cancelada.motivo_cancelamento == "Divergência física total no atendimento"
+        assert cancelada.responsavel_atendimento_id == atendente.id
+        assert cancelada.eventos.filter(tipo_evento=TipoEvento.CANCELAMENTO).exists()
+        assert item.quantidade_entregue == Decimal("0")
+        assert material.estoque.saldo_fisico == Decimal("0")
+        assert material.estoque.saldo_reservado == Decimal("0")
+        assert MovimentacaoEstoque.objects.filter(
+            requisicao=cancelada,
+            item_requisicao=item,
+            tipo=TipoMovimentacao.LIBERACAO_RESERVA_ATENDIMENTO,
+            quantidade=Decimal("3"),
+        ).exists()
+
+    def test_cancelamento_autorizada_sem_saldo_bloqueia_se_ainda_ha_saldo_fisico(self):
+        setor = self._criar_setor("Cancelamento Com Saldo", "92042")
+        requisitante = self._criar_usuario("12042", "Solicitante Com Saldo", setor=setor)
+        atendente = self._criar_usuario(
+            "12043",
+            "Auxiliar Almoxarifado Com Saldo",
+            papel=PapelChoices.AUXILIAR_ALMOXARIFADO,
+            setor=setor,
+        )
+        material = self._criar_material_com_estoque(
+            "001.003.041",
+            saldo_fisico=Decimal("1"),
+            saldo_reservado=Decimal("3"),
+        )
+        requisicao, item = self._criar_requisicao_autorizada(
+            criador=requisitante,
+            beneficiario=requisitante,
+            numero_publico="REQ-2026-200041",
+            material=material,
+            quantidade_autorizada=Decimal("3"),
+        )
+
+        with pytest.raises(DomainConflict):
+            cancelar_autorizada_sem_saldo(
+                requisicao=requisicao,
+                ator=atendente,
+                motivo_cancelamento="Ainda existe saldo",
+            )
+
+        requisicao.refresh_from_db()
+        material.estoque.refresh_from_db()
+        item.refresh_from_db()
+        assert requisicao.status == StatusRequisicao.AUTORIZADA
+        assert requisicao.motivo_cancelamento == ""
+        assert item.quantidade_entregue == Decimal("0")
+        assert material.estoque.saldo_reservado == Decimal("3")
+        assert MovimentacaoEstoque.objects.count() == 0
+
+    def test_cancelamento_autorizada_sem_saldo_exige_motivo_e_permissao_operacional(self):
+        setor = self._criar_setor("Cancelamento Permissao", "92044")
+        solicitante = self._criar_usuario("12044", "Solicitante Permissao", setor=setor)
+        material = self._criar_material_com_estoque(
+            "001.003.042",
+            saldo_fisico=Decimal("0"),
+            saldo_reservado=Decimal("2"),
+        )
+        requisicao, _ = self._criar_requisicao_autorizada(
+            criador=solicitante,
+            beneficiario=solicitante,
+            numero_publico="REQ-2026-200042",
+            material=material,
+            quantidade_autorizada=Decimal("2"),
+        )
+
+        with pytest.raises(ValidationError):
+            cancelar_autorizada_sem_saldo(
+                requisicao=requisicao,
+                ator=solicitante,
+                motivo_cancelamento="   ",
+            )
+        with pytest.raises(PermissionDenied):
+            cancelar_autorizada_sem_saldo(
+                requisicao=requisicao,
+                ator=solicitante,
+                motivo_cancelamento="Sem saldo físico",
+            )
 
     def test_atendimento_com_itens_rejeita_payload_incompleto_duplicado_ou_excessivo(self):
         setor = self._criar_setor("Atendimento Payload", "92026")

@@ -96,6 +96,22 @@ def _side_effect_reservar_itens_autorizados(
         )
 
 
+def _side_effect_liberar_reservas_cancelamento(
+    requisicao: Requisicao, payload: dict[str, object]
+) -> None:
+    estoques_por_material_id = payload["estoques_por_material_id"]
+    for item_requisicao in payload["itens_requisicao"]:
+        quantidade_liberada = item_requisicao.quantidade_autorizada
+        if quantidade_liberada <= 0:
+            continue
+        registrar_liberacao_reserva_por_atendimento(
+            requisicao=requisicao,
+            item=item_requisicao,
+            quantidade=quantidade_liberada,
+            estoque_travado=estoques_por_material_id[item_requisicao.material_id],
+        )
+
+
 TRANSICOES_REQUISICAO: dict[str, dict[str, object]] = {
     "autorizar_total": {
         "from_status": (StatusRequisicao.AGUARDANDO_AUTORIZACAO,),
@@ -156,6 +172,18 @@ TRANSICOES_REQUISICAO: dict[str, dict[str, object]] = {
             "status",
         ),
         "side_effects": (),
+    },
+    "cancelar_pos_autorizacao_sem_saldo": {
+        "from_status": (StatusRequisicao.AUTORIZADA,),
+        "to_status": StatusRequisicao.CANCELADA,
+        "timeline_event_type": TipoEvento.CANCELAMENTO,
+        "audit_fields_to_set": (
+            "responsavel_atendimento",
+            "data_finalizacao",
+            "motivo_cancelamento",
+            "status",
+        ),
+        "side_effects": (_side_effect_liberar_reservas_cancelamento,),
     },
 }
 
@@ -635,6 +663,75 @@ def cancelar_pre_autorizacao(*, requisicao: Requisicao, ator: User) -> Requisica
             "setor_beneficiario",
         )
         .prefetch_related("itens__material", "eventos__usuario")
+        .get(pk=requisicao.pk)
+    )
+
+
+def cancelar_autorizada_sem_saldo(
+    *, requisicao: Requisicao, ator: User, motivo_cancelamento: str
+) -> Requisicao:
+    motivo_cancelamento = motivo_cancelamento.strip()
+    if not motivo_cancelamento:
+        raise ValidationError({"motivo_cancelamento": ["Motivo do cancelamento é obrigatório."]})
+
+    with transaction.atomic():
+        requisicao = _recarregar_requisicao_para_atendimento(requisicao)
+        if not pode_atender_requisicao(ator, requisicao):
+            raise PermissionDenied("Usuário sem permissão para cancelar esta requisição.")
+
+        if requisicao.status != StatusRequisicao.AUTORIZADA:
+            raise DomainConflict(
+                "Somente requisições autorizadas podem ser canceladas no atendimento.",
+                details={"status_atual": requisicao.status},
+            )
+
+        itens_requisicao = list(
+            ItemRequisicao.objects.select_for_update()
+            .select_related("material")
+            .filter(requisicao=requisicao)
+            .order_by("material_id", "id")
+        )
+        itens_autorizados = [item for item in itens_requisicao if item.quantidade_autorizada > 0]
+        if not itens_autorizados:
+            raise DomainConflict(
+                "Requisição autorizada não possui itens com quantidade autorizada.",
+                details={"requisicao_id": requisicao.id},
+            )
+
+        estoques_por_material_id = _travar_estoques_dos_itens(itens_autorizados)
+        itens_com_saldo_fisico = [
+            item.id
+            for item in itens_autorizados
+            if estoques_por_material_id[item.material_id].saldo_fisico > 0
+        ]
+        if itens_com_saldo_fisico:
+            raise DomainConflict(
+                "Ainda há saldo físico para atendimento parcial da requisição.",
+                details={"item_ids": itens_com_saldo_fisico},
+            )
+
+        _apply_requisicao_transition(
+            requisicao=requisicao,
+            transition_name="cancelar_pos_autorizacao_sem_saldo",
+            actor=ator,
+            payload={
+                "responsavel_atendimento": ator,
+                "data_finalizacao": timezone.now(),
+                "motivo_cancelamento": motivo_cancelamento,
+                "itens_requisicao": itens_autorizados,
+                "estoques_por_material_id": estoques_por_material_id,
+            },
+        )
+
+    return (
+        Requisicao.objects.select_related(
+            "criador",
+            "beneficiario",
+            "setor_beneficiario",
+            "chefe_autorizador",
+            "responsavel_atendimento",
+        )
+        .prefetch_related("itens__material__estoque", "eventos__usuario")
         .get(pk=requisicao.pk)
     )
 
