@@ -1,8 +1,8 @@
 # Project Status — Post-Materialization
 
 **Date:** 2026-05-02
-**Status:** Django materialization COMPLETE; PIL-BE-ACE foundation COMPLETE through `PIL-BE-ACE-005`; PIL-BE-MAT-001 COMPLETE; PIL-BE-MAT-002 COMPLETE; PIL-BE-EST-001 COMPLETE; PIL-BE-MAT-003 COMPLETE; PIL-BE-IMP-001 COMPLETE; PIL-BE-IMP-002 COMPLETE; PIL-BE-REQ-001 COMPLETE; `PIL-BE-REQ-002/003/004/005/007/008` COMPLETE; `PIL-BE-AUT-001/003/004/005/006` COMPLETE; `PIL-BE-ATE-001/003/004/006` COMPLETE in PR #26 branch `feat/atendimento-parcial`
-**Current branch context:** PR #26 branch `feat/atendimento-parcial` pushed through commit `200777a`; main was last noted updated after merge of PR #25 on 2026-05-01.
+**Status:** Django materialization COMPLETE; PIL-BE-ACE foundation COMPLETE through `PIL-BE-ACE-005`; PIL-BE-MAT-001 COMPLETE; PIL-BE-MAT-002 COMPLETE; PIL-BE-EST-001 COMPLETE; PIL-BE-MAT-003 COMPLETE; PIL-BE-IMP-001 COMPLETE; PIL-BE-IMP-002 COMPLETE; PIL-BE-REQ-001 COMPLETE; `PIL-BE-REQ-002/003/004/005/007/008` COMPLETE; `PIL-BE-AUT-001/003/004/005/006` COMPLETE; `PIL-BE-ATE-001/003/004/005/006` COMPLETE.
+**Current branch context:** main was last noted updated after merge of PR #25 on 2026-05-01.
 
 ## Current Baseline
 
@@ -13,7 +13,7 @@ Functional foundation complete:
 - `apps/materials/`: `GrupoMaterial`, `SubgrupoMaterial`, `Material`, material list/search API, SCPI CSV parser, and import orchestration services
 - `apps/stock/`: `EstoqueMaterial`, immutable `MovimentacaoEstoque`, initial-balance registration service, reservation movement on requisition authorization, fulfillment stock exit movement, and reserve-release movement for undelivered partial-fulfillment quantities
 - `apps/core/`: DRF/OpenAPI infrastructure, pagination, and standard error envelope
-- `apps/requisitions/`: draft creation, submit/return/discard/cancel before authorization, pending-approvals queue, authorize/refuse actions, pending-fulfillments queue, full and partial fulfillment actions through the unified `atender_requisicao()` service entry point, declarative transition applier, timeline events, authorization reservation side effect, fulfillment stock exit side effect, and partial-fulfillment reserve-release side effect
+- `apps/requisitions/`: draft creation, submit/return/discard/cancel before authorization, pending-approvals queue, authorize/refuse actions, pending-fulfillments queue, full and partial fulfillment actions through the unified `atender_requisicao()` service entry point, declarative transition applier, timeline events, authorization reservation side effect, fulfillment stock exit side effect, and reserve-release side effect for undelivered partial-fulfillment quantities
 
 Technical baseline:
 - Django 6.0.4 + DRF + drf-spectacular + django-filter
@@ -70,13 +70,11 @@ Technical baseline:
 ## Recommended Next PR Sequence
 
 1. Finish `PIL-BE-ATE-005` around the operational path when no physical stock can be delivered for any item
-   - Partial fulfillment already rejects all-zero delivery with `409 domain_conflict`; the remaining slice should guide/codify the cancellation-or-operational-resolution path
-2. Authorized-request cancellation with reservation release
-   - Needed to close the loop once stock is reserved but later canceled before fulfillment; reuse the PR #26 lock order and `LIBERACAO_RESERVA_ATENDIMENTO` semantics or introduce an explicit cancellation-release movement if the domain needs a separate type
-3. Return / estorno / exceptional stock-exit flows
-   - Must reuse one canonical lock acquisition order across requisition, items, and stock before adding new stock writers
-4. Post-authorization/post-fulfillment notifications and ancillary side effects
-   - Should remain post-commit side effects, never source of truth
+   - Partial fulfillment already rejects all-zero delivery with `409 domain_conflict`; the remaining slice should guide/codify the operational decision boundary between partial delivery and cancelamento.
+2. Return / estorno / exceptional stock-exit flows
+   - Must reuse one canonical lock acquisition order across requisition, items, and stock before adding new stock writers.
+3. Post-authorization/post-fulfillment notifications and ancillary side effects
+   - Should remain post-commit side effects, never source of truth.
 
 ## Notes For Future Agents
 
