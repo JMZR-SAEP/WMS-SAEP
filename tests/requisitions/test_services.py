@@ -18,6 +18,7 @@ from apps.requisitions.services import (
     ItemAtendimentoData,
     ItemAutorizacaoData,
     _gerar_numero_publico,
+    atender_requisicao,
     atender_requisicao_com_itens,
     atender_requisicao_completa,
     autorizar_requisicao,
@@ -711,6 +712,78 @@ class TestAtendimentoRequisicaoService:
             quantidade=Decimal("2"),
         ).exists()
 
+    def test_atendimento_parcial_multi_item_mistura_entrega_total_e_parcial(self):
+        setor = self._criar_setor("Atendimento Multi Item", "92030")
+        requisitante = self._criar_usuario("12030", "Solicitante Multi", setor=setor)
+        atendente = self._criar_usuario(
+            "12031",
+            "Auxiliar Almoxarifado Multi",
+            papel=PapelChoices.AUXILIAR_ALMOXARIFADO,
+            setor=setor,
+        )
+        material_total = self._criar_material_com_estoque(
+            "001.003.030",
+            saldo_fisico=Decimal("10"),
+            saldo_reservado=Decimal("4"),
+        )
+        material_parcial = self._criar_material_com_estoque(
+            "001.003.031",
+            saldo_fisico=Decimal("10"),
+            saldo_reservado=Decimal("5"),
+        )
+        requisicao, item_total = self._criar_requisicao_autorizada(
+            criador=requisitante,
+            beneficiario=requisitante,
+            numero_publico="REQ-2026-200030",
+            material=material_total,
+            quantidade_autorizada=Decimal("4"),
+        )
+        item_parcial = requisicao.itens.create(
+            material=material_parcial,
+            unidade_medida=material_parcial.unidade_medida,
+            quantidade_solicitada=Decimal("5"),
+            quantidade_autorizada=Decimal("5"),
+        )
+
+        atendida = atender_requisicao(
+            requisicao=requisicao,
+            ator=atendente,
+            itens=[
+                ItemAtendimentoData(item_id=item_total.id, quantidade_entregue=Decimal("4")),
+                ItemAtendimentoData(
+                    item_id=item_parcial.id,
+                    quantidade_entregue=Decimal("2"),
+                    justificativa_atendimento_parcial="Retirada parcial solicitada",
+                ),
+            ],
+        )
+
+        item_total.refresh_from_db()
+        item_parcial.refresh_from_db()
+        material_total.estoque.refresh_from_db()
+        material_parcial.estoque.refresh_from_db()
+        assert atendida.status == StatusRequisicao.ATENDIDA_PARCIALMENTE
+        assert atendida.eventos.filter(tipo_evento=TipoEvento.ATENDIMENTO_PARCIAL).exists()
+        assert item_total.quantidade_entregue == Decimal("4")
+        assert item_total.justificativa_atendimento_parcial == ""
+        assert item_parcial.quantidade_entregue == Decimal("2")
+        assert item_parcial.justificativa_atendimento_parcial == "Retirada parcial solicitada"
+        assert material_total.estoque.saldo_fisico == Decimal("6")
+        assert material_total.estoque.saldo_reservado == Decimal("0")
+        assert material_parcial.estoque.saldo_fisico == Decimal("8")
+        assert material_parcial.estoque.saldo_reservado == Decimal("0")
+        assert not MovimentacaoEstoque.objects.filter(
+            requisicao=atendida,
+            item_requisicao=item_total,
+            tipo=TipoMovimentacao.LIBERACAO_RESERVA_ATENDIMENTO,
+        ).exists()
+        assert MovimentacaoEstoque.objects.filter(
+            requisicao=atendida,
+            item_requisicao=item_parcial,
+            tipo=TipoMovimentacao.LIBERACAO_RESERVA_ATENDIMENTO,
+            quantidade=Decimal("3"),
+        ).exists()
+
     def test_atendimento_com_itens_integral_preserva_status_atendida(self):
         setor = self._criar_setor("Atendimento Integral", "92022")
         requisitante = self._criar_usuario("12022", "Solicitante Integral", setor=setor)
@@ -873,6 +946,12 @@ class TestAtendimentoRequisicaoService:
 
         with pytest.raises(PermissionDenied):
             atender_requisicao_completa(requisicao=requisicao, ator=solicitante)
+        with pytest.raises(PermissionDenied):
+            atender_requisicao_com_itens(
+                requisicao=requisicao,
+                ator=solicitante,
+                itens=[ItemAtendimentoData(item_id=_.id, quantidade_entregue=Decimal("2"))],
+            )
 
         atendente = self._criar_usuario(
             "12006",

@@ -59,6 +59,20 @@ class ItemAtendimentoData:
     justificativa_atendimento_parcial: str = ""
 
 
+ItemAtendimentoPayload = ItemAtendimentoData | dict[str, object]
+
+
+def _normalizar_itens_atendimento(
+    itens: list[ItemAtendimentoPayload] | None,
+) -> list[ItemAtendimentoData] | None:
+    if itens is None:
+        return None
+    return [
+        item if isinstance(item, ItemAtendimentoData) else ItemAtendimentoData(**item)
+        for item in itens
+    ]
+
+
 def _side_effect_reservar_itens_autorizados(
     requisicao: Requisicao, payload: dict[str, object]
 ) -> None:
@@ -314,6 +328,26 @@ def _recarregar_requisicao_para_atendimento(requisicao: Requisicao) -> Requisica
         .prefetch_related("itens__material__estoque", "eventos__usuario")
         .get(pk=requisicao.pk)
     )
+
+
+def _travar_estoques_dos_itens(
+    itens_requisicao: list[ItemRequisicao],
+) -> dict[int, EstoqueMaterial]:
+    material_ids = sorted({item.material_id for item in itens_requisicao})
+    estoques = list(
+        EstoqueMaterial.objects.select_for_update()
+        .select_related("material")
+        .filter(material_id__in=material_ids)
+        .order_by("material_id")
+    )
+    estoques_por_material_id = {estoque.material_id: estoque for estoque in estoques}
+    material_ids_sem_estoque = set(material_ids) - set(estoques_por_material_id)
+    if material_ids_sem_estoque:
+        raise DomainConflict(
+            "Material autorizado não possui estoque cadastrado.",
+            details={"material_ids": sorted(material_ids_sem_estoque)},
+        )
+    return estoques_por_material_id
 
 
 def _validar_itens_rascunho(itens: list[ItemRascunhoData]) -> list[Material]:
@@ -767,6 +801,32 @@ def listar_fila_atendimento(*, ator: User):
     )
 
 
+def atender_requisicao(
+    *,
+    requisicao: Requisicao,
+    ator: User,
+    itens: list[ItemAtendimentoPayload] | None = None,
+    retirante_fisico: str = "",
+    observacao_atendimento: str = "",
+) -> Requisicao:
+    itens_normalizados = _normalizar_itens_atendimento(itens)
+    if itens_normalizados is None:
+        return atender_requisicao_completa(
+            requisicao=requisicao,
+            ator=ator,
+            retirante_fisico=retirante_fisico,
+            observacao_atendimento=observacao_atendimento,
+        )
+
+    return atender_requisicao_com_itens(
+        requisicao=requisicao,
+        ator=ator,
+        itens=itens_normalizados,
+        retirante_fisico=retirante_fisico,
+        observacao_atendimento=observacao_atendimento,
+    )
+
+
 def atender_requisicao_completa(
     *,
     requisicao: Requisicao,
@@ -797,6 +857,7 @@ def atender_requisicao_completa(
                 "Requisição autorizada não possui itens com quantidade autorizada.",
                 details={"requisicao_id": requisicao.id},
             )
+        estoques_por_material_id = _travar_estoques_dos_itens(itens_autorizados)
 
         for item in itens_autorizados:
             quantidade_entregue = item.quantidade_autorizada
@@ -804,6 +865,7 @@ def atender_requisicao_completa(
                 requisicao=requisicao,
                 item=item,
                 quantidade=quantidade_entregue,
+                estoque_travado=estoques_por_material_id[item.material_id],
             )
             item.quantidade_entregue = quantidade_entregue
             item.justificativa_atendimento_parcial = ""
@@ -929,6 +991,8 @@ def atender_requisicao_com_itens(
         if not possui_entrega:
             raise DomainConflict("Atendimento parcial deve entregar ao menos um item.")
 
+        estoques_por_material_id = _travar_estoques_dos_itens(itens_autorizados)
+
         for item in itens_autorizados:
             item_data = dados_por_item_id[item.id]
             quantidade_entregue = item_data.quantidade_entregue
@@ -939,12 +1003,14 @@ def atender_requisicao_com_itens(
                     requisicao=requisicao,
                     item=item,
                     quantidade=quantidade_entregue,
+                    estoque_travado=estoques_por_material_id[item.material_id],
                 )
             if quantidade_nao_entregue > 0:
                 registrar_liberacao_reserva_por_atendimento(
                     requisicao=requisicao,
                     item=item,
                     quantidade=quantidade_nao_entregue,
+                    estoque_travado=estoques_por_material_id[item.material_id],
                 )
 
             item.quantidade_entregue = quantidade_entregue

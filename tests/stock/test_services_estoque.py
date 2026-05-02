@@ -547,3 +547,45 @@ class TestRegistrarSaldoInicial:
         assert estoque.saldo_fisico == Decimal("10")
         assert estoque.saldo_reservado == Decimal("1")
         assert MovimentacaoEstoque.objects.count() == 0
+
+    def test_registrar_liberacao_reserva_rejeita_divergencia_critica_remanescente(self):
+        chefe = User.objects.create(
+            matricula_funcional="99008",
+            nome_completo="Chefe Estoque 8",
+            papel=PapelChoices.CHEFE_SETOR,
+            is_active=True,
+        )
+        setor = Setor.objects.create(nome="Setor Estoque 8", chefe_responsavel=chefe)
+        chefe.setor = setor
+        chefe.save(update_fields=["setor"])
+        material = self._criar_material()
+        estoque = EstoqueMaterial.objects.create(
+            material=material,
+            saldo_fisico=Decimal("3"),
+            saldo_reservado=Decimal("5"),
+        )
+        requisicao = Requisicao.objects.create(
+            criador=chefe,
+            beneficiario=chefe,
+            setor_beneficiario=setor,
+            status=StatusRequisicao.AUTORIZADA,
+        )
+        item = ItemRequisicao.objects.create(
+            requisicao=requisicao,
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal("5.000"),
+            quantidade_autorizada=Decimal("5.000"),
+        )
+
+        with pytest.raises(DomainConflict):
+            registrar_liberacao_reserva_por_atendimento(
+                requisicao=requisicao,
+                item=item,
+                quantidade=Decimal("1"),
+            )
+
+        estoque.refresh_from_db()
+        assert estoque.saldo_fisico == Decimal("3")
+        assert estoque.saldo_reservado == Decimal("5")
+        assert MovimentacaoEstoque.objects.count() == 0

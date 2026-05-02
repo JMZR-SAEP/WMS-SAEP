@@ -927,6 +927,8 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
   - Entrega zero em item autorizado com justificativa.
   - Reserva não entregue é liberada.
   - Bloquear finalização se todos os itens forem entregues com zero.
+- **Dívida técnica rastreada:**
+  - Avaliar chave de idempotência para retry de cliente no endpoint de atendimento após falha de rede; hoje a concorrência é protegida por lock/status, mas um retry posterior retorna conflito em vez de repetir a resposta original.
 - **Critérios de aceite relacionados:** 3.3, 3.4, 3.5, 3.6
 
 ### PIL-BE-ATE-005 — Validar saldo físico no atendimento
