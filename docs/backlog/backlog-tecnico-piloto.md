@@ -1206,7 +1206,7 @@ Status: concluída.
 16. PIL-BE-ATE-004 — Implementar atendimento parcial e entrega zero por item.
 17. PIL-BE-ATE-005 — Validar saldo físico no atendimento.
 
-Status: itens 1 a 16 concluídos. Próxima fatia recomendada: concluir `PIL-BE-ATE-005`, especialmente o caminho operacional quando não houver saldo físico para nenhum item.
+Status: concluída na branch `feat/notificacoes-fluxo`; itens 1 a 17 concluídos. O caminho de cancelamento pós-autorização sem saldo físico foi entregue antes desta fatia, e notificações essenciais do fluxo principal já estão integradas como side effects pós-commit.
 
 ### Fase 3 — Notificações, rastreabilidade e validação do piloto
 
@@ -1218,7 +1218,9 @@ Status: itens 1 a 16 concluídos. Próxima fatia recomendada: concluir `PIL-BE-A
 6. PIL-DOC-IMP-002 — Preparar operação paralela em papel.
 7. PIL-DOC-IMP-003 — Treinar usuários do piloto.
 
-Status: `PIL-BE-AUD-001`, `PIL-BE-AUD-003`, `PIL-BE-NOT-001` e `PIL-BE-NOT-002` concluídas. Notificações continuam como side effects pós-commit, não como fonte de verdade do domínio.
+Status: `PIL-BE-AUD-001`, `PIL-BE-AUD-003`, `PIL-BE-NOT-001` e `PIL-BE-NOT-002` concluídas na branch `feat/notificacoes-fluxo`. Notificações continuam como side effects pós-commit, não como fonte de verdade do domínio. A leitura individual de notificações coletivas por papel não faz parte desta fatia; hoje notificações por papel são visíveis por escopo de admin, mas `marcar_notificacao_como_lida()` rejeita leitura individual quando não há destinatário individual.
+
+Próxima fatia recomendada: iniciar `PIL-DOC-IMP-001` para delimitar a lista inicial de materiais do piloto e preparar a validação operacional com usuários reais. `PIL-DOC-IMP-002` e `PIL-DOC-IMP-003` devem vir em seguida, após a lista de materiais e o procedimento de operação paralela estarem definidos.
 
 ### Tarefas postergadas de frontend/fullstack
 
