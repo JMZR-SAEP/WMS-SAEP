@@ -13,6 +13,7 @@ from apps.core.api.serializers import ErrorResponseSerializer
 from apps.requisitions.policies import queryset_requisicoes_visiveis
 from apps.requisitions.serializers import (
     RequisicaoAuthorizeInputSerializer,
+    RequisicaoCancelInputSerializer,
     RequisicaoCreateInputSerializer,
     RequisicaoDetailOutputSerializer,
     RequisicaoFulfillInputSerializer,
@@ -27,7 +28,7 @@ from apps.requisitions.services import (
     ItemRascunhoData,
     atender_requisicao,
     autorizar_requisicao,
-    cancelar_pre_autorizacao,
+    cancelar_requisicao,
     criar_rascunho_requisicao,
     descartar_rascunho_nunca_enviado,
     enviar_para_autorizacao,
@@ -131,11 +132,12 @@ class RequisicaoViewSet(GenericViewSet):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
     @extend_schema(
-        operation_id="requisitions_cancel_pre_approval",
+        operation_id="requisitions_cancel",
         tags=["requisitions"],
-        request=None,
+        request=RequisicaoCancelInputSerializer,
         responses={
             200: RequisicaoDetailOutputSerializer(),
+            400: ErrorResponseSerializer(),
             403: ErrorResponseSerializer(),
             404: ErrorResponseSerializer(),
             409: ErrorResponseSerializer(),
@@ -143,7 +145,13 @@ class RequisicaoViewSet(GenericViewSet):
     )
     @action(detail=True, methods=["post"], url_path="cancel")
     def cancel(self, request, pk=None):
-        requisicao = cancelar_pre_autorizacao(requisicao=self.get_object(), ator=request.user)
+        serializer = RequisicaoCancelInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        requisicao = cancelar_requisicao(
+            requisicao=self.get_object(),
+            ator=request.user,
+            motivo_cancelamento=serializer.validated_data["motivo_cancelamento"],
+        )
         return Response(RequisicaoDetailOutputSerializer(requisicao).data)
 
     @extend_schema(

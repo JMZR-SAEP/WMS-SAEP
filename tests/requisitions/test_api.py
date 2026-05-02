@@ -1242,6 +1242,282 @@ class TestRequisicaoAPI:
         assert material.estoque.saldo_reservado == Decimal("3")
         assert not MovimentacaoEstoque.objects.filter(requisicao=requisicao).exists()
 
+    def test_cancel_autorizada_sem_saldo_libera_reserva(self):
+        setor = self._criar_setor("Cancelamento Operacional", "90055")
+        solicitante = self._criar_usuario("10068", "Solicitante Cancelamento", setor=setor)
+        almoxarife = self._criar_usuario(
+            "10069",
+            "Auxiliar Almoxarifado Cancelamento",
+            papel=PapelChoices.AUXILIAR_ALMOXARIFADO,
+            setor=setor,
+        )
+        material = self._criar_material_com_estoque(
+            "001.001.057",
+            saldo_fisico=Decimal("0"),
+            saldo_reservado=Decimal("3"),
+        )
+        requisicao = Requisicao.objects.create(
+            criador=solicitante,
+            beneficiario=solicitante,
+            setor_beneficiario=setor,
+            numero_publico="REQ-2026-000515",
+            status=StatusRequisicao.AUTORIZADA,
+            data_envio_autorizacao="2026-04-30T10:00:00Z",
+            data_autorizacao_ou_recusa="2026-04-30T11:00:00Z",
+        )
+        item = requisicao.itens.create(
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal("3"),
+            quantidade_autorizada=Decimal("3"),
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=almoxarife)
+        response = client.post(
+            reverse("requisicao-cancel", args=[requisicao.id]),
+            {"motivo_cancelamento": "Saldo físico zerado no momento da retirada"},
+            format="json",
+        )
+
+        assert response.status_code == 200
+        assert response.data["status"] == StatusRequisicao.CANCELADA
+        assert response.data["motivo_cancelamento"] == "Saldo físico zerado no momento da retirada"
+        requisicao.refresh_from_db()
+        material.estoque.refresh_from_db()
+        assert requisicao.responsavel_atendimento_id == almoxarife.id
+        assert requisicao.eventos.filter(tipo_evento=TipoEvento.CANCELAMENTO).exists()
+        assert material.estoque.saldo_fisico == Decimal("0")
+        assert material.estoque.saldo_reservado == Decimal("0")
+        assert MovimentacaoEstoque.objects.filter(
+            requisicao=requisicao,
+            item_requisicao=item,
+            tipo=TipoMovimentacao.LIBERACAO_RESERVA_ATENDIMENTO,
+            quantidade=Decimal("3"),
+        ).exists()
+
+    def test_cancel_autorizada_sem_saldo_permite_criador(self):
+        setor = self._criar_setor("Cancelamento Criador", "90061")
+        solicitante = self._criar_usuario("10077", "Solicitante Criador", setor=setor)
+        material = self._criar_material_com_estoque(
+            "001.001.062",
+            saldo_fisico=Decimal("0"),
+            saldo_reservado=Decimal("2"),
+        )
+        requisicao = Requisicao.objects.create(
+            criador=solicitante,
+            beneficiario=solicitante,
+            setor_beneficiario=setor,
+            numero_publico="REQ-2026-000520",
+            status=StatusRequisicao.AUTORIZADA,
+            data_envio_autorizacao="2026-04-30T10:00:00Z",
+            data_autorizacao_ou_recusa="2026-04-30T11:00:00Z",
+        )
+        requisicao.itens.create(
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal("2"),
+            quantidade_autorizada=Decimal("2"),
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=solicitante)
+        response = client.post(
+            reverse("requisicao-cancel", args=[requisicao.id]),
+            {"motivo_cancelamento": "Sem saldo fisico para retirada"},
+            format="json",
+        )
+
+        assert response.status_code == 200
+        assert response.data["status"] == StatusRequisicao.CANCELADA
+        requisicao.refresh_from_db()
+        material.estoque.refresh_from_db()
+        assert requisicao.responsavel_atendimento_id == solicitante.id
+        assert material.estoque.saldo_reservado == Decimal("0")
+
+    def test_cancel_autorizada_sem_saldo_exige_motivo(self):
+        setor = self._criar_setor("Cancelamento Motivo", "90056")
+        solicitante = self._criar_usuario("10070", "Solicitante Motivo", setor=setor)
+        almoxarife = self._criar_usuario(
+            "10071",
+            "Auxiliar Almoxarifado Motivo",
+            papel=PapelChoices.AUXILIAR_ALMOXARIFADO,
+            setor=setor,
+        )
+        material = self._criar_material_com_estoque(
+            "001.001.058",
+            saldo_fisico=Decimal("0"),
+            saldo_reservado=Decimal("2"),
+        )
+        requisicao = Requisicao.objects.create(
+            criador=solicitante,
+            beneficiario=solicitante,
+            setor_beneficiario=setor,
+            numero_publico="REQ-2026-000516",
+            status=StatusRequisicao.AUTORIZADA,
+            data_envio_autorizacao="2026-04-30T10:00:00Z",
+            data_autorizacao_ou_recusa="2026-04-30T11:00:00Z",
+        )
+        requisicao.itens.create(
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal("2"),
+            quantidade_autorizada=Decimal("2"),
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=almoxarife)
+        response = client.post(
+            reverse("requisicao-cancel", args=[requisicao.id]),
+            {"motivo_cancelamento": "   "},
+            format="json",
+        )
+
+        assert response.status_code == 400
+        assert response.data["error"]["code"] == "validation_error"
+        requisicao.refresh_from_db()
+        material.estoque.refresh_from_db()
+        assert requisicao.status == StatusRequisicao.AUTORIZADA
+        assert material.estoque.saldo_reservado == Decimal("2")
+
+    def test_cancel_autorizada_sem_saldo_bloqueia_quando_ainda_ha_saldo_fisico(self):
+        setor = self._criar_setor("Cancelamento Parcial", "90057")
+        solicitante = self._criar_usuario("10072", "Solicitante Parcial", setor=setor)
+        almoxarife = self._criar_usuario(
+            "10073",
+            "Auxiliar Almoxarifado Parcial",
+            papel=PapelChoices.AUXILIAR_ALMOXARIFADO,
+            setor=setor,
+        )
+        material = self._criar_material_com_estoque(
+            "001.001.059",
+            saldo_fisico=Decimal("1"),
+            saldo_reservado=Decimal("3"),
+        )
+        requisicao = Requisicao.objects.create(
+            criador=solicitante,
+            beneficiario=solicitante,
+            setor_beneficiario=setor,
+            numero_publico="REQ-2026-000517",
+            status=StatusRequisicao.AUTORIZADA,
+            data_envio_autorizacao="2026-04-30T10:00:00Z",
+            data_autorizacao_ou_recusa="2026-04-30T11:00:00Z",
+        )
+        requisicao.itens.create(
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal("3"),
+            quantidade_autorizada=Decimal("3"),
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=almoxarife)
+        response = client.post(
+            reverse("requisicao-cancel", args=[requisicao.id]),
+            {"motivo_cancelamento": "Tentativa de cancelar com saldo restante"},
+            format="json",
+        )
+
+        assert response.status_code == 409
+        assert response.data["error"]["code"] == "domain_conflict"
+        requisicao.refresh_from_db()
+        material.estoque.refresh_from_db()
+        assert requisicao.status == StatusRequisicao.AUTORIZADA
+        assert material.estoque.saldo_reservado == Decimal("3")
+
+    def test_cancel_autorizada_sem_saldo_bloqueia_usuario_sem_permissao(self):
+        setor = self._criar_setor("Cancelamento Permissao", "90058")
+        solicitante = self._criar_usuario("10074", "Solicitante Permissao", setor=setor)
+        chefe_setor = setor.chefe_responsavel
+        material = self._criar_material_com_estoque(
+            "001.001.060",
+            saldo_fisico=Decimal("0"),
+            saldo_reservado=Decimal("2"),
+        )
+        requisicao = Requisicao.objects.create(
+            criador=solicitante,
+            beneficiario=solicitante,
+            setor_beneficiario=setor,
+            numero_publico="REQ-2026-000518",
+            status=StatusRequisicao.AUTORIZADA,
+            data_envio_autorizacao="2026-04-30T10:00:00Z",
+            data_autorizacao_ou_recusa="2026-04-30T11:00:00Z",
+        )
+        requisicao.itens.create(
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal("2"),
+            quantidade_autorizada=Decimal("2"),
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=chefe_setor)
+        response = client.post(
+            reverse("requisicao-cancel", args=[requisicao.id]),
+            {"motivo_cancelamento": "Sem saldo físico"},
+            format="json",
+        )
+
+        assert response.status_code == 403
+        assert response.data["error"]["code"] == "permission_denied"
+        requisicao.refresh_from_db()
+        material.estoque.refresh_from_db()
+        assert requisicao.status == StatusRequisicao.AUTORIZADA
+        assert material.estoque.saldo_reservado == Decimal("2")
+
+    def test_cancel_autorizada_sem_saldo_unauthenticated(self):
+        setor = self._criar_setor("Cancelamento Auth", "90059")
+        solicitante = self._criar_usuario("10075", "Solicitante Auth", setor=setor)
+        material = self._criar_material_com_estoque(
+            "001.001.061",
+            saldo_fisico=Decimal("0"),
+            saldo_reservado=Decimal("2"),
+        )
+        requisicao = Requisicao.objects.create(
+            criador=solicitante,
+            beneficiario=solicitante,
+            setor_beneficiario=setor,
+            numero_publico="REQ-2026-000519",
+            status=StatusRequisicao.AUTORIZADA,
+            data_envio_autorizacao="2026-04-30T10:00:00Z",
+            data_autorizacao_ou_recusa="2026-04-30T11:00:00Z",
+        )
+        requisicao.itens.create(
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal("2"),
+            quantidade_autorizada=Decimal("2"),
+        )
+
+        client = APIClient()
+        response = client.post(
+            reverse("requisicao-cancel", args=[requisicao.id]),
+            {"motivo_cancelamento": "Sem credenciais"},
+            format="json",
+        )
+
+        assert response.status_code == 403
+        assert response.data["error"]["code"] == "not_authenticated"
+
+    def test_cancel_autorizada_sem_saldo_not_found(self):
+        setor = self._criar_setor("Cancelamento Not Found", "90060")
+        almoxarife = self._criar_usuario(
+            "10076",
+            "Auxiliar Almoxarifado Not Found",
+            papel=PapelChoices.AUXILIAR_ALMOXARIFADO,
+            setor=setor,
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=almoxarife)
+        response = client.post(
+            reverse("requisicao-cancel", args=[999999]),
+            {"motivo_cancelamento": "Requisição inexistente"},
+            format="json",
+        )
+
+        assert response.status_code == 404
+
     def test_fulfill_payload_incompleto_retorna_validation_error(self):
         setor = self._criar_setor("Manutencao Payload", "90054")
         solicitante = self._criar_usuario("10066", "Solicitante Payload", setor=setor)
