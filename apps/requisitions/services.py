@@ -7,6 +7,14 @@ from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from apps.core.api.exceptions import DomainConflict
+from apps.core.events import (
+    REQUISICAO_ATENDIDA,
+    REQUISICAO_AUTORIZADA,
+    REQUISICAO_CANCELADA,
+    REQUISICAO_ENVIADA_AUTORIZACAO,
+    REQUISICAO_RECUSADA,
+    publish_on_commit,
+)
 from apps.materials.models import Material
 from apps.requisitions.models import (
     EventoTimeline,
@@ -124,6 +132,7 @@ TRANSICOES_REQUISICAO: dict[str, dict[str, object]] = {
             "status",
         ),
         "side_effects": (_side_effect_reservar_itens_autorizados,),
+        "notification_event": REQUISICAO_AUTORIZADA,
     },
     "autorizar_parcial": {
         "from_status": (StatusRequisicao.AGUARDANDO_AUTORIZACAO,),
@@ -135,6 +144,7 @@ TRANSICOES_REQUISICAO: dict[str, dict[str, object]] = {
             "status",
         ),
         "side_effects": (_side_effect_reservar_itens_autorizados,),
+        "notification_event": REQUISICAO_AUTORIZADA,
     },
     "recusar": {
         "from_status": (StatusRequisicao.AGUARDANDO_AUTORIZACAO,),
@@ -147,6 +157,7 @@ TRANSICOES_REQUISICAO: dict[str, dict[str, object]] = {
             "status",
         ),
         "side_effects": (),
+        "notification_event": REQUISICAO_RECUSADA,
     },
     "atender_total": {
         "from_status": (StatusRequisicao.AUTORIZADA,),
@@ -160,6 +171,7 @@ TRANSICOES_REQUISICAO: dict[str, dict[str, object]] = {
             "status",
         ),
         "side_effects": (),
+        "notification_event": REQUISICAO_ATENDIDA,
     },
     "atender_parcial": {
         "from_status": (StatusRequisicao.AUTORIZADA,),
@@ -173,6 +185,7 @@ TRANSICOES_REQUISICAO: dict[str, dict[str, object]] = {
             "status",
         ),
         "side_effects": (),
+        "notification_event": REQUISICAO_ATENDIDA,
     },
     "cancelar_pos_autorizacao_sem_saldo": {
         "from_status": (StatusRequisicao.AUTORIZADA,),
@@ -185,6 +198,7 @@ TRANSICOES_REQUISICAO: dict[str, dict[str, object]] = {
             "status",
         ),
         "side_effects": (_side_effect_liberar_reservas_cancelamento,),
+        "notification_event": REQUISICAO_CANCELADA,
     },
     "cancelar_pre_autorizacao": {
         "from_status": (
@@ -198,6 +212,7 @@ TRANSICOES_REQUISICAO: dict[str, dict[str, object]] = {
             "status",
         ),
         "side_effects": (),
+        "notification_event": REQUISICAO_CANCELADA,
     },
 }
 
@@ -238,6 +253,10 @@ def _apply_requisicao_transition(
 
     for side_effect in config["side_effects"]:
         side_effect(requisicao, payload)
+
+    notification_event = config.get("notification_event")
+    if notification_event:
+        publish_on_commit(notification_event, {"requisicao_id": requisicao.pk})
 
     return requisicao
 
@@ -564,6 +583,7 @@ def enviar_para_autorizacao(*, requisicao: Requisicao, ator: User) -> Requisicao
             ),
             usuario=ator,
         )
+        publish_on_commit(REQUISICAO_ENVIADA_AUTORIZACAO, {"requisicao_id": requisicao.pk})
 
     return (
         Requisicao.objects.select_related(

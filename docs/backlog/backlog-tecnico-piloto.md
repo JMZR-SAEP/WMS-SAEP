@@ -980,7 +980,7 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
 
 ### PIL-BE-NOT-001 — Criar modelo de notificação interna
 
-- **Status atual:** não iniciada.
+- **Status atual:** concluída.
 - **Fase:** Piloto inicial
 - **Tipo:** Backend / Banco de dados
 - **Agente sugerido:** Agente backend
@@ -1001,7 +1001,7 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
 
 ### PIL-BE-NOT-002 — Gerar notificações essenciais do fluxo principal
 
-- **Status atual:** não iniciada.
+- **Status atual:** concluída.
 - **Fase:** Piloto inicial
 - **Tipo:** Backend
 - **Agente sugerido:** Agente backend
@@ -1218,7 +1218,7 @@ Status: itens 1 a 16 concluídos. Próxima fatia recomendada: concluir `PIL-BE-A
 6. PIL-DOC-IMP-002 — Preparar operação paralela em papel.
 7. PIL-DOC-IMP-003 — Treinar usuários do piloto.
 
-Status: `PIL-BE-AUD-001` e `PIL-BE-AUD-003` concluídas. Notificações devem continuar como side effects pós-commit, não como fonte de verdade do domínio.
+Status: `PIL-BE-AUD-001`, `PIL-BE-AUD-003`, `PIL-BE-NOT-001` e `PIL-BE-NOT-002` concluídas. Notificações continuam como side effects pós-commit, não como fonte de verdade do domínio.
 
 ### Tarefas postergadas de frontend/fullstack
 

@@ -37,6 +37,7 @@ class TestSettingsLoading:
             "materials",
             "stock",
             "requisitions",
+            "notifications",
         ]
         for app in released_domain_apps:
             assert any(app in name for name in installed), (
@@ -46,12 +47,12 @@ class TestSettingsLoading:
         # materials is installed after PIL-BE-MAT-001 (complete)
         # stock is installed after PIL-BE-EST-001 (complete)
         # requisitions is installed after PIL-BE-REQ-001 (current)
+        # notifications is installed after PIL-BE-NOT-001 (complete)
         # Other domain apps should not be installed yet
         domain_apps = [
             "organizational",
             "approvals",
             "warehouse",
-            "notifications",
             "imports",
             "audit",
             "reports",

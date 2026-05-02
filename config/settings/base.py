@@ -26,6 +26,7 @@ INSTALLED_APPS = [
     "apps.materials",
     "apps.stock",
     "apps.requisitions",
+    "apps.notifications",
     "apps.core",
 ]
 
