@@ -256,9 +256,18 @@ def _apply_requisicao_transition(
 
     notification_event = config.get("notification_event")
     if notification_event:
-        publish_on_commit(notification_event, {"requisicao_id": requisicao.pk})
+        _publish_notification_event_on_commit(notification_event, requisicao)
 
     return requisicao
+
+
+def _publish_notification_event_on_commit(event_name: str, requisicao: Requisicao) -> None:
+    if not transaction.get_connection().in_atomic_block:
+        raise DomainConflict(
+            "Publicação de notificação de requisição exige transação ativa.",
+            details={"requisicao_id": requisicao.pk, "event_name": event_name},
+        )
+    publish_on_commit(event_name, {"requisicao_id": requisicao.pk})
 
 
 def _material_e_estoque_validos_autorizacao(
@@ -583,7 +592,7 @@ def enviar_para_autorizacao(*, requisicao: Requisicao, ator: User) -> Requisicao
             ),
             usuario=ator,
         )
-        publish_on_commit(REQUISICAO_ENVIADA_AUTORIZACAO, {"requisicao_id": requisicao.pk})
+        _publish_notification_event_on_commit(REQUISICAO_ENVIADA_AUTORIZACAO, requisicao)
 
     return (
         Requisicao.objects.select_related(

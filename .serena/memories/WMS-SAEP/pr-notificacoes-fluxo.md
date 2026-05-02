@@ -12,9 +12,15 @@ Invariantes:
 - Domain services publicam eventos com `publish_on_commit()`; handlers de notificacao rodam depois do commit.
 - `apps/core/events.publish()` captura/loga excecoes de subscribers para evitar que side effects posteriores quebrem a operacao principal.
 - Notificacoes permanecem side effects. Nao devem decidir sucesso de requisicao, autorizacao, cancelamento, atendimento ou estoque.
+- Admin de notificacoes filtra leitura por `destinatario=request.user` ou `papel_destinatario=request.user.papel`; superuser ve tudo, mas a action de marcar como lida ainda passa pelo service e rejeita notificacao coletiva.
+- Notificacoes por papel nao possuem leitura individual nesta fatia; `marcar_notificacao_como_lida()` rejeita explicitamente notificacao sem destinatario individual.
+- Publicacao de notification events em requisitions agora exige transacao ativa antes de registrar `publish_on_commit()`.
 - Migrations continuam efemeras; apenas `apps/notifications/migrations/__init__.py` deve ser versionado para o app participar do fluxo de `makemigrations`/`migrate`.
 
 Validacao local:
 - `rtk make setup` passou apos adicionar o pacote de migrations do novo app.
 - `rtk ruff check apps/core/events.py apps/notifications apps/requisitions/services.py tests/notifications/test_notifications.py tests/test_bootstrap.py` passou.
-- `rtk make test` passou com 312 testes coletados.
+- `rtk make test` passou com 312 testes coletados na entrega inicial.
+- Apos review hardening de admin/RBAC/leitura coletiva/eventos, `rtk ruff check apps/core/events.py apps/notifications/admin.py apps/notifications/services.py apps/requisitions/services.py tests/notifications/test_admin.py tests/notifications/test_notifications.py` passou.
+- Apos review hardening, testes focados `rtk proxy pytest tests/notifications/test_admin.py tests/notifications/test_notifications.py -q` passaram com 15 testes.
+- Apos review hardening, `rtk make test` passou com 320 testes coletados.

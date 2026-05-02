@@ -1,4 +1,5 @@
 from django.contrib import admin, messages
+from django.db.models import Q
 from rest_framework.exceptions import PermissionDenied
 
 from apps.notifications.models import Notificacao
@@ -24,6 +25,15 @@ class NotificacaoAdmin(admin.ModelAdmin):
         "destinatario__nome_completo",
     )
     readonly_fields = ("created_at", "lida", "lida_em")
+    list_select_related = ("destinatario",)
+
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        if request.user.is_superuser:
+            return queryset
+        return queryset.filter(
+            Q(destinatario=request.user) | Q(papel_destinatario=request.user.papel)
+        )
 
     @admin.action(description="Marcar notificações selecionadas como lidas")
     def marcar_como_lida_action(self, request, queryset):

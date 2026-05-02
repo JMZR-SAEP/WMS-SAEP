@@ -26,6 +26,10 @@ def subscribe(event_name: str, handler: EventHandler) -> None:
         handlers.append(handler)
 
 
+def clear_subscribers() -> None:
+    _subscribers.clear()
+
+
 def publish(event_name: str, payload: EventPayload) -> None:
     for handler in tuple(_subscribers[event_name]):
         try:

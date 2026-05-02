@@ -110,6 +110,22 @@ class TestNotificacoes:
         with pytest.raises(PermissionDenied):
             marcar_notificacao_como_lida(notificacao=notificacao, usuario=outro)
 
+    def test_marcar_como_lida_rejeita_notificacao_por_papel(self):
+        usuario = self._criar_usuario(
+            "30097",
+            "Auxiliar",
+            papel=PapelChoices.AUXILIAR_ALMOXARIFADO,
+        )
+        notificacao = criar_notificacao_papel(
+            papel_destinatario=PapelChoices.AUXILIAR_ALMOXARIFADO,
+            tipo=TipoNotificacao.REQUISICAO_AUTORIZADA,
+            titulo="Teste",
+            mensagem="Teste.",
+        )
+
+        with pytest.raises(PermissionDenied):
+            marcar_notificacao_como_lida(notificacao=notificacao, usuario=usuario)
+
     def test_cria_notificacao_para_papel_operacional(self):
         notificacao = criar_notificacao_papel(
             papel_destinatario=PapelChoices.AUXILIAR_ALMOXARIFADO,

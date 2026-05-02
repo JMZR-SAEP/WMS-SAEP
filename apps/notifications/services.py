@@ -81,6 +81,8 @@ def criar_notificacoes_usuarios_unicos(
 
 
 def marcar_notificacao_como_lida(*, notificacao: Notificacao, usuario: User) -> Notificacao:
+    if notificacao.destinatario_id is None:
+        raise PermissionDenied("Notificações coletivas por papel não possuem leitura individual.")
     if notificacao.destinatario_id != usuario.pk:
         raise PermissionDenied("Usuário não é destinatário desta notificação.")
     notificacao.marcar_como_lida()
