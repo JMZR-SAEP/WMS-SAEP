@@ -1,8 +1,8 @@
 # Project Status — Post-Materialization
 
 **Date:** 2026-05-02
-**Status:** Django materialization COMPLETE; PIL-BE-ACE foundation COMPLETE through `PIL-BE-ACE-005`; PIL-BE-MAT-001 COMPLETE; PIL-BE-MAT-002 COMPLETE; PIL-BE-EST-001 COMPLETE; PIL-BE-MAT-003 COMPLETE; PIL-BE-IMP-001 COMPLETE; PIL-BE-IMP-002 COMPLETE; PIL-BE-REQ-001 COMPLETE; `PIL-BE-REQ-002/003/004/005/007/008` COMPLETE; `PIL-BE-AUT-001/003/004/005/006` COMPLETE; `PIL-BE-ATE-001/003/004/005/006` COMPLETE.
-**Current branch context:** main was last noted updated after merge of PR #25 on 2026-05-01.
+**Status:** Django materialization COMPLETE; PIL-BE-ACE foundation COMPLETE through `PIL-BE-ACE-005`; PIL-BE-MAT-001 COMPLETE; PIL-BE-MAT-002 COMPLETE; PIL-BE-EST-001 COMPLETE; PIL-BE-MAT-003 COMPLETE; PIL-BE-IMP-001 COMPLETE; PIL-BE-IMP-002 COMPLETE; PIL-BE-REQ-001 COMPLETE; `PIL-BE-REQ-002/003/004/005/007/008` COMPLETE; `PIL-BE-AUT-001/003/004/005/006` COMPLETE; `PIL-BE-ATE-001/003/004/005/006` COMPLETE; `PIL-BE-AUD-001/003` COMPLETE; `PIL-BE-NOT-001/002` COMPLETE on branch `feat/notificacoes-fluxo`.
+**Current branch context:** branch `feat/notificacoes-fluxo` contains PR #28 notification flow commits through `020ad4d`; main was last noted at `9937926` before this PR is merged.
 
 ## Current Baseline
 
@@ -12,8 +12,9 @@ Functional foundation complete:
 - `apps/users/`: custom user by `matricula_funcional`, setores, papéis, centralized policies, and third-party request creation support from `PIL-BE-ACE-005`
 - `apps/materials/`: `GrupoMaterial`, `SubgrupoMaterial`, `Material`, material list/search API, SCPI CSV parser, and import orchestration services
 - `apps/stock/`: `EstoqueMaterial`, immutable `MovimentacaoEstoque`, initial-balance registration service, reservation movement on requisition authorization, fulfillment stock exit movement, and reserve-release movement for undelivered partial-fulfillment quantities
-- `apps/core/`: DRF/OpenAPI infrastructure, pagination, and standard error envelope
-- `apps/requisitions/`: draft creation, submit/return/discard/cancel before authorization, pending-approvals queue, authorize/refuse actions, pending-fulfillments queue, full and partial fulfillment actions through the unified `atender_requisicao()` service entry point, declarative transition applier, timeline events, authorization reservation side effect, fulfillment stock exit side effect, and reserve-release side effect for undelivered partial-fulfillment quantities
+- `apps/core/`: DRF/OpenAPI infrastructure, pagination, standard error envelope, and in-process post-commit event pub/sub in `apps/core/events.py`
+- `apps/requisitions/`: draft creation, submit/return/discard/cancel before authorization, pending-approvals queue, authorize/refuse actions, pending-fulfillments queue, full and partial fulfillment actions through the unified `atender_requisicao()` service entry point, declarative transition applier, timeline events, authorization reservation side effect, fulfillment stock exit side effect, reserve-release side effect for undelivered partial-fulfillment quantities, and post-commit notification event publication
+- `apps/notifications/`: `Notificacao` model, individual or role-targeted notifications, read/unread state for individual notifications, admin scoped by user/papel, and handlers for requisition submit/authorize/refuse/cancel/fulfill events
 
 Technical baseline:
 - Django 6.0.4 + DRF + drf-spectacular + django-filter
@@ -66,15 +67,20 @@ Technical baseline:
   - `rtk ruff check` for touched requisitions/stock files
 - The repository now contains API, service, stock, PostgreSQL-concurrency, and OpenAPI tests covering the delivered requisition authorization, full-fulfillment, and partial-fulfillment endpoints and invariants
 - PR #26 local validation passed after review fixes with `rtk make test` collecting 292 tests; focused requisitions/stock validation passed with `rtk proxy pytest tests/stock/test_services_estoque.py tests/requisitions/test_services.py tests/requisitions/test_api.py -q` collecting 84 tests
+- PR #28 notification flow validation on branch `feat/notificacoes-fluxo` passed with `rtk make setup`, focused Ruff, focused notifications/admin tests, and final `rtk make test` collecting 320 tests after review hardening
 
 ## Recommended Next PR Sequence
 
-1. Finish `PIL-BE-ATE-005` around the operational path when no physical stock can be delivered for any item
-   - Partial fulfillment already rejects all-zero delivery with `409 domain_conflict`; the remaining slice should guide/codify the operational decision boundary between partial delivery and cancelamento.
-2. Return / estorno / exceptional stock-exit flows
-   - Must reuse one canonical lock acquisition order across requisition, items, and stock before adding new stock writers.
-3. Post-authorization/post-fulfillment notifications and ancillary side effects
-   - Should remain post-commit side effects, never source of truth.
+1. `PIL-DOC-IMP-001` — define the initial material list for the pilot
+   - Backend/API flow for request, authorization, fulfillment, cancellation without stock, audit, stock movements, and essential notifications is complete on `feat/notificacoes-fluxo`; the next useful slice is operational pilot preparation.
+2. `PIL-DOC-IMP-002` — prepare paper-parallel operation
+   - Should define how operators compare WMS records with the existing paper control during rollout.
+3. `PIL-DOC-IMP-003` — prepare training guides by role
+   - Should cover solicitante, chefe/autorizador, and Almoxarifado workflows after the pilot material set and paper-parallel routine are clear.
+
+Post-pilot/MVP technical follow-up:
+- Individual read state for role-targeted notifications remains deferred. Current role notifications are visible by admin scope but cannot be individually marked as read because `Notificacao.lida/lida_em` is global to the notification row.
+- Return / estorno / exceptional stock-exit flows remain later MVP work and must reuse the canonical requisition/item/stock lock order before adding new stock writers.
 
 ## Notes For Future Agents
 

@@ -103,7 +103,7 @@ Observação de escopo atual:
 Observação de estado atual:
 
 - A base funcional do piloto já está entregue até `PIL-BE-ATE-004` e `PIL-BE-ATE-006`, incluindo acesso, materiais/importação, requisições, autorização, reserva, fila de atendimento, atendimento completo/parcial, saída de estoque, liberação de reserva e metadados de retirada.
-- A próxima fronteira backend/API deve priorizar o restante de `PIL-BE-ATE-005` e o desenho de cancelamento pós-autorização quando não houver saldo físico para atendimento.
+- A base de atendimento do piloto inclui a validação de saldo físico e o cancelamento de requisição autorizada quando não houver saldo físico para nenhum item; a próxima fronteira backend/API deve priorizar a importação documental do piloto.
 
 ## 4.1 Piloto inicial
 
@@ -933,7 +933,7 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
 
 ### PIL-BE-ATE-005 — Validar saldo físico no atendimento
 
-- **Status atual:** parcialmente implementada no atendimento completo e parcial/zero; pendente a orientação/fluxo de cancelamento quando não houver saldo físico para nenhum item.
+- **Status atual:** concluída. O atendimento completo/parcial valida saldo físico, bloqueia entrega acima do saldo disponível e impede atendimento sem nenhum item entregue; o cancelamento de requisição autorizada sem saldo físico para nenhum item já existe via endpoint de cancelamento com justificativa. Implementado no PR/branch: feat/notificacoes-fluxo.
 - **Fase:** Piloto inicial
 - **Tipo:** Backend / Estoque
 - **Agente sugerido:** Agente backend de regras de estoque
@@ -980,7 +980,7 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
 
 ### PIL-BE-NOT-001 — Criar modelo de notificação interna
 
-- **Status atual:** não iniciada.
+- **Status atual:** concluída.
 - **Fase:** Piloto inicial
 - **Tipo:** Backend / Banco de dados
 - **Agente sugerido:** Agente backend
@@ -1001,7 +1001,7 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
 
 ### PIL-BE-NOT-002 — Gerar notificações essenciais do fluxo principal
 
-- **Status atual:** não iniciada.
+- **Status atual:** concluída.
 - **Fase:** Piloto inicial
 - **Tipo:** Backend
 - **Agente sugerido:** Agente backend
@@ -1206,7 +1206,7 @@ Status: concluída.
 16. PIL-BE-ATE-004 — Implementar atendimento parcial e entrega zero por item.
 17. PIL-BE-ATE-005 — Validar saldo físico no atendimento.
 
-Status: itens 1 a 16 concluídos. Próxima fatia recomendada: concluir `PIL-BE-ATE-005`, especialmente o caminho operacional quando não houver saldo físico para nenhum item.
+Status: concluída; itens 1 a 17 concluídos. O caminho de cancelamento pós-autorização sem saldo físico foi entregue antes desta fatia, e notificações essenciais do fluxo principal já estão integradas como side effects pós-commit. Implementado no PR/branch: feat/notificacoes-fluxo.
 
 ### Fase 3 — Notificações, rastreabilidade e validação do piloto
 
@@ -1218,7 +1218,9 @@ Status: itens 1 a 16 concluídos. Próxima fatia recomendada: concluir `PIL-BE-A
 6. PIL-DOC-IMP-002 — Preparar operação paralela em papel.
 7. PIL-DOC-IMP-003 — Treinar usuários do piloto.
 
-Status: `PIL-BE-AUD-001` e `PIL-BE-AUD-003` concluídas. Notificações devem continuar como side effects pós-commit, não como fonte de verdade do domínio.
+Status: `PIL-BE-AUD-001`, `PIL-BE-AUD-003`, `PIL-BE-NOT-001` e `PIL-BE-NOT-002` concluídas. Notificações continuam como side effects pós-commit, não como fonte de verdade do domínio. A leitura individual de notificações coletivas por papel não faz parte desta fatia; hoje notificações por papel são visíveis por escopo de admin, mas `marcar_notificacao_como_lida()` rejeita leitura individual quando não há destinatário individual. Implementado no PR/branch: feat/notificacoes-fluxo.
+
+Próxima fatia recomendada: iniciar `PIL-DOC-IMP-001` para delimitar a lista inicial de materiais do piloto e preparar a validação operacional com usuários reais. `PIL-DOC-IMP-002` e `PIL-DOC-IMP-003` devem vir em seguida, após a lista de materiais e o procedimento de operação paralela estarem definidos.
 
 ### Tarefas postergadas de frontend/fullstack
 

@@ -54,6 +54,11 @@ Request/requisition invariants:
 Notifications:
 - Notifications are side effects, never source of truth and never precondition for domain success.
 - Domain apps communicate with notifications via `core/events.py` in-process pub/sub: `subscribe()` and `publish_on_commit()`.
+- Requisition notification events must be registered while an active `transaction.atomic()` block is open; `apps/requisitions/services.py` enforces this before calling `publish_on_commit()`.
+- `apps/core/events.publish()` catches/logs subscriber failures so notification failures do not rollback successful domain operations.
+- `apps/core/events.clear_subscribers()` exists for controlled test fixture cleanup when tests monkeypatch subscribers.
+- Notification admin visibility is scoped: superuser sees all; non-superuser staff sees only notifications addressed directly to them or to their own `papel`.
+- Role-targeted notifications currently do not have per-user read state; `marcar_notificacao_como_lida()` rejects notifications without an individual `destinatario` until a dedicated per-user read model/API is introduced.
 - Avoid direct imports from domain apps into `notifications` that create coupling.
 
 Audit/rastreability:
