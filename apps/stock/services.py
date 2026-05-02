@@ -128,6 +128,11 @@ def registrar_saida_por_atendimento(
         )
 
     if estoque_travado is not None:
+        if not transaction.get_connection().in_atomic_block:
+            raise DomainConflict(
+                "Estoque travado exige transação ativa.",
+                details={"material_id": item.material_id},
+            )
         return _registrar_saida_por_atendimento_com_estoque(
             requisicao=requisicao,
             item=item,
@@ -225,6 +230,11 @@ def registrar_liberacao_reserva_por_atendimento(
         )
 
     if estoque_travado is not None:
+        if not transaction.get_connection().in_atomic_block:
+            raise DomainConflict(
+                "Estoque travado exige transação ativa.",
+                details={"material_id": item.material_id},
+            )
         return _registrar_liberacao_reserva_por_atendimento_com_estoque(
             requisicao=requisicao,
             item=item,

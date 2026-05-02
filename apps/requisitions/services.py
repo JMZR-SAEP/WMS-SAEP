@@ -73,6 +73,13 @@ def _normalizar_itens_atendimento(
     ]
 
 
+def _validacao_payload_atendimento(message: str, *, item_ids: list[int] | None = None):
+    details: dict[str, object] = {"itens": [message]}
+    if item_ids is not None:
+        details["item_ids"] = item_ids
+    return ValidationError(details)
+
+
 def _side_effect_reservar_itens_autorizados(
     requisicao: Requisicao, payload: dict[str, object]
 ) -> None:
@@ -938,21 +945,27 @@ def atender_requisicao_com_itens(
         item_ids_recebidos = [item.item_id for item in itens]
         item_ids_unicos = set(item_ids_recebidos)
         if len(item_ids_unicos) != len(item_ids_recebidos):
-            raise DomainConflict("Payload de atendimento não pode repetir item_id.")
+            item_ids_repetidos = sorted(
+                {item_id for item_id in item_ids_recebidos if item_ids_recebidos.count(item_id) > 1}
+            )
+            raise _validacao_payload_atendimento(
+                "Payload de atendimento não pode repetir item_id.",
+                item_ids=item_ids_repetidos,
+            )
 
         item_ids_esperados = {item.id for item in itens_autorizados}
         item_ids_desconhecidos = item_ids_unicos - item_ids_esperados
         if item_ids_desconhecidos:
-            raise DomainConflict(
+            raise _validacao_payload_atendimento(
                 "Payload de atendimento contém item inválido para esta requisição.",
-                details={"item_ids": sorted(item_ids_desconhecidos)},
+                item_ids=sorted(item_ids_desconhecidos),
             )
 
         item_ids_omitidos = item_ids_esperados - item_ids_unicos
         if item_ids_omitidos:
-            raise DomainConflict(
+            raise _validacao_payload_atendimento(
                 "Payload de atendimento deve informar todos os itens autorizados.",
-                details={"item_ids": sorted(item_ids_omitidos)},
+                item_ids=sorted(item_ids_omitidos),
             )
 
         dados_por_item_id = {item.item_id: item for item in itens}

@@ -458,6 +458,50 @@ class TestRegistrarSaldoInicial:
         assert estoque.saldo_reservado == Decimal("2")
         assert MovimentacaoEstoque.objects.count() == 0
 
+    @pytest.mark.django_db(transaction=True)
+    def test_registrar_saida_rejeita_estoque_travado_sem_transacao_ativa(self):
+        chefe = User.objects.create(
+            matricula_funcional="99009",
+            nome_completo="Chefe Estoque 9",
+            papel=PapelChoices.CHEFE_SETOR,
+            is_active=True,
+        )
+        setor = Setor.objects.create(nome="Setor Estoque 9", chefe_responsavel=chefe)
+        chefe.setor = setor
+        chefe.save(update_fields=["setor"])
+        material = self._criar_material()
+        estoque = EstoqueMaterial.objects.create(
+            material=material,
+            saldo_fisico=Decimal("4"),
+            saldo_reservado=Decimal("2"),
+        )
+        requisicao = Requisicao.objects.create(
+            criador=chefe,
+            beneficiario=chefe,
+            setor_beneficiario=setor,
+            status=StatusRequisicao.AUTORIZADA,
+        )
+        item = ItemRequisicao.objects.create(
+            requisicao=requisicao,
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal("2.000"),
+            quantidade_autorizada=Decimal("2.000"),
+        )
+
+        with pytest.raises(DomainConflict):
+            registrar_saida_por_atendimento(
+                requisicao=requisicao,
+                item=item,
+                quantidade=Decimal("2"),
+                estoque_travado=estoque,
+            )
+
+        estoque.refresh_from_db()
+        assert estoque.saldo_fisico == Decimal("4")
+        assert estoque.saldo_reservado == Decimal("2")
+        assert MovimentacaoEstoque.objects.count() == 0
+
     def test_registrar_liberacao_reserva_por_atendimento_nao_altera_saldo_fisico(self):
         chefe = User.objects.create(
             matricula_funcional="99006",

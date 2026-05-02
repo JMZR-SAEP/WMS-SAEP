@@ -899,18 +899,32 @@ class TestAtendimentoRequisicaoService:
             quantidade_autorizada=Decimal("2"),
         )
 
-        cenarios = [
+        cenarios_validation_error = [
             [ItemAtendimentoData(item_id=item_a.id, quantidade_entregue=Decimal("2"))],
             [
                 ItemAtendimentoData(item_id=item_a.id, quantidade_entregue=Decimal("2")),
                 ItemAtendimentoData(item_id=item_a.id, quantidade_entregue=Decimal("2")),
             ],
             [
+                ItemAtendimentoData(item_id=item_a.id, quantidade_entregue=Decimal("2")),
+                ItemAtendimentoData(item_id=item_b.id + 999, quantidade_entregue=Decimal("2")),
+            ],
+        ]
+        for itens in cenarios_validation_error:
+            with pytest.raises(ValidationError):
+                atender_requisicao_com_itens(
+                    requisicao=requisicao,
+                    ator=atendente,
+                    itens=itens,
+                )
+
+        cenarios_domain_conflict = [
+            [
                 ItemAtendimentoData(item_id=item_a.id, quantidade_entregue=Decimal("3")),
                 ItemAtendimentoData(item_id=item_b.id, quantidade_entregue=Decimal("2")),
             ],
         ]
-        for itens in cenarios:
+        for itens in cenarios_domain_conflict:
             with pytest.raises(DomainConflict):
                 atender_requisicao_com_itens(
                     requisicao=requisicao,
