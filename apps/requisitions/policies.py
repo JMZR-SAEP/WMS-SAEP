@@ -31,17 +31,23 @@ def pode_visualizar_requisicao(user, requisicao: Requisicao) -> bool:
     )
 
 
-def queryset_requisicoes_visiveis(user) -> QuerySet[Requisicao]:
+def queryset_requisicoes_visiveis(
+    user,
+    *,
+    skip_prefetch: bool = False,
+) -> QuerySet[Requisicao]:
     queryset = Requisicao.objects.select_related(
         "criador",
         "beneficiario",
         "setor_beneficiario",
         "chefe_autorizador",
         "responsavel_atendimento",
-    ).prefetch_related(
-        "itens__material",
-        "eventos__usuario",
     )
+    if not skip_prefetch:
+        queryset = queryset.prefetch_related(
+            "itens__material",
+            "eventos__usuario",
+        )
 
     if not user.is_authenticated:
         return queryset.none()
