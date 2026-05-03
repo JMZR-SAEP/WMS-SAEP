@@ -321,6 +321,60 @@ class TestAuthAPI:
             }
         ]
 
+    def test_beneficiary_lookup_para_chefe_setor_filtra_por_setor_responsavel(self):
+        chefe_ti = self._criar_usuario(
+            matricula="21501",
+            nome_completo="Chefe TI Lookup",
+            papel=PapelChoices.CHEFE_SETOR,
+        )
+        setor_ti = self._criar_setor(nome="TI Lookup", chefe=chefe_ti)
+        chefe_ti.setor = setor_ti
+        chefe_ti.save(update_fields=["setor"])
+
+        chefe_rh = self._criar_usuario(
+            matricula="21502",
+            nome_completo="Chefe RH Lookup",
+            papel=PapelChoices.CHEFE_SETOR,
+        )
+        setor_rh = self._criar_setor(nome="RH Lookup", chefe=chefe_rh)
+        chefe_rh.setor = setor_rh
+        chefe_rh.save(update_fields=["setor"])
+
+        beneficiario_mesmo_setor = self._criar_usuario(
+            matricula="21503",
+            nome_completo="Bruno TI",
+            setor=setor_ti,
+        )
+        self._criar_usuario(
+            matricula="21504",
+            nome_completo="Bruno RH",
+            setor=setor_rh,
+        )
+        self._criar_usuario(
+            matricula="21505",
+            nome_completo="Bruno TI Inativo",
+            setor=setor_ti,
+            is_active=False,
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=chefe_ti)
+
+        response = client.get(reverse("user-beneficiary-lookup"), {"q": "Bruno"})
+
+        assert response.status_code == 200
+        assert response.data == [
+            {
+                "id": beneficiario_mesmo_setor.id,
+                "nome_completo": "Bruno TI",
+                "matricula_funcional": "21503",
+                "setor": {
+                    "id": setor_ti.id,
+                    "nome": "TI Lookup",
+                },
+            }
+        ]
+
     def test_beneficiary_lookup_para_almoxarifado_ordenado_por_relevancia_simples(self):
         chefe_alm = self._criar_usuario(
             matricula="22001",
@@ -379,6 +433,59 @@ class TestAuthAPI:
         assert [item["nome_completo"] for item in response.data] == [
             "Ana Paula",
             "Mariana Obras",
+        ]
+
+    def test_beneficiary_lookup_para_superusuario_retorna_visibilidade_ampla_elegivel(self):
+        chefe_ti = self._criar_usuario(
+            matricula="22501",
+            nome_completo="Chefe TI Super",
+            papel=PapelChoices.CHEFE_SETOR,
+        )
+        setor_ti = self._criar_setor(nome="TI Super", chefe=chefe_ti)
+        chefe_ti.setor = setor_ti
+        chefe_ti.save(update_fields=["setor"])
+
+        chefe_rh = self._criar_usuario(
+            matricula="22502",
+            nome_completo="Chefe RH Super",
+            papel=PapelChoices.CHEFE_SETOR,
+        )
+        setor_rh = self._criar_setor(nome="RH Super", chefe=chefe_rh)
+        chefe_rh.setor = setor_rh
+        chefe_rh.save(update_fields=["setor"])
+
+        superuser = User.objects.create_superuser(
+            matricula_funcional="99901",
+            password="senha-segura-123",
+            nome_completo="Super Admin Lookup",
+        )
+
+        self._criar_usuario(
+            matricula="22503",
+            nome_completo="Carla TI",
+            setor=setor_ti,
+        )
+        self._criar_usuario(
+            matricula="22504",
+            nome_completo="Carla RH",
+            setor=setor_rh,
+        )
+        self._criar_usuario(
+            matricula="22505",
+            nome_completo="Carla Inativa",
+            setor=setor_ti,
+            is_active=False,
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=superuser)
+
+        response = client.get(reverse("user-beneficiary-lookup"), {"q": "Carla"})
+
+        assert response.status_code == 200
+        assert [item["nome_completo"] for item in response.data] == [
+            "Carla RH",
+            "Carla TI",
         ]
 
     def test_beneficiary_lookup_sem_autenticacao_retorna_401(self):

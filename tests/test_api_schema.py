@@ -213,6 +213,9 @@ class TestOpenAPISchema:
             if path == "/api/v1/users/beneficiary-lookup/":
                 assert operation["parameters"][0]["name"] == "q"
                 assert operation["parameters"][0]["required"] is True
+                assert operation["parameters"][0]["schema"]["minLength"] == 3, (
+                    "beneficiary lookup query param must document minLength=3"
+                )
 
             for code in expectation["success_codes"]:
                 assert code in responses
@@ -225,6 +228,7 @@ class TestOpenAPISchema:
                     schema = responses[code]["content"]["application/json"]["schema"]
                     assert schema["type"] == "array"
                     assert schema["items"]["$ref"] == expectation["success_items_ref"]
+                    assert schema["maxItems"] == 10
                 else:
                     assert (
                         responses[code]["content"]["application/json"]["schema"]["$ref"]

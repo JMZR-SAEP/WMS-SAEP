@@ -63,8 +63,11 @@ def queryset_beneficiarios_lookup_para(criador) -> QuerySet[User]:
         setor__is_active=True,
     )
 
-    if not _user_ativo_nao_superuser(criador):
+    if not criador.is_active:
         return queryset.none()
+
+    if criador.is_superuser:
+        return queryset
 
     papel = criador.papel
 

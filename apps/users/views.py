@@ -3,7 +3,7 @@ from django.db.models import Case, IntegerField, Value, When
 from django.middleware.csrf import get_token
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -134,7 +134,14 @@ class BeneficiaryLookupView(APIView):
         tags=["users"],
         parameters=[BeneficiaryLookupQuerySerializer],
         responses={
-            200: BeneficiaryLookupOutputSerializer(many=True),
+            200: OpenApiResponse(
+                response={
+                    "type": "array",
+                    "items": {"$ref": "#/components/schemas/BeneficiaryLookupOutput"},
+                    "maxItems": 10,
+                },
+                description="Lista curta de beneficiários elegíveis, limitada a 10 resultados.",
+            ),
             400: ErrorResponseSerializer(),
             401: ErrorResponseSerializer(),
         },
