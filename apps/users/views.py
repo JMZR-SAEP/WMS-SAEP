@@ -1,4 +1,5 @@
 from django.contrib.auth import authenticate, login, logout
+from django.db.models import Case, IntegerField, Value, When
 from django.middleware.csrf import get_token
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import ensure_csrf_cookie
@@ -11,9 +12,12 @@ from rest_framework.views import APIView
 
 from apps.core.api.serializers import ErrorResponseSerializer
 from apps.users.authentication import SessionAuthentication401
+from apps.users.policies import queryset_beneficiarios_lookup_para
 from apps.users.serializers import (
     AuthLoginInputSerializer,
     AuthSessionOutputSerializer,
+    BeneficiaryLookupOutputSerializer,
+    BeneficiaryLookupQuerySerializer,
     CsrfTokenOutputSerializer,
 )
 
@@ -118,4 +122,40 @@ class AuthMeView(APIView):
     )
     def get(self, request):
         serializer = AuthSessionOutputSerializer(_session_payload(request.user))
+        return Response(serializer.data)
+
+
+class BeneficiaryLookupView(APIView):
+    authentication_classes = [SessionAuthentication401]
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        operation_id="users_beneficiary_lookup",
+        tags=["users"],
+        parameters=[BeneficiaryLookupQuerySerializer],
+        responses={
+            200: BeneficiaryLookupOutputSerializer(many=True),
+            400: ErrorResponseSerializer(),
+            401: ErrorResponseSerializer(),
+        },
+    )
+    def get(self, request):
+        query_serializer = BeneficiaryLookupQuerySerializer(data=request.query_params)
+        query_serializer.is_valid(raise_exception=True)
+
+        query = query_serializer.validated_data["q"]
+        queryset = (
+            queryset_beneficiarios_lookup_para(request.user)
+            .filter(nome_completo__icontains=query)
+            .annotate(
+                nome_match_rank=Case(
+                    When(nome_completo__istartswith=query, then=Value(0)),
+                    default=Value(1),
+                    output_field=IntegerField(),
+                )
+            )
+            .order_by("nome_match_rank", "nome_completo", "matricula_funcional")[:10]
+        )
+
+        serializer = BeneficiaryLookupOutputSerializer(queryset, many=True)
         return Response(serializer.data)

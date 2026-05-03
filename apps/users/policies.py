@@ -7,7 +7,9 @@ para garantir que a mesma lógica seja aplicada em ambas as camadas
 (invariante PER-08).
 """
 
-from .models import PapelChoices
+from django.db.models import QuerySet
+
+from .models import PapelChoices, User
 
 
 def _user_ativo_nao_superuser(user) -> bool:
@@ -51,6 +53,39 @@ def pode_criar_requisicao_para(criador, beneficiario) -> bool:
         return setor_responsavel.pk == beneficiario.setor_id
 
     return False
+
+
+def queryset_beneficiarios_lookup_para(criador) -> QuerySet[User]:
+    queryset = User.objects.select_related("setor").filter(
+        is_active=True,
+        is_superuser=False,
+        setor__isnull=False,
+        setor__is_active=True,
+    )
+
+    if not _user_ativo_nao_superuser(criador):
+        return queryset.none()
+
+    papel = criador.papel
+
+    if papel in (PapelChoices.AUXILIAR_ALMOXARIFADO, PapelChoices.CHEFE_ALMOXARIFADO):
+        return queryset
+
+    if papel == PapelChoices.SOLICITANTE:
+        return queryset.filter(pk=criador.pk)
+
+    if papel == PapelChoices.AUXILIAR_SETOR:
+        if criador.setor_id is None:
+            return queryset.none()
+        return queryset.filter(setor_id=criador.setor_id)
+
+    if papel == PapelChoices.CHEFE_SETOR:
+        setor_responsavel = getattr(criador, "setor_responsavel", None)
+        if setor_responsavel is None:
+            return queryset.none()
+        return queryset.filter(setor=setor_responsavel)
+
+    return queryset.none()
 
 
 def pode_autorizar_setor(autorizador, setor) -> bool:

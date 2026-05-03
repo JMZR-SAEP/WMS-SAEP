@@ -136,6 +136,7 @@ class TestOpenAPISchema:
         assert "/api/v1/auth/login/" in paths
         assert "/api/v1/auth/logout/" in paths
         assert "/api/v1/auth/me/" in paths
+        assert "/api/v1/users/beneficiary-lookup/" in paths
         assert "/api/v1/materials/{id}/" in paths
         assert "/api/v1/requisitions/" in paths
         assert "/api/v1/requisitions/{id}/submit/" in paths
@@ -186,6 +187,12 @@ class TestOpenAPISchema:
                 "success_ref": "#/components/schemas/AuthSessionOutput",
                 "error_codes": {"401"},
             },
+            ("/api/v1/users/beneficiary-lookup/", "get"): {
+                "request_body": False,
+                "success_codes": {"200"},
+                "success_items_ref": "#/components/schemas/BeneficiaryLookupOutput",
+                "error_codes": {"400", "401"},
+            },
         }
 
         error_ref = "#/components/schemas/ErrorResponse"
@@ -203,10 +210,21 @@ class TestOpenAPISchema:
             else:
                 assert "requestBody" not in operation
 
+            if path == "/api/v1/users/beneficiary-lookup/":
+                assert operation["parameters"][0]["name"] == "q"
+                assert operation["parameters"][0]["required"] is True
+
             for code in expectation["success_codes"]:
                 assert code in responses
-                if expectation["success_ref"] is None:
+                if (
+                    expectation.get("success_ref") is None
+                    and expectation.get("success_items_ref") is None
+                ):
                     assert "content" not in responses[code]
+                elif expectation.get("success_items_ref"):
+                    schema = responses[code]["content"]["application/json"]["schema"]
+                    assert schema["type"] == "array"
+                    assert schema["items"]["$ref"] == expectation["success_items_ref"]
                 else:
                     assert (
                         responses[code]["content"]["application/json"]["schema"]["$ref"]
