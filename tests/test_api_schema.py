@@ -140,6 +140,7 @@ class TestOpenAPISchema:
         assert "/api/v1/materials/{id}/" in paths
         assert "/api/v1/requisitions/" in paths
         assert "/api/v1/requisitions/{id}/" in paths
+        assert "/api/v1/requisitions/{id}/draft/" in paths
         assert "/api/v1/requisitions/{id}/submit/" in paths
         assert "/api/v1/requisitions/{id}/return-to-draft/" in paths
         assert "/api/v1/requisitions/{id}/discard/" in paths
@@ -291,6 +292,13 @@ class TestOpenAPISchema:
                 "request_body": True,
                 "request_ref": "#/components/schemas/RequisicaoCreateInput",
                 "success_codes": {"201"},
+                "success_ref": "#/components/schemas/RequisicaoDetailOutput",
+                "error_codes": {"400", "403", "404", "409"},
+            },
+            ("/api/v1/requisitions/{id}/draft/", "put"): {
+                "request_body": True,
+                "request_ref": "#/components/schemas/RequisicaoCreateInput",
+                "success_codes": {"200"},
                 "success_ref": "#/components/schemas/RequisicaoDetailOutput",
                 "error_codes": {"400", "403", "404", "409"},
             },

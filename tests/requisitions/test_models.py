@@ -122,20 +122,70 @@ class TestRequisicaoModel:
 
         assert req.setor_beneficiario == beneficiario.setor
 
-    def test_beneficiario_nao_pode_ser_alterado_apos_criacao(self):
-        """REQ-domain — beneficiário é imutável após a criação"""
+    def test_beneficiario_pode_ser_alterado_enquanto_rascunho(self):
+        """REQ-domain — beneficiário pode mudar enquanto a requisição segue em rascunho"""
         req = self._criar_requisicao()
         novo_beneficiario = self._criar_usuario(matricula="1003", nome="Carlos")
+
+        req.beneficiario = novo_beneficiario
+        req.setor_beneficiario = novo_beneficiario.setor
+
+        req.save(update_fields=["beneficiario", "setor_beneficiario"])
+
+        req.refresh_from_db()
+        assert req.beneficiario == novo_beneficiario
+        assert req.setor_beneficiario == novo_beneficiario.setor
+
+    def test_beneficiario_nao_pode_ser_alterado_fora_de_rascunho(self):
+        """REQ-domain — beneficiário volta a ser imutável após sair de rascunho"""
+        req = self._criar_requisicao()
+        self._marcar_primeiro_envio(req)
+        novo_beneficiario = self._criar_usuario(matricula="1004", nome="Carlos")
+
+        req.beneficiario = novo_beneficiario
+        req.setor_beneficiario = novo_beneficiario.setor
+
+        with pytest.raises(ValidationError):
+            req.save(update_fields=["beneficiario", "setor_beneficiario"])
+
+    def test_setor_beneficiario_pode_ser_alterado_enquanto_rascunho(self):
+        """REQ-domain — snapshot de setor acompanha troca de beneficiário em rascunho"""
+        req = self._criar_requisicao()
+        outro_setor = self._criar_setor(nome="Setor Alternativo", matricula_chefe="9910")
+        novo_beneficiario = self._criar_usuario(
+            matricula="1005",
+            nome="Beneficiario Alternativo",
+            setor=outro_setor,
+        )
+
+        req.beneficiario = novo_beneficiario
+        req.setor_beneficiario = outro_setor
+
+        req.save(update_fields=["beneficiario", "setor_beneficiario"])
+
+        req.refresh_from_db()
+        assert req.setor_beneficiario == outro_setor
+
+    def test_rascunho_rejeita_snapshot_inconsistente_com_setor_do_beneficiario(self):
+        """REQ-domain — rascunho não aceita beneficiário/setor_beneficiario desencontrados"""
+        req = self._criar_requisicao()
+        outro_setor = self._criar_setor(nome="Setor Inconsistente", matricula_chefe="9912")
+        novo_beneficiario = self._criar_usuario(
+            matricula="1006",
+            nome="Beneficiario Inconsistente",
+            setor=outro_setor,
+        )
 
         req.beneficiario = novo_beneficiario
 
         with pytest.raises(ValidationError):
             req.save(update_fields=["beneficiario"])
 
-    def test_setor_beneficiario_nao_pode_ser_alterado_apos_criacao(self):
-        """REQ-domain — snapshot de setor é imutável após a criação"""
+    def test_setor_beneficiario_nao_pode_ser_alterado_fora_de_rascunho(self):
+        """REQ-domain — snapshot de setor segue imutável após sair de rascunho"""
         req = self._criar_requisicao()
-        outro_setor = self._criar_setor(nome="Setor Alternativo", matricula_chefe="9910")
+        self._marcar_primeiro_envio(req)
+        outro_setor = self._criar_setor(nome="Setor Alternativo 2", matricula_chefe="9911")
 
         req.setor_beneficiario = outro_setor
 

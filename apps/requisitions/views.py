@@ -6,6 +6,7 @@ from drf_spectacular.openapi import OpenApiParameter
 from drf_spectacular.utils import extend_schema
 from rest_framework import filters, mixins, status
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
@@ -31,6 +32,7 @@ from apps.requisitions.services import (
     ItemAutorizacaoData,
     ItemRascunhoData,
     atender_requisicao,
+    atualizar_rascunho_requisicao,
     autorizar_requisicao,
     cancelar_requisicao,
     criar_rascunho_requisicao,
@@ -172,6 +174,39 @@ class RequisicaoViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, Generi
         )
         output = RequisicaoDetailOutputSerializer(requisicao)
         return Response(output.data, status=status.HTTP_201_CREATED)
+
+    @extend_schema(
+        operation_id="requisitions_update_draft",
+        tags=["requisitions"],
+        request=RequisicaoCreateInputSerializer,
+        responses={
+            200: RequisicaoDetailOutputSerializer(),
+            400: ErrorResponseSerializer(),
+            403: ErrorResponseSerializer(),
+            404: ErrorResponseSerializer(),
+            409: ErrorResponseSerializer(),
+        },
+    )
+    @action(detail=True, methods=["put"], url_path="draft")
+    def update_draft(self, request, pk=None):
+        serializer = RequisicaoCreateInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            requisicao_id = int(pk)
+        except (TypeError, ValueError) as exc:
+            raise ValidationError({"pk": ["Identificador de requisição inválido."]}) from exc
+
+        requisicao = atualizar_rascunho_requisicao(
+            requisicao_id=requisicao_id,
+            ator=request.user,
+            beneficiario_id=serializer.validated_data["beneficiario_id"],
+            observacao=serializer.validated_data["observacao"],
+            itens=[
+                ItemRascunhoData(**item_data) for item_data in serializer.validated_data["itens"]
+            ],
+        )
+        return Response(RequisicaoDetailOutputSerializer(requisicao).data)
 
     @extend_schema(
         operation_id="requisitions_submit",
