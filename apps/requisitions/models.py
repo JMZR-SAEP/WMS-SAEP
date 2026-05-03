@@ -230,17 +230,23 @@ class Requisicao(models.Model):
             if persisted is not None:
                 errors = {}
                 pode_alterar_snapshot = persisted["status"] == StatusRequisicao.RASCUNHO
-                if (
-                    self.beneficiario_id != persisted["beneficiario_id"]
-                    and not pode_alterar_snapshot
-                ):
-                    errors["beneficiario"] = "Beneficiário não pode ser alterado após a criação."
-                if (
+                beneficiario_foi_alterado = self.beneficiario_id != persisted["beneficiario_id"]
+                setor_beneficiario_foi_alterado = (
                     self.setor_beneficiario_id != persisted["setor_beneficiario_id"]
-                    and not pode_alterar_snapshot
-                ):
+                )
+                if beneficiario_foi_alterado and not pode_alterar_snapshot:
+                    errors["beneficiario"] = "Beneficiário não pode ser alterado após a criação."
+                if setor_beneficiario_foi_alterado and not pode_alterar_snapshot:
                     errors["setor_beneficiario"] = (
                         "Setor beneficiário é snapshot histórico e não pode ser alterado."
+                    )
+                if (
+                    pode_alterar_snapshot
+                    and (beneficiario_foi_alterado or setor_beneficiario_foi_alterado)
+                    and self.beneficiario.setor_id != self.setor_beneficiario_id
+                ):
+                    errors["setor_beneficiario"] = (
+                        "Setor beneficiário deve corresponder ao setor atual do beneficiário."
                     )
                 if errors:
                     raise ValidationError(errors)

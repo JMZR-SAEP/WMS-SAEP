@@ -166,6 +166,21 @@ class TestRequisicaoModel:
         req.refresh_from_db()
         assert req.setor_beneficiario == outro_setor
 
+    def test_rascunho_rejeita_snapshot_inconsistente_com_setor_do_beneficiario(self):
+        """REQ-domain — rascunho não aceita beneficiário/setor_beneficiario desencontrados"""
+        req = self._criar_requisicao()
+        outro_setor = self._criar_setor(nome="Setor Inconsistente", matricula_chefe="9912")
+        novo_beneficiario = self._criar_usuario(
+            matricula="1006",
+            nome="Beneficiario Inconsistente",
+            setor=outro_setor,
+        )
+
+        req.beneficiario = novo_beneficiario
+
+        with pytest.raises(ValidationError):
+            req.save(update_fields=["beneficiario"])
+
     def test_setor_beneficiario_nao_pode_ser_alterado_fora_de_rascunho(self):
         """REQ-domain — snapshot de setor segue imutável após sair de rascunho"""
         req = self._criar_requisicao()

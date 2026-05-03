@@ -191,13 +191,10 @@ class RequisicaoViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, Generi
         serializer = RequisicaoCreateInputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        beneficiario = get_object_or_404(
-            User.objects.select_related("setor"), pk=serializer.validated_data["beneficiario_id"]
-        )
         requisicao = atualizar_rascunho_requisicao(
-            requisicao=self.get_object(),
+            requisicao_id=int(pk),
             ator=request.user,
-            beneficiario=beneficiario,
+            beneficiario_id=serializer.validated_data["beneficiario_id"],
             observacao=serializer.validated_data["observacao"],
             itens=[
                 ItemRascunhoData(**item_data) for item_data in serializer.validated_data["itens"]

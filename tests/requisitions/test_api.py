@@ -648,6 +648,34 @@ class TestRequisicaoAPI:
 
         assert response.status_code == 404
 
+    def test_update_draft_bloqueia_chefe_almox_visivel_sem_permissao_contextual(self):
+        setor = self._criar_setor("Patio Permissao Contextual", "900096")
+        setor_almox = self._criar_setor(
+            "Almoxarifado",
+            "900097",
+            papel=PapelChoices.CHEFE_ALMOXARIFADO,
+        )
+        criador = self._criar_usuario("100141", "Criador", setor=setor)
+        beneficiario = self._criar_usuario("100142", "Beneficiario", setor=setor)
+        chefe_almox = setor_almox.chefe_responsavel
+        material = self._criar_material_com_estoque("001.001.077")
+        requisicao = self._criar_requisicao_com_item(
+            criador=criador,
+            beneficiario=beneficiario,
+            material=material,
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=chefe_almox)
+        response = client.put(
+            reverse("requisicao-update-draft", args=[requisicao.id]),
+            self._payload_requisicao(beneficiario_id=beneficiario.id, material_id=material.id),
+            format="json",
+        )
+
+        assert response.status_code == 403
+        assert response.data["error"]["code"] == "permission_denied"
+
     def test_update_draft_exige_autenticacao(self):
         setor = self._criar_setor("Patio Auth", "900095")
         usuario = self._criar_usuario("100131", "Usuario Auth", setor=setor)

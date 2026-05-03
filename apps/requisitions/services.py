@@ -4,7 +4,7 @@ from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
 from django.utils import timezone
-from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 
 from apps.core.api.exceptions import DomainConflict
 from apps.core.events import (
@@ -29,6 +29,7 @@ from apps.requisitions.policies import (
     pode_autorizar_requisicao,
     pode_cancelar_autorizada,
     pode_manipular_pre_autorizacao,
+    pode_visualizar_requisicao,
     queryset_fila_atendimento,
     queryset_fila_autorizacao,
 )
@@ -38,7 +39,7 @@ from apps.stock.services import (
     registrar_reserva_por_autorizacao,
     registrar_saida_por_atendimento,
 )
-from apps.users.models import PapelChoices
+from apps.users.models import PapelChoices, Setor
 from apps.users.policies import (
     pode_criar_requisicao_para,
     pode_ver_fila_atendimento,
@@ -542,50 +543,71 @@ def criar_rascunho_requisicao(
 
 def atualizar_rascunho_requisicao(
     *,
-    requisicao: Requisicao,
+    requisicao_id: int,
     ator: User,
-    beneficiario: User,
+    beneficiario_id: int,
     observacao: str,
     itens: list[ItemRascunhoData],
 ) -> Requisicao:
-    if beneficiario.setor_id is None:
-        raise ValidationError({"beneficiario_id": ["Beneficiário deve possuir setor válido."]})
-
-    if not beneficiario.setor.is_active:
-        raise DomainConflict(
-            "Setor do beneficiário está inativo.",
-            details={"beneficiario_id": f"Setor '{beneficiario.setor.nome}' está inativo."},
-        )
-
     materiais = _validar_itens_rascunho(itens)
 
     with transaction.atomic():
-        requisicao = (
-            Requisicao.objects.select_for_update()
-            .select_related("criador", "beneficiario", "setor_beneficiario")
-            .prefetch_related("itens__material", "eventos__usuario")
-            .get(pk=requisicao.pk)
-        )
+        try:
+            requisicao_locked = (
+                Requisicao.objects.select_related(
+                    "criador",
+                    "beneficiario",
+                    "setor_beneficiario",
+                )
+                .select_for_update()
+                .prefetch_related("itens__material", "eventos__usuario")
+                .get(pk=requisicao_id)
+            )
+        except Requisicao.DoesNotExist as exc:
+            raise NotFound("Requisição não encontrada.") from exc
 
-        if not pode_manipular_pre_autorizacao(ator, requisicao):
+        if not pode_visualizar_requisicao(ator, requisicao_locked):
+            raise NotFound("Requisição não encontrada.")
+
+        if not pode_manipular_pre_autorizacao(ator, requisicao_locked):
             raise PermissionDenied("Apenas criador ou beneficiário podem editar a requisição.")
 
-        if requisicao.status != StatusRequisicao.RASCUNHO:
+        if requisicao_locked.status != StatusRequisicao.RASCUNHO:
             raise DomainConflict(
                 "Somente requisições em rascunho podem ser editadas.",
-                details={"status_atual": requisicao.status},
+                details={"status_atual": requisicao_locked.status},
             )
 
-        if not pode_criar_requisicao_para(ator, beneficiario):
+        try:
+            beneficiario_locked = User.objects.select_for_update().get(pk=beneficiario_id)
+        except User.DoesNotExist as exc:
+            raise NotFound("Beneficiário não encontrado.") from exc
+
+        if beneficiario_locked.setor_id is None:
+            raise ValidationError({"beneficiario_id": ["Beneficiário deve possuir setor válido."]})
+
+        setor_beneficiario_locked = Setor.objects.select_for_update().get(
+            pk=beneficiario_locked.setor_id
+        )
+
+        if not setor_beneficiario_locked.is_active:
+            raise DomainConflict(
+                "Setor do beneficiário está inativo.",
+                details={
+                    "beneficiario_id": f"Setor '{setor_beneficiario_locked.nome}' está inativo."
+                },
+            )
+
+        if not pode_criar_requisicao_para(ator, beneficiario_locked):
             raise PermissionDenied(
                 "Usuário sem permissão para criar requisição para este beneficiário."
             )
 
-        requisicao.beneficiario = beneficiario
-        requisicao.setor_beneficiario = beneficiario.setor
-        requisicao.observacao = observacao
-        requisicao.full_clean()
-        requisicao.save(
+        requisicao_locked.beneficiario = beneficiario_locked
+        requisicao_locked.setor_beneficiario = setor_beneficiario_locked
+        requisicao_locked.observacao = observacao
+        requisicao_locked.full_clean()
+        requisicao_locked.save(
             update_fields=[
                 "beneficiario",
                 "setor_beneficiario",
@@ -594,12 +616,12 @@ def atualizar_rascunho_requisicao(
             ]
         )
 
-        requisicao.itens.all().delete()
+        requisicao_locked.itens.all().delete()
         materiais_por_id = {material.pk: material for material in materiais}
         ItemRequisicao.objects.bulk_create(
             [
                 ItemRequisicao(
-                    requisicao=requisicao,
+                    requisicao=requisicao_locked,
                     material=materiais_por_id[item.material_id],
                     unidade_medida=materiais_por_id[item.material_id].unidade_medida,
                     quantidade_solicitada=item.quantidade_solicitada,
@@ -616,7 +638,7 @@ def atualizar_rascunho_requisicao(
             "setor_beneficiario",
         )
         .prefetch_related("itens__material", "eventos__usuario")
-        .get(pk=requisicao.pk)
+        .get(pk=requisicao_id)
     )
 
 
