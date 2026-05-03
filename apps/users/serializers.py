@@ -22,3 +22,14 @@ class CsrfTokenOutputSerializer(serializers.Serializer):
 class AuthLoginInputSerializer(serializers.Serializer):
     matricula_funcional = serializers.CharField()
     password = serializers.CharField(write_only=True)
+
+
+class BeneficiaryLookupQuerySerializer(serializers.Serializer):
+    q = serializers.CharField(min_length=3, trim_whitespace=True)
+
+
+class BeneficiaryLookupOutputSerializer(serializers.Serializer):
+    id = serializers.IntegerField(read_only=True)
+    matricula_funcional = serializers.CharField(read_only=True)
+    nome_completo = serializers.CharField(read_only=True)
+    setor = AuthSetorOutputSerializer(read_only=True)

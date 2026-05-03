@@ -1,10 +1,21 @@
 from django.urls import path
 
-from apps.users.views import AuthCsrfView, AuthLoginView, AuthLogoutView, AuthMeView
+from apps.users.views import (
+    AuthCsrfView,
+    AuthLoginView,
+    AuthLogoutView,
+    AuthMeView,
+    BeneficiaryLookupView,
+)
 
 urlpatterns = [
     path("auth/csrf/", AuthCsrfView.as_view(), name="auth-csrf"),
     path("auth/login/", AuthLoginView.as_view(), name="auth-login"),
     path("auth/logout/", AuthLogoutView.as_view(), name="auth-logout"),
     path("auth/me/", AuthMeView.as_view(), name="auth-me"),
+    path(
+        "users/beneficiary-lookup/",
+        BeneficiaryLookupView.as_view(),
+        name="user-beneficiary-lookup",
+    ),
 ]
