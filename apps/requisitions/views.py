@@ -60,10 +60,16 @@ class RequisicaoViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, Generi
     ]
 
     def get_queryset(self):
-        queryset = queryset_requisicoes_visiveis(self.request.user)
         if self.action == "list":
-            return queryset.annotate(total_itens=Count("itens")).order_by("-updated_at", "-id")
-        return queryset
+            return (
+                queryset_requisicoes_visiveis(
+                    self.request.user,
+                    skip_prefetch=True,
+                )
+                .annotate(total_itens=Count("itens"))
+                .order_by("-updated_at", "-id")
+            )
+        return queryset_requisicoes_visiveis(self.request.user)
 
     def get_serializer_class(self):
         if self.action == "list":

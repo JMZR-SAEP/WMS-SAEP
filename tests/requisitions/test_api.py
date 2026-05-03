@@ -300,6 +300,41 @@ class TestRequisicaoAPI:
         assert "itens" not in response.data["results"][0]
         assert "eventos" not in response.data["results"][0]
 
+    def test_lista_requisicoes_nao_autenticado_retorna_403(self):
+        client = APIClient()
+
+        response = client.get(reverse("requisicao-list"))
+
+        assert response.status_code == 403
+        assert response.data["error"]["code"] == "not_authenticated"
+
+    def test_lista_requisicoes_almoxarife_ve_todos_os_setores(self):
+        setor_a = self._criar_setor("Almoxarifado", "900079")
+        setor_b = self._criar_setor("Manutencao", "900080")
+        almoxarife = self._criar_usuario(
+            "100090",
+            "Auxiliar Almoxarifado",
+            papel=PapelChoices.AUXILIAR_ALMOXARIFADO,
+            setor=setor_a,
+        )
+        usuario_b = self._criar_usuario("100091", "Solicitante B", setor=setor_b)
+        material = self._criar_material_com_estoque("001.001.057")
+        requisicao = self._criar_requisicao_com_item(
+            criador=usuario_b,
+            beneficiario=usuario_b,
+            material=material,
+            status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
+            numero_publico="REQ-2026-000777",
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=almoxarife)
+        response = client.get(reverse("requisicao-list"))
+
+        assert response.status_code == 200
+        assert response.data["count"] >= 1
+        assert any(item["id"] == requisicao.id for item in response.data["results"])
+
     def test_lista_requisicoes_filtra_por_status_e_busca_textual(self):
         setor = self._criar_setor("Compras", "900074")
         usuario = self._criar_usuario("100084", "Solicitante Compras", setor=setor)
