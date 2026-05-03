@@ -648,6 +648,26 @@ class TestRequisicaoAPI:
 
         assert response.status_code == 404
 
+    def test_update_draft_exige_autenticacao(self):
+        setor = self._criar_setor("Patio Auth", "900095")
+        usuario = self._criar_usuario("100131", "Usuario Auth", setor=setor)
+        material = self._criar_material_com_estoque("001.001.076")
+        requisicao = self._criar_requisicao_com_item(
+            criador=usuario,
+            beneficiario=usuario,
+            material=material,
+        )
+
+        client = APIClient()
+        response = client.put(
+            reverse("requisicao-update-draft", args=[requisicao.id]),
+            self._payload_requisicao(beneficiario_id=usuario.id, material_id=material.id),
+            format="json",
+        )
+
+        assert response.status_code == 403
+        assert response.data["error"]["code"] == "not_authenticated"
+
     def test_reenvio_preserva_numero_publico(self):
         setor = self._criar_setor("Frota", "90010")
         usuario = self._criar_usuario("10011", "Solicitante Frota", setor=setor)

@@ -548,13 +548,8 @@ def atualizar_rascunho_requisicao(
     observacao: str,
     itens: list[ItemRascunhoData],
 ) -> Requisicao:
-    if not pode_manipular_pre_autorizacao(ator, requisicao):
-        raise PermissionDenied("Apenas criador ou beneficiário podem editar a requisição.")
-
     if beneficiario.setor_id is None:
-        raise ValidationError(
-            {"beneficiario_id": ["Beneficiário deve possuir setor para criar a requisição."]}
-        )
+        raise ValidationError({"beneficiario_id": ["Beneficiário deve possuir setor válido."]})
 
     if not beneficiario.setor.is_active:
         raise DomainConflict(
@@ -571,6 +566,9 @@ def atualizar_rascunho_requisicao(
             .prefetch_related("itens__material", "eventos__usuario")
             .get(pk=requisicao.pk)
         )
+
+        if not pode_manipular_pre_autorizacao(ator, requisicao):
+            raise PermissionDenied("Apenas criador ou beneficiário podem editar a requisição.")
 
         if requisicao.status != StatusRequisicao.RASCUNHO:
             raise DomainConflict(
