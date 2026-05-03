@@ -7,6 +7,7 @@ from django.test import override_settings
 
 from apps.materials.models import Material
 from apps.requisitions.models import Requisicao, StatusRequisicao
+from apps.requisitions.seed_pilot_minimo import carregar_seed_pilot_minimo
 from apps.stock.models import EstoqueMaterial
 from apps.users.models import PapelChoices, User
 
@@ -19,7 +20,7 @@ class TestSeedPilotMinimoCommand:
             CommandError,
             match="Seed piloto mínima só pode ser executada em ambiente efêmero.",
         ):
-            call_command("seed_pilot_minimo")
+            carregar_seed_pilot_minimo()
 
     def test_cria_cenario_minimo_oficial_para_validacao_manual_e_playwright(self):
         stdout = StringIO()
@@ -106,3 +107,21 @@ class TestSeedPilotMinimoCommand:
         assert estoque_baixo.saldo_reservado == 1
 
         assert "Seed piloto mínima carregada com sucesso" in stdout.getvalue()
+
+    def test_seed_is_idempotent(self):
+        call_command("seed_pilot_minimo")
+        call_command("seed_pilot_minimo")
+
+        assert User.objects.count() == 8
+        assert Material.objects.count() == 4
+        assert Requisicao.objects.count() == 4
+        assert list(
+            Requisicao.objects.filter(observacao__startswith="SEED_PILOT_MINIMO")
+            .values_list("status", flat=True)
+            .order_by("id")
+        ) == [
+            StatusRequisicao.RASCUNHO,
+            StatusRequisicao.AGUARDANDO_AUTORIZACAO,
+            StatusRequisicao.AUTORIZADA,
+            StatusRequisicao.ATENDIDA_PARCIALMENTE,
+        ]
