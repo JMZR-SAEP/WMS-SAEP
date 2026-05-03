@@ -275,6 +275,12 @@ Conteúdo mínimo:
 
 Essa seed é base oficial tanto para validação manual quanto para Playwright local.
 
+Fluxo operacional esperado no ambiente efêmero:
+
+- rodar `rtk make setup`
+- rodar `rtk make seed-pilot-minimo`
+- usar esse mesmo cenário como baseline para validação manual local e para E2E com Playwright
+
 ## 15. CI
 
 Entrada em duas fases:
