@@ -321,6 +321,22 @@ class TestAuthAPI:
             }
         ]
 
+    def test_beneficiary_lookup_para_solicitante_sem_setor_retorna_lista_vazia(self):
+        ator = self._criar_usuario(
+            matricula="21101",
+            nome_completo="Ana Sem Setor",
+            papel=PapelChoices.SOLICITANTE,
+            setor=None,
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=ator)
+
+        response = client.get(reverse("user-beneficiary-lookup"), {"q": "Ana"})
+
+        assert response.status_code == 200
+        assert response.data == []
+
     def test_beneficiary_lookup_para_chefe_setor_filtra_por_setor_responsavel(self):
         chefe_ti = self._criar_usuario(
             matricula="21501",
@@ -374,6 +390,22 @@ class TestAuthAPI:
                 },
             }
         ]
+
+    def test_beneficiary_lookup_para_chefe_setor_sem_setor_responsavel_retorna_lista_vazia(self):
+        chefe_sem_setor = self._criar_usuario(
+            matricula="21601",
+            nome_completo="Chefe Sem Setor",
+            papel=PapelChoices.CHEFE_SETOR,
+            setor=None,
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=chefe_sem_setor)
+
+        response = client.get(reverse("user-beneficiary-lookup"), {"q": "Bruno"})
+
+        assert response.status_code == 200
+        assert response.data == []
 
     def test_beneficiary_lookup_para_almoxarifado_ordenado_por_relevancia_simples(self):
         chefe_alm = self._criar_usuario(
@@ -434,6 +466,22 @@ class TestAuthAPI:
             "Ana Paula",
             "Mariana Obras",
         ]
+
+    def test_beneficiary_lookup_para_auxiliar_setor_sem_setor_retorna_lista_vazia(self):
+        auxiliar_sem_setor = self._criar_usuario(
+            matricula="22101",
+            nome_completo="Auxiliar Sem Setor",
+            papel=PapelChoices.AUXILIAR_SETOR,
+            setor=None,
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=auxiliar_sem_setor)
+
+        response = client.get(reverse("user-beneficiary-lookup"), {"q": "Ana"})
+
+        assert response.status_code == 200
+        assert response.data == []
 
     def test_beneficiary_lookup_para_superusuario_retorna_visibilidade_ampla_elegivel(self):
         chefe_ti = self._criar_usuario(

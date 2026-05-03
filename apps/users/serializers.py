@@ -32,4 +32,4 @@ class BeneficiaryLookupOutputSerializer(serializers.Serializer):
     id = serializers.IntegerField(read_only=True)
     matricula_funcional = serializers.CharField(read_only=True)
     nome_completo = serializers.CharField(read_only=True)
-    setor = AuthSetorOutputSerializer(read_only=True, allow_null=True)
+    setor = AuthSetorOutputSerializer(read_only=True)
