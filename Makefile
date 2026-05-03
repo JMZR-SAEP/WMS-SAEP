@@ -114,8 +114,11 @@ test: ## Rodar testes com settings de teste
 	-rm -fr .pytest_cache/
 	DJANGO_SETTINGS_MODULE=$(TEST_SETTINGS_MODULE) $(UV) run pytest
 
+seed-pilot-minimo: ## Carregar seed minima oficial do piloto
+	DJANGO_SETTINGS_MODULE=$(DJANGO_SETTINGS_MODULE) $(DJANGO_ADMIN) seed_pilot_minimo
+
 run: ## Subir servidor de desenvolvimento
 	DJANGO_SETTINGS_MODULE=$(DJANGO_SETTINGS_MODULE) $(DJANGO_ADMIN) runserver
 
-.PHONY: help prepare init setup clean cleanall veryclean test run resetdb resetpostgres
+.PHONY: help prepare init setup clean cleanall veryclean test seed-pilot-minimo run resetdb resetpostgres
 .EXPORT_ALL_VARIABLES:

@@ -125,3 +125,5 @@ CORS_ALLOWED_ORIGINS = os.environ.get(
     "http://localhost:3000,http://localhost:8000",
 ).split(",")
 CORS_ALLOW_CREDENTIALS = True
+
+EPHEMERAL_ENVIRONMENT = False
