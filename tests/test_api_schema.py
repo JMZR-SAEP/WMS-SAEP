@@ -139,6 +139,7 @@ class TestOpenAPISchema:
         assert "/api/v1/users/beneficiary-lookup/" in paths
         assert "/api/v1/materials/{id}/" in paths
         assert "/api/v1/requisitions/" in paths
+        assert "/api/v1/requisitions/{id}/" in paths
         assert "/api/v1/requisitions/{id}/submit/" in paths
         assert "/api/v1/requisitions/{id}/return-to-draft/" in paths
         assert "/api/v1/requisitions/{id}/discard/" in paths
@@ -152,9 +153,41 @@ class TestOpenAPISchema:
 
         components = schema["components"]["schemas"]
         assert "RequisicaoItemFulfillInput" in components
+        assert "RequisicaoListOutput" in components
+        assert "RequisicaoTimelineEventOutput" in components
         item_schema = components["RequisicaoItemFulfillInput"]["properties"]
         assert "quantidade_entregue" in item_schema
         assert "justificativa_atendimento_parcial" in item_schema
+
+    def test_requisitions_read_endpoints_declaram_filtros_e_respostas(self):
+        """Verify canonical requisition reads expose explicit list/detail contracts."""
+        schema = self._get_schema()
+        paths = schema["paths"]
+        error_ref = "#/components/schemas/ErrorResponse"
+
+        list_operation = paths["/api/v1/requisitions/"]["get"]
+        list_parameters = {param["name"]: param for param in list_operation["parameters"]}
+        assert set(list_parameters) >= {"page", "page_size", "search", "status"}
+        assert list_operation["operationId"] == "requisitions_list"
+        assert (
+            list_operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"]
+            == "#/components/schemas/PaginatedRequisicaoListPaginatedList"
+        )
+        assert (
+            list_operation["responses"]["403"]["content"]["application/json"]["schema"]["$ref"]
+            == error_ref
+        )
+
+        detail_operation = paths["/api/v1/requisitions/{id}/"]["get"]
+        assert detail_operation["operationId"] == "requisitions_retrieve"
+        assert (
+            detail_operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"]
+            == "#/components/schemas/RequisicaoDetailOutput"
+        )
+        assert (
+            detail_operation["responses"]["404"]["content"]["application/json"]["schema"]["$ref"]
+            == error_ref
+        )
 
     def test_auth_endpoints_declaram_requests_responses_e_status_esperados(self):
         """Verify auth endpoints expose explicit schema contracts."""

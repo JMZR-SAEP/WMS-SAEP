@@ -1,15 +1,17 @@
 from django.contrib.auth import get_user_model
 from django.db.models import Count
 from django.shortcuts import get_object_or_404
+from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.openapi import OpenApiParameter
 from drf_spectacular.utils import extend_schema
-from rest_framework import status
+from rest_framework import filters, mixins, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 
 from apps.core.api.serializers import ErrorResponseSerializer
+from apps.requisitions.filters import RequisicaoFilter
 from apps.requisitions.policies import queryset_requisicoes_visiveis
 from apps.requisitions.serializers import (
     RequisicaoAuthorizeInputSerializer,
@@ -17,6 +19,8 @@ from apps.requisitions.serializers import (
     RequisicaoCreateInputSerializer,
     RequisicaoDetailOutputSerializer,
     RequisicaoFulfillInputSerializer,
+    RequisicaoListOutputSerializer,
+    RequisicaoListPaginatedSerializer,
     RequisicaoPendingApprovalOutputSerializer,
     RequisicaoPendingApprovalPaginatedSerializer,
     RequisicaoPendingFulfillmentOutputSerializer,
@@ -41,18 +45,97 @@ from apps.requisitions.services import (
 User = get_user_model()
 
 
-class RequisicaoViewSet(GenericViewSet):
+class RequisicaoViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, GenericViewSet):
     permission_classes = [IsAuthenticated]
     serializer_class = RequisicaoDetailOutputSerializer
+    filterset_class = RequisicaoFilter
+    filter_backends = [
+        filters.SearchFilter,
+        DjangoFilterBackend,
+    ]
+    search_fields = [
+        "numero_publico",
+        "beneficiario__nome_completo",
+        "criador__nome_completo",
+    ]
 
     def get_queryset(self):
-        return queryset_requisicoes_visiveis(self.request.user)
+        queryset = queryset_requisicoes_visiveis(self.request.user)
+        if self.action == "list":
+            return queryset.annotate(total_itens=Count("itens")).order_by("-updated_at", "-id")
+        return queryset
+
+    def get_serializer_class(self):
+        if self.action == "list":
+            return RequisicaoListOutputSerializer
+        return RequisicaoDetailOutputSerializer
 
     def get_object(self):
         queryset = self.filter_queryset(self.get_queryset())
         obj = get_object_or_404(queryset, pk=self.kwargs["pk"])
         self.check_object_permissions(self.request, obj)
         return obj
+
+    @extend_schema(
+        operation_id="requisitions_list",
+        tags=["requisitions"],
+        description=(
+            "Lista paginada das requisições visíveis ao usuário autenticado. "
+            "Suporta busca textual simples e filtro por status."
+        ),
+        parameters=[
+            OpenApiParameter(
+                name="page",
+                description="Número da página (padrão: 1)",
+                required=False,
+                type=int,
+                location=OpenApiParameter.QUERY,
+            ),
+            OpenApiParameter(
+                name="page_size",
+                description="Quantidade de resultados por página (padrão: 20, máximo: 100)",
+                required=False,
+                type=int,
+                location=OpenApiParameter.QUERY,
+            ),
+            OpenApiParameter(
+                name="search",
+                description="Busca textual por número público, nome do beneficiário ou nome do criador.",
+                required=False,
+                type=str,
+                location=OpenApiParameter.QUERY,
+            ),
+            OpenApiParameter(
+                name="status",
+                description="Filtro exato por status da requisição.",
+                required=False,
+                type=str,
+                location=OpenApiParameter.QUERY,
+            ),
+        ],
+        responses={
+            200: RequisicaoListPaginatedSerializer(),
+            403: ErrorResponseSerializer(),
+        },
+    )
+    def list(self, request, *args, **kwargs):
+        return super().list(request, *args, **kwargs)
+
+    @extend_schema(
+        operation_id="requisitions_retrieve",
+        tags=["requisitions"],
+        description=(
+            "Detalhe canônico de uma requisição visível ao usuário autenticado, "
+            "incluindo itens e resumo operacional da timeline."
+        ),
+        responses={
+            200: RequisicaoDetailOutputSerializer(),
+            403: ErrorResponseSerializer(),
+            404: ErrorResponseSerializer(),
+        },
+    )
+    def retrieve(self, request, *args, **kwargs):
+        return super().retrieve(request, *args, **kwargs)
 
     @extend_schema(
         operation_id="requisitions_create_draft",

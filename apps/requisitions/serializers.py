@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from rest_framework import serializers
 
-from apps.requisitions.models import ItemRequisicao, Requisicao
+from apps.requisitions.models import EventoTimeline, ItemRequisicao, Requisicao
 
 
 class RequisicaoUserOutputSerializer(serializers.Serializer):
@@ -111,6 +111,56 @@ class RequisicaoActionOutputSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class RequisicaoTimelineEventOutputSerializer(serializers.ModelSerializer):
+    usuario = RequisicaoUserOutputSerializer(read_only=True)
+
+    class Meta:
+        model = EventoTimeline
+        fields = [
+            "id",
+            "tipo_evento",
+            "usuario",
+            "data_hora",
+            "observacao",
+        ]
+        read_only_fields = fields
+
+
+class RequisicaoListOutputSerializer(serializers.ModelSerializer):
+    criador = RequisicaoUserOutputSerializer(read_only=True)
+    beneficiario = RequisicaoUserOutputSerializer(read_only=True)
+    setor_beneficiario = RequisicaoSetorOutputSerializer(read_only=True)
+    total_itens = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = Requisicao
+        fields = [
+            "id",
+            "numero_publico",
+            "status",
+            "criador",
+            "beneficiario",
+            "setor_beneficiario",
+            "data_criacao",
+            "data_envio_autorizacao",
+            "data_autorizacao_ou_recusa",
+            "data_finalizacao",
+            "updated_at",
+            "total_itens",
+        ]
+        read_only_fields = fields
+
+
+class RequisicaoListPaginatedSerializer(serializers.Serializer):
+    count = serializers.IntegerField(read_only=True)
+    page = serializers.IntegerField(read_only=True)
+    page_size = serializers.IntegerField(read_only=True)
+    total_pages = serializers.IntegerField(read_only=True)
+    next = serializers.URLField(allow_null=True, read_only=True)
+    previous = serializers.URLField(allow_null=True, read_only=True)
+    results = RequisicaoListOutputSerializer(many=True, read_only=True)
+
+
 class RequisicaoDetailOutputSerializer(serializers.ModelSerializer):
     criador = RequisicaoUserOutputSerializer(read_only=True)
     beneficiario = RequisicaoUserOutputSerializer(read_only=True)
@@ -118,6 +168,7 @@ class RequisicaoDetailOutputSerializer(serializers.ModelSerializer):
     chefe_autorizador = RequisicaoUserOutputSerializer(read_only=True)
     responsavel_atendimento = RequisicaoUserOutputSerializer(read_only=True)
     itens = RequisicaoActionOutputSerializer(many=True, read_only=True)
+    eventos = RequisicaoTimelineEventOutputSerializer(many=True, read_only=True)
 
     class Meta:
         model = Requisicao
@@ -140,6 +191,7 @@ class RequisicaoDetailOutputSerializer(serializers.ModelSerializer):
             "observacao",
             "observacao_atendimento",
             "itens",
+            "eventos",
         ]
         read_only_fields = fields
 

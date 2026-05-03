@@ -103,6 +103,31 @@ class TestRequisicaoAPI:
             ]
         }
 
+    @staticmethod
+    def _criar_requisicao_com_item(
+        *,
+        criador: User,
+        beneficiario: User,
+        material: Material,
+        status: str = StatusRequisicao.RASCUNHO,
+        numero_publico: str | None = None,
+        observacao: str = "",
+        quantidade_solicitada: str = "2",
+    ) -> Requisicao:
+        requisicao = Requisicao.objects.create(
+            criador=criador,
+            beneficiario=beneficiario,
+            status=status,
+            numero_publico=numero_publico,
+            observacao=observacao,
+        )
+        requisicao.itens.create(
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal(quantidade_solicitada),
+        )
+        return requisicao
+
     def test_cria_rascunho_para_si(self):
         setor = self._criar_setor("Operacional", "90001")
         usuario = self._criar_usuario("10001", "Solicitante", setor=setor)
@@ -227,6 +252,146 @@ class TestRequisicaoAPI:
             self._payload_requisicao(beneficiario_id=999999, material_id=material.id),
             format="json",
         )
+
+        assert response.status_code == 404
+        assert response.data["error"]["code"] == "not_found"
+
+    def test_lista_requisicoes_visiveis_paginada_e_leve(self):
+        setor = self._criar_setor("Operacoes", "900072")
+        outro_setor = self._criar_setor("Financeiro", "900073")
+        usuario = self._criar_usuario("100082", "Solicitante Operacoes", setor=setor)
+        outro_usuario = self._criar_usuario("100083", "Solicitante Financeiro", setor=outro_setor)
+        material = self._criar_material_com_estoque("001.001.052")
+
+        rascunho = self._criar_requisicao_com_item(
+            criador=usuario,
+            beneficiario=usuario,
+            material=material,
+            observacao="Rascunho visivel",
+        )
+        submetida = self._criar_requisicao_com_item(
+            criador=usuario,
+            beneficiario=usuario,
+            material=material,
+            status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
+            numero_publico="REQ-2026-000111",
+            observacao="Requisicao enviada",
+        )
+        self._criar_requisicao_com_item(
+            criador=outro_usuario,
+            beneficiario=outro_usuario,
+            material=material,
+            status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
+            numero_publico="REQ-2026-000222",
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=usuario)
+        response = client.get(reverse("requisicao-list"))
+
+        assert response.status_code == 200
+        assert response.data["count"] == 2
+        assert response.data["page"] == 1
+        assert response.data["page_size"] == 20
+        resultado_ids = [item["id"] for item in response.data["results"]]
+        assert resultado_ids == [submetida.id, rascunho.id]
+        assert response.data["results"][1]["numero_publico"] is None
+        assert response.data["results"][0]["total_itens"] == 1
+        assert "itens" not in response.data["results"][0]
+        assert "eventos" not in response.data["results"][0]
+
+    def test_lista_requisicoes_filtra_por_status_e_busca_textual(self):
+        setor = self._criar_setor("Compras", "900074")
+        usuario = self._criar_usuario("100084", "Solicitante Compras", setor=setor)
+        material = self._criar_material_com_estoque("001.001.053")
+
+        self._criar_requisicao_com_item(
+            criador=usuario,
+            beneficiario=usuario,
+            material=material,
+            observacao="Rascunho para edicao",
+        )
+        aguardando = self._criar_requisicao_com_item(
+            criador=usuario,
+            beneficiario=usuario,
+            material=material,
+            status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
+            numero_publico="REQ-2026-000333",
+            observacao="Fluxo de autorizacao",
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=usuario)
+
+        response_status = client.get(
+            reverse("requisicao-list"),
+            {"status": StatusRequisicao.AGUARDANDO_AUTORIZACAO},
+        )
+        assert response_status.status_code == 200
+        assert response_status.data["count"] == 1
+        assert response_status.data["results"][0]["id"] == aguardando.id
+
+        response_search = client.get(reverse("requisicao-list"), {"search": "000333"})
+        assert response_search.status_code == 200
+        assert response_search.data["count"] == 1
+        assert response_search.data["results"][0]["id"] == aguardando.id
+
+    def test_detail_retorna_itens_justificativas_e_eventos(self):
+        setor = self._criar_setor("Patrimonio", "900075")
+        usuario = self._criar_usuario("100085", "Solicitante Patrimonio", setor=setor)
+        autorizador = self._criar_usuario(
+            "100086",
+            "Chefe Patrimonio",
+            papel=PapelChoices.CHEFE_SETOR,
+            setor=setor,
+        )
+        material = self._criar_material_com_estoque("001.001.054")
+        requisicao = self._criar_requisicao_com_item(
+            criador=usuario,
+            beneficiario=usuario,
+            material=material,
+            status=StatusRequisicao.AUTORIZADA,
+            numero_publico="REQ-2026-000444",
+        )
+        item = requisicao.itens.get()
+        item.quantidade_autorizada = Decimal("1")
+        item.justificativa_autorizacao_parcial = "Saldo parcial"
+        item.save(update_fields=["quantidade_autorizada", "justificativa_autorizacao_parcial"])
+        EventoTimeline.objects.create(
+            requisicao=requisicao,
+            tipo_evento=TipoEvento.AUTORIZACAO_PARCIAL,
+            usuario=autorizador,
+            observacao="Autorizado parcialmente por saldo.",
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=usuario)
+        response = client.get(reverse("requisicao-detail", args=[requisicao.id]))
+
+        assert response.status_code == 200
+        assert response.data["id"] == requisicao.id
+        assert response.data["itens"][0]["justificativa_autorizacao_parcial"] == "Saldo parcial"
+        assert response.data["eventos"][0]["tipo_evento"] == TipoEvento.AUTORIZACAO_PARCIAL
+        assert response.data["eventos"][0]["usuario"]["id"] == autorizador.id
+        assert response.data["eventos"][0]["observacao"] == "Autorizado parcialmente por saldo."
+
+    def test_detail_requisicao_fora_do_escopo_retorna_404(self):
+        setor_a = self._criar_setor("TI", "900076")
+        setor_b = self._criar_setor("Frota", "900077")
+        usuario = self._criar_usuario("100087", "Solicitante TI", setor=setor_a)
+        outro_usuario = self._criar_usuario("100088", "Solicitante Frota", setor=setor_b)
+        material = self._criar_material_com_estoque("001.001.055")
+        requisicao = self._criar_requisicao_com_item(
+            criador=outro_usuario,
+            beneficiario=outro_usuario,
+            material=material,
+            status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
+            numero_publico="REQ-2026-000555",
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=usuario)
+        response = client.get(reverse("requisicao-detail", args=[requisicao.id]))
 
         assert response.status_code == 404
         assert response.data["error"]["code"] == "not_found"
