@@ -89,6 +89,17 @@ def carregar_seed_pilot_minimo() -> None:
             papel=PapelChoices.AUXILIAR_ALMOXARIFADO,
             setor=setor_almox,
         )
+        superuser = User.objects.create_superuser(
+            matricula_funcional="91998",
+            password=SEED_PASSWORD,
+            nome_completo="Superusuario Tecnico Seed",
+            papel=PapelChoices.CHEFE_ALMOXARIFADO,
+            setor=setor_almox,
+            is_active=True,
+        )
+        if not superuser.is_staff:
+            superuser.is_staff = True
+            superuser.save(update_fields=["is_staff"])
         _criar_usuario(
             matricula="91999",
             nome_completo="Usuario Inativo Seed",

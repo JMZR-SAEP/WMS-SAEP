@@ -27,6 +27,7 @@ class TestSeedPilotMinimoCommand:
             "91004",
             "91005",
             "91006",
+            "91998",
             "91999",
         }
         assert usuarios["91001"].papel == PapelChoices.CHEFE_SETOR
@@ -35,6 +36,8 @@ class TestSeedPilotMinimoCommand:
         assert usuarios["91004"].papel == PapelChoices.SOLICITANTE
         assert usuarios["91005"].papel == PapelChoices.CHEFE_ALMOXARIFADO
         assert usuarios["91006"].papel == PapelChoices.AUXILIAR_ALMOXARIFADO
+        assert usuarios["91998"].is_superuser is True
+        assert usuarios["91998"].is_staff is True
         assert usuarios["91999"].is_active is False
 
         materiais = {
