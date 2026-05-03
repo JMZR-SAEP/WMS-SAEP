@@ -396,6 +396,28 @@ class TestRequisicaoAPI:
         assert response.status_code == 404
         assert response.data["error"]["code"] == "not_found"
 
+    def test_detail_ignora_filtros_de_listagem_na_url(self):
+        setor = self._criar_setor("Obras", "900078")
+        usuario = self._criar_usuario("100089", "Solicitante Obras", setor=setor)
+        material = self._criar_material_com_estoque("001.001.056")
+        requisicao = self._criar_requisicao_com_item(
+            criador=usuario,
+            beneficiario=usuario,
+            material=material,
+            status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
+            numero_publico="REQ-2026-000666",
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=usuario)
+        response = client.get(
+            reverse("requisicao-detail", args=[requisicao.id]),
+            {"status": StatusRequisicao.RASCUNHO, "search": "nao-corresponde"},
+        )
+
+        assert response.status_code == 200
+        assert response.data["id"] == requisicao.id
+
     def test_submit_gera_numero_publico_e_entrada_na_fila(self):
         setor = self._criar_setor("Planejamento", "90008")
         usuario = self._criar_usuario("10009", "Solicitante Planejamento", setor=setor)

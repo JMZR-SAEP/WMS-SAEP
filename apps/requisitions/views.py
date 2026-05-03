@@ -71,7 +71,7 @@ class RequisicaoViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, Generi
         return RequisicaoDetailOutputSerializer
 
     def get_object(self):
-        queryset = self.filter_queryset(self.get_queryset())
+        queryset = self.get_queryset()
         obj = get_object_or_404(queryset, pk=self.kwargs["pk"])
         self.check_object_permissions(self.request, obj)
         return obj
