@@ -540,6 +540,88 @@ def criar_rascunho_requisicao(
     )
 
 
+def atualizar_rascunho_requisicao(
+    *,
+    requisicao: Requisicao,
+    ator: User,
+    beneficiario: User,
+    observacao: str,
+    itens: list[ItemRascunhoData],
+) -> Requisicao:
+    if not pode_manipular_pre_autorizacao(ator, requisicao):
+        raise PermissionDenied("Apenas criador ou beneficiário podem editar a requisição.")
+
+    if beneficiario.setor_id is None:
+        raise ValidationError(
+            {"beneficiario_id": ["Beneficiário deve possuir setor para criar a requisição."]}
+        )
+
+    if not beneficiario.setor.is_active:
+        raise DomainConflict(
+            "Setor do beneficiário está inativo.",
+            details={"beneficiario_id": f"Setor '{beneficiario.setor.nome}' está inativo."},
+        )
+
+    materiais = _validar_itens_rascunho(itens)
+
+    with transaction.atomic():
+        requisicao = (
+            Requisicao.objects.select_for_update()
+            .select_related("criador", "beneficiario", "setor_beneficiario")
+            .prefetch_related("itens__material", "eventos__usuario")
+            .get(pk=requisicao.pk)
+        )
+
+        if requisicao.status != StatusRequisicao.RASCUNHO:
+            raise DomainConflict(
+                "Somente requisições em rascunho podem ser editadas.",
+                details={"status_atual": requisicao.status},
+            )
+
+        if not pode_criar_requisicao_para(ator, beneficiario):
+            raise PermissionDenied(
+                "Usuário sem permissão para criar requisição para este beneficiário."
+            )
+
+        requisicao.beneficiario = beneficiario
+        requisicao.setor_beneficiario = beneficiario.setor
+        requisicao.observacao = observacao
+        requisicao.full_clean()
+        requisicao.save(
+            update_fields=[
+                "beneficiario",
+                "setor_beneficiario",
+                "observacao",
+                "updated_at",
+            ]
+        )
+
+        requisicao.itens.all().delete()
+        materiais_por_id = {material.pk: material for material in materiais}
+        ItemRequisicao.objects.bulk_create(
+            [
+                ItemRequisicao(
+                    requisicao=requisicao,
+                    material=materiais_por_id[item.material_id],
+                    unidade_medida=materiais_por_id[item.material_id].unidade_medida,
+                    quantidade_solicitada=item.quantidade_solicitada,
+                    observacao=item.observacao,
+                )
+                for item in itens
+            ]
+        )
+
+    return (
+        Requisicao.objects.select_related(
+            "criador",
+            "beneficiario",
+            "setor_beneficiario",
+        )
+        .prefetch_related("itens__material", "eventos__usuario")
+        .get(pk=requisicao.pk)
+    )
+
+
 def enviar_para_autorizacao(*, requisicao: Requisicao, ator: User) -> Requisicao:
     if not pode_manipular_pre_autorizacao(ator, requisicao):
         raise PermissionDenied("Apenas criador ou beneficiário podem enviar a requisição.")

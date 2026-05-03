@@ -31,6 +31,7 @@ from apps.requisitions.services import (
     ItemAutorizacaoData,
     ItemRascunhoData,
     atender_requisicao,
+    atualizar_rascunho_requisicao,
     autorizar_requisicao,
     cancelar_requisicao,
     criar_rascunho_requisicao,
@@ -172,6 +173,37 @@ class RequisicaoViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, Generi
         )
         output = RequisicaoDetailOutputSerializer(requisicao)
         return Response(output.data, status=status.HTTP_201_CREATED)
+
+    @extend_schema(
+        operation_id="requisitions_update_draft",
+        tags=["requisitions"],
+        request=RequisicaoCreateInputSerializer,
+        responses={
+            200: RequisicaoDetailOutputSerializer(),
+            400: ErrorResponseSerializer(),
+            403: ErrorResponseSerializer(),
+            404: ErrorResponseSerializer(),
+            409: ErrorResponseSerializer(),
+        },
+    )
+    @action(detail=True, methods=["put"], url_path="draft")
+    def update_draft(self, request, pk=None):
+        serializer = RequisicaoCreateInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        beneficiario = get_object_or_404(
+            User.objects.select_related("setor"), pk=serializer.validated_data["beneficiario_id"]
+        )
+        requisicao = atualizar_rascunho_requisicao(
+            requisicao=self.get_object(),
+            ator=request.user,
+            beneficiario=beneficiario,
+            observacao=serializer.validated_data["observacao"],
+            itens=[
+                ItemRascunhoData(**item_data) for item_data in serializer.validated_data["itens"]
+            ],
+        )
+        return Response(RequisicaoDetailOutputSerializer(requisicao).data)
 
     @extend_schema(
         operation_id="requisitions_submit",

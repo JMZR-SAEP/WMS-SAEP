@@ -223,14 +223,22 @@ class Requisicao(models.Model):
                 .values(
                     "beneficiario_id",
                     "setor_beneficiario_id",
+                    "status",
                 )
                 .first()
             )
             if persisted is not None:
                 errors = {}
-                if self.beneficiario_id != persisted["beneficiario_id"]:
+                pode_alterar_snapshot = persisted["status"] == StatusRequisicao.RASCUNHO
+                if (
+                    self.beneficiario_id != persisted["beneficiario_id"]
+                    and not pode_alterar_snapshot
+                ):
                     errors["beneficiario"] = "Beneficiário não pode ser alterado após a criação."
-                if self.setor_beneficiario_id != persisted["setor_beneficiario_id"]:
+                if (
+                    self.setor_beneficiario_id != persisted["setor_beneficiario_id"]
+                    and not pode_alterar_snapshot
+                ):
                     errors["setor_beneficiario"] = (
                         "Setor beneficiário é snapshot histórico e não pode ser alterado."
                     )

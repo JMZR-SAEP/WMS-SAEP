@@ -505,6 +505,149 @@ class TestRequisicaoAPI:
             tipo_evento=TipoEvento.RETORNO_RASCUNHO,
         ).exists()
 
+    def test_update_draft_substitui_beneficiario_observacao_e_itens(self):
+        setor = self._criar_setor("Patio", "900091")
+        criador = self._criar_usuario(
+            "100101",
+            "Criador Patio",
+            papel=PapelChoices.AUXILIAR_SETOR,
+            setor=setor,
+        )
+        beneficiario_inicial = self._criar_usuario("100102", "Beneficiario Inicial", setor=setor)
+        beneficiario_novo = self._criar_usuario("100103", "Beneficiario Novo", setor=setor)
+        material_antigo = self._criar_material_com_estoque("001.001.071")
+        material_atualizado = self._criar_material_com_estoque("001.001.072")
+        material_novo = self._criar_material_com_estoque("001.001.073")
+        requisicao = Requisicao.objects.create(
+            criador=criador,
+            beneficiario=beneficiario_inicial,
+            observacao="Observacao antiga",
+        )
+        item_antigo = requisicao.itens.create(
+            material=material_antigo,
+            unidade_medida=material_antigo.unidade_medida,
+            quantidade_solicitada=Decimal("1"),
+            observacao="Item antigo",
+        )
+        requisicao.itens.create(
+            material=material_atualizado,
+            unidade_medida=material_atualizado.unidade_medida,
+            quantidade_solicitada=Decimal("2"),
+            observacao="Item manter",
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=criador)
+        response = client.put(
+            reverse("requisicao-update-draft", args=[requisicao.id]),
+            {
+                "beneficiario_id": beneficiario_novo.id,
+                "observacao": "Observacao nova",
+                "itens": [
+                    {
+                        "material_id": material_atualizado.id,
+                        "quantidade_solicitada": "5.000",
+                        "observacao": "Item atualizado",
+                    },
+                    {
+                        "material_id": material_novo.id,
+                        "quantidade_solicitada": "3.000",
+                        "observacao": "Item novo",
+                    },
+                ],
+            },
+            format="json",
+        )
+
+        assert response.status_code == 200
+        assert response.data["status"] == StatusRequisicao.RASCUNHO
+        assert response.data["beneficiario"]["id"] == beneficiario_novo.id
+        assert response.data["observacao"] == "Observacao nova"
+        assert len(response.data["itens"]) == 2
+        assert {
+            (
+                item["material"]["id"],
+                item["quantidade_solicitada"],
+                item["observacao"],
+            )
+            for item in response.data["itens"]
+        } == {
+            (material_atualizado.id, "5.000", "Item atualizado"),
+            (material_novo.id, "3.000", "Item novo"),
+        }
+
+        requisicao.refresh_from_db()
+        assert requisicao.beneficiario_id == beneficiario_novo.id
+        assert requisicao.setor_beneficiario_id == beneficiario_novo.setor_id
+        assert requisicao.observacao == "Observacao nova"
+        assert not requisicao.itens.filter(id=item_antigo.id).exists()
+        assert {
+            (
+                item.material_id,
+                item.quantidade_solicitada,
+                item.observacao,
+            )
+            for item in requisicao.itens.all()
+        } == {
+            (material_atualizado.id, Decimal("5.000"), "Item atualizado"),
+            (material_novo.id, Decimal("3.000"), "Item novo"),
+        }
+
+    def test_update_draft_bloqueia_requisicao_fora_de_rascunho(self):
+        setor = self._criar_setor("Patio Status", "900092")
+        criador = self._criar_usuario(
+            "100111",
+            "Criador Patio Status",
+            papel=PapelChoices.AUXILIAR_SETOR,
+            setor=setor,
+        )
+        beneficiario = self._criar_usuario("100112", "Beneficiario Status", setor=setor)
+        material = self._criar_material_com_estoque("001.001.074")
+        requisicao = self._criar_requisicao_com_item(
+            criador=criador,
+            beneficiario=beneficiario,
+            material=material,
+            status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
+            numero_publico="REQ-2026-000321",
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=criador)
+        response = client.put(
+            reverse("requisicao-update-draft", args=[requisicao.id]),
+            self._payload_requisicao(beneficiario_id=beneficiario.id, material_id=material.id),
+            format="json",
+        )
+
+        assert response.status_code == 409
+        assert response.data["error"]["code"] == "domain_conflict"
+        assert response.data["error"]["details"]["status_atual"] == (
+            StatusRequisicao.AGUARDANDO_AUTORIZACAO
+        )
+
+    def test_update_draft_bloqueia_usuario_sem_permissao(self):
+        setor = self._criar_setor("Patio Permissao", "900093")
+        outro_setor = self._criar_setor("Outro Patio", "900094")
+        criador = self._criar_usuario("100121", "Criador", setor=setor)
+        beneficiario = self._criar_usuario("100122", "Beneficiario", setor=setor)
+        intruso = self._criar_usuario("100123", "Intruso", setor=outro_setor)
+        material = self._criar_material_com_estoque("001.001.075")
+        requisicao = self._criar_requisicao_com_item(
+            criador=criador,
+            beneficiario=beneficiario,
+            material=material,
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=intruso)
+        response = client.put(
+            reverse("requisicao-update-draft", args=[requisicao.id]),
+            self._payload_requisicao(beneficiario_id=beneficiario.id, material_id=material.id),
+            format="json",
+        )
+
+        assert response.status_code == 404
+
     def test_reenvio_preserva_numero_publico(self):
         setor = self._criar_setor("Frota", "90010")
         usuario = self._criar_usuario("10011", "Solicitante Frota", setor=setor)
