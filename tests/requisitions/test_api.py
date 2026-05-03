@@ -696,6 +696,25 @@ class TestRequisicaoAPI:
         assert response.status_code == 403
         assert response.data["error"]["code"] == "not_authenticated"
 
+    def test_update_draft_rejeita_pk_invalido_com_envelope_padrao(self):
+        setor = self._criar_setor("Patio PK", "900095A")
+        usuario = self._criar_usuario("100131A", "Usuario PK", setor=setor)
+        material = self._criar_material_com_estoque("001.001.176")
+
+        client = APIClient()
+        client.force_authenticate(user=usuario)
+        response = client.put(
+            reverse("requisicao-update-draft", args=["abc"]),
+            self._payload_requisicao(beneficiario_id=usuario.id, material_id=material.id),
+            format="json",
+        )
+
+        assert response.status_code == 400
+        assert response.data["error"]["code"] == "validation_error"
+        assert response.data["error"]["details"] == {
+            "pk": ["Identificador de requisição inválido."]
+        }
+
     def test_reenvio_preserva_numero_publico(self):
         setor = self._criar_setor("Frota", "90010")
         usuario = self._criar_usuario("10011", "Solicitante Frota", setor=setor)

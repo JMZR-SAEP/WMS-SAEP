@@ -549,8 +549,6 @@ def atualizar_rascunho_requisicao(
     observacao: str,
     itens: list[ItemRascunhoData],
 ) -> Requisicao:
-    materiais = _validar_itens_rascunho(itens)
-
     with transaction.atomic():
         try:
             requisicao_locked = (
@@ -602,6 +600,8 @@ def atualizar_rascunho_requisicao(
             raise PermissionDenied(
                 "Usuário sem permissão para criar requisição para este beneficiário."
             )
+
+        materiais = _validar_itens_rascunho(itens)
 
         requisicao_locked.beneficiario = beneficiario_locked
         requisicao_locked.setor_beneficiario = setor_beneficiario_locked

@@ -6,6 +6,7 @@ from drf_spectacular.openapi import OpenApiParameter
 from drf_spectacular.utils import extend_schema
 from rest_framework import filters, mixins, status
 from rest_framework.decorators import action
+from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
@@ -191,8 +192,13 @@ class RequisicaoViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, Generi
         serializer = RequisicaoCreateInputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
+        try:
+            requisicao_id = int(pk)
+        except (TypeError, ValueError) as exc:
+            raise ValidationError({"pk": ["Identificador de requisição inválido."]}) from exc
+
         requisicao = atualizar_rascunho_requisicao(
-            requisicao_id=int(pk),
+            requisicao_id=requisicao_id,
             ator=request.user,
             beneficiario_id=serializer.validated_data["beneficiario_id"],
             observacao=serializer.validated_data["observacao"],
