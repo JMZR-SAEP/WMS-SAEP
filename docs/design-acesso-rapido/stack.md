@@ -11,7 +11,7 @@ A stack foi escolhida para favorecer:
 - desenvolvimento rápido do piloto;
 - regras de negócio centralizadas no backend;
 - contratos HTTP claros para APIs;
-- foco inicial exclusivo em backend e integrações técnicas;
+- backend como fonte de verdade de domínio e contratos;
 - implantação em servidor próprio;
 - segurança transacional para estoque e requisições.
 
@@ -32,13 +32,28 @@ O sistema deve priorizar uma arquitetura monolítica Django com backend/API-firs
 
 ## 3. Frontend
 
-No momento, frontend não faz parte do escopo ativo do WMS-SAEP.
+O frontend do piloto faz parte do escopo ativo do projeto.
 
-A implementação atual deve se concentrar em domínio, persistência, autenticação, autorização, APIs, importações técnicas e rotinas administrativas operadas por comando, admin do Django ou endpoints internos.
+Diretriz atual:
 
-Não devem ser implementadas telas server-rendered, SPA separada, componentes de frontend dedicados ou trabalho de UX/UI enquanto essa diretriz estiver vigente.
+- implementar uma SPA separada em `frontend/`, no mesmo repositório;
+- manter o backend Django como fonte de verdade para domínio, autenticação, autorização e OpenAPI;
+- usar sessão Django com CSRF para autenticação da SPA;
+- tratar o frontend como interface operacional do piloto, não como frente paralela de administração genérica;
+- bloquear o avanço das features operacionais da SPA até a conclusão do bloco 0 de APIs habilitadoras do backend.
 
-Se uma interface vier a ser necessária no futuro, a decisão deve ser registrada separadamente com escopo, tecnologia escolhida, impacto no contrato da API e estratégia de testes.
+Stack prevista para o frontend do piloto:
+
+- React + TypeScript + Vite;
+- TanStack Query;
+- TanStack Router;
+- TanStack Table;
+- React Hook Form + Zod;
+- openapi-typescript + openapi-fetch;
+- Tailwind CSS + shadcn/ui + Radix UI;
+- Playwright.
+
+O detalhe operacional da arquitetura do frontend está em `docs/design-acesso-rapido/frontend-arquitetura-piloto.md`, e a decisão macro está registrada em `docs/adr/0001-frontend-piloto-spa-separada.md`.
 
 ## 4. Django REST Framework
 

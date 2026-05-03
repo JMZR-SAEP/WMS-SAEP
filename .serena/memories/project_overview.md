@@ -2,7 +2,7 @@
 
 WMS-SAEP is an auxiliary WMS for SAEP (Servico de Agua e Esgoto de Pirassununga), initially focused on a robust backend for warehouse/material requisition workflows.
 
-The active implementation direction is backend/API only: domain modeling, persistence, authentication, authorization, stock/requisition workflows, SCPI CSV import, auditability, and technical/administrative operation paths. Frontend work is explicitly out of current scope and remains future planning only.
+The implementation direction remains backend/API-first: domain modeling, persistence, authentication, authorization, stock/requisition workflows, SCPI CSV import, auditability, and technical/administrative operation paths. Frontend work was reopened in this session as active pilot scope, but only as a separate SPA in `frontend/` and only after the backend enablement block (`bloco 0`) is completed.
 
 The initial Django materialization has already been completed and the separate materialization backlog was removed. The current active scope is backend/API pilot and MVP work. Django apps live under `apps/`, while `config/` remains responsible for project bootstrap and settings. `apps/core/` is reserved for technical API infrastructure only.
 
@@ -24,8 +24,11 @@ Important references:
 - `docs/design-acesso-rapido/api-contracts.md` records DRF/API contract rules.
 - `docs/design-acesso-rapido/matriz-invariantes.md` records critical domain invariants.
 - `docs/design-acesso-rapido/matriz-permissoes.md` records permission/scope rules.
-- `docs/backlog/backlog-tecnico-piloto.md` is the initial pilot functional backlog.
+- `docs/backlog/backlog-tecnico-piloto.md` is the active pilot backlog and now includes bloco 0 plus blocked frontend slices.
 - `docs/backlog/backlog-tecnico-mvp.md` is the later MVP backlog.
+- `docs/design-acesso-rapido/frontend-arquitetura-piloto.md` records the operational SPA architecture.
+- `docs/adr/0001-frontend-piloto-spa-separada.md` records the macro frontend decision.
+- `docs/agents/` records GitHub issue tracker, triage labels, and domain-doc routing for issue-oriented skills.
 - `docs/coderabbit-guidelines.md` records code review/domain invariants.
 
 Current top-level structure:
@@ -38,6 +41,7 @@ Current top-level structure:
 - `AGENTS.md` agent instructions.
 
 Current near-term implementation frontier:
-- partial / zero fulfillment and reservation release for undelivered quantities
-- physical stock reversal / return / estorno flows after fulfilled requisitions
-- notifications as post-commit side effects only, never domain truth
+- bloco 0 for the SPA: session/auth endpoints, beneficiary lookup, canonical requisition reads, and explicit draft update
+- SPA foundation and first-cut operational flows after bloco 0
+- notifications in the SPA only as second wave, while backend notifications remain post-commit side effects and never domain truth
+- physical stock reversal / return / estorno flows after the frontend enablement path is stabilized

@@ -14,6 +14,17 @@ Current active stack for WMS-SAEP:
 - pytest, pytest-django, ruff, coverage, and pre-commit as the initial quality/tooling base.
 - factory_boy as the chosen standard for test data generation.
 
+Approved pilot frontend stack:
+- separate SPA in `frontend/`
+- `pnpm` as Node package manager, integrated through repo `Makefile`
+- React + TypeScript + Vite
+- TanStack Query, TanStack Router, TanStack Table
+- React Hook Form + Zod
+- `openapi-typescript` + `openapi-fetch`
+- Tailwind CSS + shadcn/ui + Radix UI
+- Playwright for E2E
+- exported OpenAPI input file at `frontend/openapi/schema.json`
+
 Current dependency baseline after the 2026-04-27 audit/upgrade (`d7702de chore: upgrade python dependencies`):
 - Django 6.0.4, djangorestframework 3.17.1, drf-spectacular 0.29.0.
 - django-filter 25.2, django-allauth 65.16.1, django-cors-headers 4.9.0.
@@ -37,7 +48,7 @@ Current validation snapshot:
 - `rtk make test` passed locally on 2026-04-29 with 175 collected tests.
 - The current suite covers API pagination/search contracts, SCPI parser edge cases, import all-or-nothing behavior, and initial stock-movement consistency.
 
-Current scope rule: frontend is not part of the active implementation scope. Work should focus on domain, persistence, authentication, authorization, APIs, technical imports, administrative/internal flows, and tests. Do not introduce server-rendered UI work, SPA frameworks, or dedicated frontend components unless a later technical decision explicitly reopens that scope.
+Current scope rule: frontend pilot work is now part of the active implementation scope, but only through the approved separate SPA architecture and only after the backend enablement block (`bloco 0`) is completed. Backend/API work, domain rules, persistence, authentication, authorization, imports, internal/admin flows, and tests remain the source-of-truth frontier; do not introduce server-rendered UI work or a parallel frontend shape outside the approved SPA path.
 
 Typing/tooling rule: mypy, django-stubs, and djangorestframework-stubs are intentionally out of the current stack and may be reconsidered later if static typing becomes an explicit project discipline.
 

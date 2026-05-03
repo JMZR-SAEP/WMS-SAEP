@@ -36,7 +36,7 @@ Princípios:
 - Não implementar ajuste manual de estoque no MVP.
 - Garantir rastreabilidade mínima desde o piloto.
 - Evitar relatórios completos no piloto; usar apenas consultas operacionais necessárias.
-- Não investir em frontend neste momento; priorizar domínio, API, autenticação, autorização e fluxos técnicos/administrativos.
+- Implementar frontend do piloto somente após o bloco 0 de APIs habilitadoras do backend.
 - Manter o escopo do piloto menor que o MVP completo.
 - Escrever tarefas pequenas o suficiente para serem executadas por agentes de IA com baixo risco de interpretação.
 - Seguir a stack atual baseada em Django monolítico, Django REST Framework e PostgreSQL.
@@ -78,7 +78,7 @@ Orientações para agentes:
 - Toda implementação que altere estoque, status de requisição ou permissões deve possuir testes automatizados ou, no mínimo, cenários de validação documentados.
 - Seguir as decisões técnicas registradas em `docs/design-acesso-rapido/stack.md`.
 - Usar Django REST Framework para endpoints de API e manter views/serializers finos.
-- Não abrir frente de implementação de frontend enquanto o foco do projeto permanecer em backend/API.
+- Seguir `docs/design-acesso-rapido/frontend-arquitetura-piloto.md` ao abrir a frente de frontend do piloto.
 
 ## 3. Épicos
 
@@ -97,13 +97,32 @@ Orientações para agentes:
 
 Observação de escopo atual:
 
-- Tarefas identificadas como `FE` ou `fullstack`, bem como entregáveis descritos como telas, formulários ou componentes visuais, devem ser tratadas como postergadas.
-- Enquanto esta diretriz estiver vigente, o backlog ativo deve priorizar apenas backend, API, autenticação, autorização, importação, estoque, auditoria e testes.
+- O frontend do piloto passa a fazer parte do escopo ativo.
+- O frontend fica bloqueado até a conclusão do bloco 0 de APIs habilitadoras do backend.
+- O backlog ativo deve priorizar primeiro o bloco 0 e só depois a fundação/fluxos da SPA.
 
 Observação de estado atual:
 
 - A base funcional do piloto já está entregue até `PIL-BE-ATE-004` e `PIL-BE-ATE-006`, incluindo acesso, materiais/importação, requisições, autorização, reserva, fila de atendimento, atendimento completo/parcial, saída de estoque, liberação de reserva e metadados de retirada.
-- A base de atendimento do piloto inclui a validação de saldo físico e o cancelamento de requisição autorizada quando não houver saldo físico para nenhum item; a próxima fronteira backend/API deve priorizar a importação documental do piloto.
+- A base de atendimento do piloto inclui a validação de saldo físico e o cancelamento de requisição autorizada quando não houver saldo físico para nenhum item.
+- A próxima fronteira do piloto é o bloco 0 de APIs habilitadoras do frontend, seguido da SPA operacional do piloto.
+
+### Gate atual — Bloco 0 de APIs habilitadoras
+
+Antes de implementar as telas operacionais do frontend, o backend deve entregar:
+
+1. Auth/sessão para SPA:
+   - `GET /api/v1/auth/csrf/`
+   - `POST /api/v1/auth/login/`
+   - `POST /api/v1/auth/logout/`
+   - `GET /api/v1/auth/me/`
+2. Lookup de beneficiário:
+   - `GET /api/v1/users/beneficiary-lookup/?q=...`
+3. Leituras canônicas de requisição:
+   - `GET /api/v1/requisitions/`
+   - `GET /api/v1/requisitions/{id}/`
+4. Update explícito de rascunho:
+   - operação de atualização por substituição completa do rascunho
 
 ## 4.1 Piloto inicial
 
@@ -141,7 +160,7 @@ Objetivo: validar o fluxo principal de requisição, autorização e retirada co
 - Painel completo de Gestão do Almoxarifado.
 - Exportações CSV dos relatórios.
 - Rotinas completas de gestão do Almoxarifado.
-- Qualquer implementação de frontend, telas operacionais ou responsividade dedicada.
+- Qualquer frente de frontend fora dos fluxos aprovados do piloto e fora da arquitetura registrada para a SPA.
 
 ### Piloto — Critério mínimo para entrada em uso real
 
@@ -438,7 +457,7 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
 
 ### PIL-FE-MAT-004 — Implementar componente visual de busca e seleção de materiais
 
-- **Status atual:** postergada fora do escopo ativo de backend/API.
+- **Status atual:** bloqueada até a conclusão do bloco 0 de APIs habilitadoras.
 - **Fase:** Piloto inicial
 - **Tipo:** Frontend
 - **Agente sugerido:** Agente frontend
@@ -598,7 +617,7 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
 
 ### PIL-FE-REQ-006 — Implementar tela de criação e edição de rascunho
 
-- **Status atual:** postergada fora do escopo ativo de backend/API.
+- **Status atual:** bloqueada até a conclusão do bloco 0 de APIs habilitadoras.
 - **Fase:** Piloto inicial
 - **Tipo:** Frontend
 - **Agente sugerido:** Agente frontend
@@ -671,7 +690,7 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
 
 ### PIL-FS-REQ-009 — Implementar painel “Minhas requisições”
 
-- **Status atual:** postergada fora do escopo ativo de backend/API.
+- **Status atual:** bloqueada até a conclusão do bloco 0 de APIs habilitadoras.
 - **Fase:** Piloto inicial
 - **Tipo:** Fullstack
 - **Agente sugerido:** Agente fullstack
@@ -717,7 +736,7 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
 
 ### PIL-FE-AUT-002 — Implementar tela de análise da autorização
 
-- **Status atual:** postergada fora do escopo ativo de backend/API.
+- **Status atual:** bloqueada até a conclusão do bloco 0 de APIs habilitadoras.
 - **Fase:** Piloto inicial
 - **Tipo:** Frontend
 - **Agente sugerido:** Agente frontend
@@ -855,7 +874,7 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
 
 ### PIL-FE-ATE-002 — Implementar tela de atendimento
 
-- **Status atual:** postergada fora do escopo ativo de backend/API.
+- **Status atual:** bloqueada até a conclusão do bloco 0 de APIs habilitadoras.
 - **Fase:** Piloto inicial
 - **Tipo:** Frontend
 - **Agente sugerido:** Agente frontend
@@ -1024,7 +1043,7 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
 
 ### PIL-FS-NOT-003 — Implementar contador e leitura de notificações
 
-- **Status atual:** postergada fora do escopo ativo de backend/API.
+- **Status atual:** bloqueada até a conclusão do bloco 0 de APIs habilitadoras.
 - **Fase:** Piloto inicial
 - **Tipo:** Fullstack
 - **Agente sugerido:** Agente fullstack
@@ -1070,7 +1089,7 @@ O piloto só deve iniciar com usuários reais quando estiverem funcionando:
 
 ### PIL-FE-AUD-002 — Exibir linha do tempo básica na requisição
 
-- **Status atual:** postergada fora do escopo ativo de backend/API.
+- **Status atual:** bloqueada até a conclusão do bloco 0 de APIs habilitadoras.
 - **Fase:** Piloto inicial
 - **Tipo:** Frontend
 - **Agente sugerido:** Agente frontend
@@ -1220,11 +1239,18 @@ Status: concluída; itens 1 a 17 concluídos. O caminho de cancelamento pós-aut
 
 Status: `PIL-BE-AUD-001`, `PIL-BE-AUD-003`, `PIL-BE-NOT-001` e `PIL-BE-NOT-002` concluídas. Notificações continuam como side effects pós-commit, não como fonte de verdade do domínio. A leitura individual de notificações coletivas por papel não faz parte desta fatia; hoje notificações por papel são visíveis por escopo de admin, mas `marcar_notificacao_como_lida()` rejeita leitura individual quando não há destinatário individual. Implementado no PR/branch: feat/notificacoes-fluxo.
 
-Próxima fatia recomendada: iniciar `PIL-DOC-IMP-001` para delimitar a lista inicial de materiais do piloto e preparar a validação operacional com usuários reais. `PIL-DOC-IMP-002` e `PIL-DOC-IMP-003` devem vir em seguida, após a lista de materiais e o procedimento de operação paralela estarem definidos.
+Próxima fatia recomendada: executar o bloco 0 de APIs habilitadoras do frontend, nesta ordem:
 
-### Tarefas postergadas de frontend/fullstack
+1. autenticação e sessão para SPA;
+2. lookup de beneficiário por nome;
+3. leituras canônicas de requisição;
+4. update explícito de rascunho.
 
-Estas tarefas não fazem parte da ordem ativa de implementação enquanto o escopo atual permanecer backend/API:
+Depois do bloco 0, a próxima frente é a fundação da SPA e os fluxos operacionais do piloto. `PIL-DOC-IMP-001`, `PIL-DOC-IMP-002` e `PIL-DOC-IMP-003` continuam relevantes, mas deixam de ser a próxima prioridade imediata do backlog ativo.
+
+### Tarefas de frontend/fullstack bloqueadas pelo bloco 0
+
+Estas tarefas passam a fazer parte do escopo ativo do piloto, mas não entram na ordem imediata de implementação antes da conclusão do bloco 0:
 
 1. PIL-FE-MAT-004 — Implementar componente visual de busca e seleção de materiais.
 2. PIL-FE-REQ-006 — Implementar tela de criação e edição de rascunho.

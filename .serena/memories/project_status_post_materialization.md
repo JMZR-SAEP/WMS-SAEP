@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-02
 **Status:** Django materialization COMPLETE; PIL-BE-ACE foundation COMPLETE through `PIL-BE-ACE-005`; PIL-BE-MAT-001 COMPLETE; PIL-BE-MAT-002 COMPLETE; PIL-BE-EST-001 COMPLETE; PIL-BE-MAT-003 COMPLETE; PIL-BE-IMP-001 COMPLETE; PIL-BE-IMP-002 COMPLETE; PIL-BE-REQ-001 COMPLETE; `PIL-BE-REQ-002/003/004/005/007/008` COMPLETE; `PIL-BE-AUT-001/003/004/005/006` COMPLETE; `PIL-BE-ATE-001/003/004/005/006` COMPLETE; `PIL-BE-AUD-001/003` COMPLETE; `PIL-BE-NOT-001/002` COMPLETE on branch `feat/notificacoes-fluxo`.
-**Current branch context:** branch `feat/notificacoes-fluxo` contains PR #28 notification flow commits through `020ad4d`; main was last noted at `9937926` before this PR is merged.
+**Current branch context:** repo currently being operated from `main`; this session produced architecture/docs/backlog/planning changes for the pilot frontend plus Serena-memory sync work. Notification-flow branch notes are historical context only.
 
 ## Current Baseline
 
@@ -71,12 +71,25 @@ Technical baseline:
 
 ## Recommended Next PR Sequence
 
-1. `PIL-DOC-IMP-001` — define the initial material list for the pilot
-   - Backend/API flow for request, authorization, fulfillment, cancellation without stock, audit, stock movements, and essential notifications is complete on `feat/notificacoes-fluxo`; the next useful slice is operational pilot preparation.
-2. `PIL-DOC-IMP-002` — prepare paper-parallel operation
-   - Should define how operators compare WMS records with the existing paper control during rollout.
-3. `PIL-DOC-IMP-003` — prepare training guides by role
-   - Should cover solicitante, chefe/autorizador, and Almoxarifado workflows after the pilot material set and paper-parallel routine are clear.
+1. `#31` / bloco 0 de autenticação e sessão para SPA
+   - deliver `csrf`, `login`, `logout`, and `me` for session-based SPA auth
+2. bloco 0 restante, nesta ordem já aprovada na sessão:
+   - lookup de beneficiário por nome
+   - leituras canônicas de requisição (`GET /requisitions/` e `GET /requisitions/{id}/`)
+   - atualização explícita de rascunho por substituição completa
+3. depois do bloco 0:
+   - scaffold da SPA e integração com `Makefile`
+   - login/bootstrap da SPA
+   - `Minhas requisições`
+   - criação/edição de rascunho e envio
+   - filas de autorizações e atendimento
+4. depois disso:
+   - Playwright/CI fase 2
+   - notificações da SPA como segunda onda
+
+GitHub issue planning created in this session:
+- issues `#31` through `#44` were opened as vertical slices for the frontend pilot and supporting work
+- `#31` (`Frontend piloto: bloco 0 de autenticação e sessão para SPA`) is already labeled `ready-for-agent`
 
 Post-pilot/MVP technical follow-up:
 - Individual read state for role-targeted notifications remains deferred. Current role notifications are visible by admin scope but cannot be individually marked as read because `Notificacao.lida/lida_em` is global to the notification row.
@@ -84,7 +97,7 @@ Post-pilot/MVP technical follow-up:
 
 ## Notes For Future Agents
 
-- Prefer backend/API-only slices while frontend remains out of active scope
+- Prefer backend/API-first slices, but note that frontend pilot work is now active scope after the macro SPA decision; do not start operational SPA implementation before bloco 0 is done
 - Reuse `apps/users/policies.py` from both services and views
 - Keep business rules in services/use cases, not in views/serializers/admin
 - Treat SCPI import as a service pipeline: parser/normalization + domain creation + stock initialization, with atomic persistence

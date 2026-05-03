@@ -29,6 +29,8 @@ Updated on 2026-04-27 after merging PRs through PIL-BE-ACE-003.
 ## Usage guidance
 - Reuse these policy helpers from both services and views (PER-08)
 - Do not infer chief powers from role alone when the rule depends on the responsible sector
+- `auxiliar de setor` is not an authorizer in the pilot; keep authorization queue/actions limited to the proper chefia roles
+- The pilot currently assumes one operational `papel` principal per user. Do not design frontend navigation or capability derivation around simultaneous multiple active roles unless the backend model changes explicitly.
 - When authorizing warehouse requests, use the canonical Almoxarifado constant instead of duplicating the literal string in services/views/tests
 - Keep serializer/admin checks non-authoritative; critical contextual authorization belongs in shared policies and service revalidation
 
