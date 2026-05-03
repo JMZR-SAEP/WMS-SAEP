@@ -2,6 +2,8 @@ from io import StringIO
 
 import pytest
 from django.core.management import call_command
+from django.core.management.base import CommandError
+from django.test import override_settings
 
 from apps.materials.models import Material
 from apps.requisitions.models import Requisicao, StatusRequisicao
@@ -11,6 +13,14 @@ from apps.users.models import PapelChoices, User
 
 @pytest.mark.django_db
 class TestSeedPilotMinimoCommand:
+    @override_settings(EPHEMERAL_ENVIRONMENT=False)
+    def test_bloqueia_execucao_fora_de_ambiente_efemero(self):
+        with pytest.raises(
+            CommandError,
+            match="Seed piloto mínima só pode ser executada em ambiente efêmero.",
+        ):
+            call_command("seed_pilot_minimo")
+
     def test_cria_cenario_minimo_oficial_para_validacao_manual_e_playwright(self):
         stdout = StringIO()
 
@@ -76,8 +86,11 @@ class TestSeedPilotMinimoCommand:
         assert rascunho.criador_id != rascunho.beneficiario_id
         assert rascunho.criador.matricula_funcional == "91002"
         assert rascunho.beneficiario.matricula_funcional == "91004"
+        assert rascunho.numero_publico is None
 
         assert aguardando.numero_publico is not None
+        assert autorizada_parcial.numero_publico is not None
+        assert atendida_parcial.numero_publico is not None
 
         item_autorizado = autorizada_parcial.itens.get()
         assert item_autorizado.quantidade_autorizada < item_autorizado.quantidade_solicitada
