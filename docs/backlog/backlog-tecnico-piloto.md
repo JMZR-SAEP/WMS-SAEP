@@ -1243,16 +1243,18 @@ Status do enablement do frontend: bloco 0 do backend concluído em código/contr
 
 Débito técnico residual do scaffold frontend:
 
-- `frontend/` ainda não executa autenticação real: `/login` segue placeholder, falta bootstrap de sessão via `GET /api/v1/auth/me/`, guards de rota e resolução de home por papel.
 - O repositório ainda não tem a primeira fatia de CI do frontend. Ela deve validar artefatos gerados (`frontend/src/routeTree.gen.ts` e OpenAPI/types), lint, typecheck, smoke tests e Playwright.
-- A árvore `src/features/` já foi criada, mas ainda sem módulos reais. As próximas fatias devem migrar comportamento de domínio para `features/` e evitar crescimento permanente de placeholders em `routes/`/`shared/`.
+- A árvore `src/features/` começou a receber comportamento real por `features/auth`, mas as próximas fatias ainda devem evitar crescimento permanente de placeholders em `routes/`/`shared/`.
+- `frontend-gen-api`/`frontend-test` ainda depende de `frontend-init` via `npx pnpm@10.15.1`; em ambiente sem rede, use os binários locais em `frontend/node_modules/.bin` ou conclua a instalação oficial antes dos checks completos.
+- O E2E atual da SPA é smoke mockado para login/logout. Próximo degrau: E2E real com backend e seed mínima quando a infra estiver estável.
+- `/unknown-role` é fallback defensivo para papel não mapeado, não fluxo de negócio. Se aparecer em uso real, tratar como desalinhamento de contrato/cadastro/OpenAPI.
 
 Próxima fatia recomendada:
 
-1. login/bootstrap da SPA;
-2. CI inicial do frontend;
-3. `Minhas requisições` + detalhe canônico;
-4. criação/edição de rascunho e envio.
+1. CI inicial do frontend;
+2. `Minhas requisições` + detalhe canônico;
+3. criação/edição de rascunho e envio;
+4. filas de autorização e atendimento.
 
 Depois disso, a próxima frente segue para as filas operacionais e a timeline básica da requisição. `PIL-DOC-IMP-001`, `PIL-DOC-IMP-002` e `PIL-DOC-IMP-003` continuam relevantes, mas deixam de ser a próxima prioridade imediata do backlog ativo.
 

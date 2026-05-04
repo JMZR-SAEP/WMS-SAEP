@@ -76,4 +76,5 @@ Recorded from the 2026-05-02 architecture session.
 - Delivered base includes Vite, React, TypeScript, TanStack Router file-based routing, TanStack Query provider, Tailwind CSS baseline, `openapi-fetch` client, Vitest smoke tests, and Playwright smoke E2E.
 - Official repo entrypoints are `rtk make frontend-init`, `frontend-gen-api`, `frontend-dev`, `frontend-build`, `frontend-lint`, `frontend-test`, and `frontend-e2e`.
 - `frontend/openapi/schema.json`, `frontend/src/shared/api/schema.d.ts`, and `frontend/src/routeTree.gen.ts` are generated artifacts and should not be edited manually.
-- Next frontend slices move to `#37` login/bootstrap, `#42` initial frontend CI, then operational worklists and draft/detail flows.
+- Issue `#37` login/bootstrap is now implemented: `/login` performs Django session + CSRF auth, protected routes bootstrap via `GET /api/v1/auth/me/`, `/` resolves home by operational `papel`, shell shows current user, and logout clears session cache.
+- Next frontend slices move to `#42` initial frontend CI, then `#38` minhas requisicoes + canonical detail, then draft/detail operational flows.

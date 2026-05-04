@@ -1,9 +1,35 @@
-import { Link, Outlet, useLocation } from "@tanstack/react-router";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 
+import { ApiError, authQueryKeys, logoutSession, meQueryOptions } from "../../features/auth/session";
 import { navigationItems } from "../../shared/config/navigation";
+
+function messageFromLogoutError(error: unknown) {
+  if (error instanceof ApiError) {
+    return error.payload?.error.message || error.message;
+  }
+
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return "Não foi possível sair. Tente novamente.";
+}
 
 export function AppShell() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const sessionQuery = useQuery(meQueryOptions);
+  const session = sessionQuery.data;
+  const logoutMutation = useMutation({
+    mutationFn: logoutSession,
+    retry: false,
+    onSuccess: async () => {
+      queryClient.removeQueries({ queryKey: authQueryKeys.me });
+      await navigate({ to: "/login", search: { redirect: undefined } });
+    },
+  });
 
   return (
     <div className="min-h-screen bg-[var(--page-bg)] text-[var(--ink-strong)]">
@@ -48,14 +74,48 @@ export function AppShell() {
           </nav>
 
           <div className="border-t border-[var(--line-soft)] px-6 py-5">
-            <p className="text-xs uppercase tracking-[0.28em] text-[var(--ink-muted)]">
-              Bloco 0 consumido
-            </p>
-            <ul className="mt-3 space-y-2 text-sm text-[var(--ink-soft)]">
-              <li>`auth/csrf` `auth/login` `auth/logout` `auth/me`</li>
-              <li>`users/beneficiary-lookup`</li>
-              <li>`requisitions list/detail` + `draft update`</li>
-            </ul>
+            {session ? (
+              <div className="space-y-3">
+                <p className="text-xs uppercase tracking-[0.28em] text-[var(--ink-muted)]">
+                  Sessão atual
+                </p>
+                <div>
+                  <p className="text-sm font-semibold text-[var(--ink-strong)]">
+                    {session.nome_completo}
+                  </p>
+                  <p className="mt-1 text-xs uppercase tracking-[0.18em] text-[var(--ink-muted)]">
+                    {session.papel}
+                  </p>
+                  {session.setor ? (
+                    <p className="mt-2 text-sm text-[var(--ink-soft)]">{session.setor.nome}</p>
+                  ) : null}
+                </div>
+                <button
+                  className="preview-button w-full"
+                  disabled={logoutMutation.isPending}
+                  onClick={() => logoutMutation.mutate()}
+                  type="button"
+                >
+                  {logoutMutation.isPending ? "Saindo..." : "Sair"}
+                </button>
+                {logoutMutation.isError ? (
+                  <p className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
+                    {messageFromLogoutError(logoutMutation.error)}
+                  </p>
+                ) : null}
+              </div>
+            ) : (
+              <>
+                <p className="text-xs uppercase tracking-[0.28em] text-[var(--ink-muted)]">
+                  Bloco 0 consumido
+                </p>
+                <ul className="mt-3 space-y-2 text-sm text-[var(--ink-soft)]">
+                  <li>`auth/csrf` `auth/login` `auth/logout` `auth/me`</li>
+                  <li>`users/beneficiary-lookup`</li>
+                  <li>`requisitions list/detail` + `draft update`</li>
+                </ul>
+              </>
+            )}
           </div>
         </aside>
 

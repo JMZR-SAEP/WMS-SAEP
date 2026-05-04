@@ -1,8 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 
+import { requireSession } from "../../features/auth/guards";
 import { FeaturePlaceholder } from "../../shared/ui/feature-placeholder";
 
 export const Route = createFileRoute("/requisicoes/$id")({
+  beforeLoad: ({ context, location }) =>
+    requireSession({ queryClient: context.queryClient, locationHref: location.href }),
   component: DetalhePlaceholderPage,
 });
 

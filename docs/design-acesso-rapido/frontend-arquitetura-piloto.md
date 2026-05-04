@@ -126,6 +126,7 @@ Rotas públicas da SPA:
 - `/requisicoes/:id`
 - `/autorizacoes`
 - `/atendimentos`
+- `/unknown-role`
 
 Regras:
 
@@ -141,6 +142,7 @@ Homes por papel:
 - `chefe_setor`: `Fila de autorizações`
 - `auxiliar_almoxarifado`: `Fila de atendimento`
 - `chefe_almoxarifado`: `Fila de atendimento`
+- papel desconhecido: página neutra `/unknown-role`, sem voltar para `/login`, para evitar loop e explicitar desalinhamento de contrato/cadastro.
 
 ## 8. Bloco 0 de APIs habilitadoras
 
@@ -185,6 +187,13 @@ Regras complementares:
 6. `Fila de autorizações` + autorização total/parcial + recusa
 7. `Fila de atendimento` + atendimento total/parcial + cancelamento operacional permitido
 8. Notificações como segunda onda
+
+Estado atual após a fatia #37:
+
+- bloco 0 de backend concluído;
+- fundação `frontend/` concluída;
+- login real, bootstrap via `GET /api/v1/auth/me/`, guards, logout com erro visível, home por papel e fallback `/unknown-role` implementados;
+- próxima fatia funcional da SPA deve partir de `Minhas requisições` e detalhe canônico.
 
 ## 10. Worklists e detalhe
 

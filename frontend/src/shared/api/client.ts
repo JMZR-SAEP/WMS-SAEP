@@ -19,8 +19,9 @@ function getCookie(name: string) {
 }
 
 export const apiClient = createClient<paths>({
-  baseUrl: "/api/v1",
+  baseUrl: globalThis.location?.origin ?? "",
   credentials: "include",
+  fetch: (request) => globalThis.fetch(request),
 });
 
 apiClient.use({

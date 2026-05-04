@@ -1,8 +1,19 @@
-import { Link, createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute, redirect } from "@tanstack/react-router";
 
+import { requireSession } from "../features/auth/guards";
+import { homePathForPapel } from "../features/auth/session";
 import { navigationItems } from "../shared/config/navigation";
 
 export const Route = createFileRoute("/")({
+  beforeLoad: async ({ context, location }) => {
+    const session = await requireSession({
+      queryClient: context.queryClient,
+      locationHref: location.href,
+    });
+
+    // eslint-disable-next-line @typescript-eslint/only-throw-error
+    throw redirect({ to: homePathForPapel(session.papel) });
+  },
   component: HomePage,
 });
 
