@@ -11,6 +11,7 @@ export function createAppQueryClient() {
             return false;
           }
 
+          // Pilot default: one retry for transient non-auth failures, no noisy loops.
           return failureCount < 1;
         },
         refetchOnWindowFocus: false,

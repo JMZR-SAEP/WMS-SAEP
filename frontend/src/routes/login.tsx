@@ -47,6 +47,7 @@ function LoginPage() {
     retry: false,
     onSuccess: async (session) => {
       queryClient.setQueryData(authQueryKeys.me, session);
+      // Trusted redirects win; otherwise fall back to the papel-derived home, including /unknown-role.
       await navigate({
         href: safeInternalRedirectPath(redirect) ?? homePathForPapel(session.papel),
         search: { redirect: undefined },

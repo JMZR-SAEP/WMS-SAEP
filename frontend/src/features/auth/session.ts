@@ -40,14 +40,20 @@ export function isAuthError(error: unknown) {
 }
 
 export async function ensureCsrfCookie() {
-  const { data, response } = await apiClient.GET("/api/v1/auth/csrf/");
+  const result = await apiClient.GET("/api/v1/auth/csrf/");
+  const error = result.error as ErrorResponse | undefined;
 
-  if (!data) {
-    throw new ApiError("Não foi possível preparar a sessão.", response.status);
+  if (error || !result.data) {
+    throw new ApiError(
+      messageFromError(error, "Não foi possível preparar a sessão."),
+      result.response.status,
+      error,
+    );
   }
 }
 
 export async function fetchCurrentSession() {
+  // Contract: GET /auth/me/ bootstraps session state and does not require CSRF.
   const { data, error, response } = await apiClient.GET("/api/v1/auth/me/");
 
   if (error || !data) {

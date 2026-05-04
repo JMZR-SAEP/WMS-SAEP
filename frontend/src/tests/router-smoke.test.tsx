@@ -81,6 +81,20 @@ function unauthenticatedResponse() {
   );
 }
 
+function forbiddenResponse() {
+  return new Response(
+    JSON.stringify({
+      error: {
+        code: "permission_denied",
+        message: "Permissão negada.",
+        details: {},
+        trace_id: null,
+      },
+    }),
+    { status: 403, headers: jsonHeaders },
+  );
+}
+
 function mockCurrentSession(papel = "solicitante") {
   vi.stubGlobal(
     "fetch",
@@ -265,6 +279,25 @@ describe("frontend scaffold router", () => {
     expect(container.ownerDocument.location.search).toBe("?redirect=%2Fminhas-requisicoes");
   });
 
+  it("redirects protected routes on forbidden session bootstrap", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((request: Request) => {
+        if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+          return forbiddenResponse();
+        }
+
+        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+      }),
+    );
+
+    const { container } = renderRoute("/atendimentos");
+
+    expect(await screen.findByRole("heading", { name: "Entrar no piloto" })).toBeInTheDocument();
+    expect(container.ownerDocument.location.pathname).toBe("/login");
+    expect(container.ownerDocument.location.search).toBe("?redirect=%2Fatendimentos");
+  });
+
   it("renders minhas requisicoes placeholder", async () => {
     mockCurrentSession();
     renderRoute("/minhas-requisicoes");
@@ -339,6 +372,46 @@ describe("frontend scaffold router", () => {
     fireEvent.click(screen.getByRole("button", { name: "Sair" }));
 
     expect(await screen.findByText("Não foi possível encerrar a sessão.")).toBeInTheDocument();
+    expect(container.ownerDocument.location.pathname).toBe("/minhas-requisicoes");
+  });
+
+  it("does not post logout when csrf preparation fails", async () => {
+    let logoutCalled = false;
+    const fetchMock = vi.fn((request: Request) => {
+      if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+        return sessionResponse(authSession("solicitante"));
+      }
+
+      if (requestUrl(request).endsWith("/api/v1/auth/csrf/")) {
+        return new Response(
+          JSON.stringify({
+            error: {
+              code: "csrf_unavailable",
+              message: "CSRF indisponível.",
+              details: {},
+              trace_id: null,
+            },
+          }),
+          { status: 503, headers: jsonHeaders },
+        );
+      }
+
+      if (requestUrl(request).endsWith("/api/v1/auth/logout/")) {
+        logoutCalled = true;
+        return new Response(null, { status: 204 });
+      }
+
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { container } = renderRoute("/minhas-requisicoes");
+
+    expect(await screen.findByText("Usuario Piloto")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Sair" }));
+
+    expect(await screen.findByText("CSRF indisponível.")).toBeInTheDocument();
+    expect(logoutCalled).toBe(false);
     expect(container.ownerDocument.location.pathname).toBe("/minhas-requisicoes");
   });
 });

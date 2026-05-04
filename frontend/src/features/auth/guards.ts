@@ -1,7 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { redirect } from "@tanstack/react-router";
 
-import { ApiError, authQueryKeys, meQueryOptions } from "./session";
+import { authQueryKeys, isAuthError, meQueryOptions } from "./session";
 
 export async function requireSession({
   queryClient,
@@ -13,7 +13,7 @@ export async function requireSession({
   try {
     return await queryClient.ensureQueryData(meQueryOptions);
   } catch (error) {
-    if (error instanceof ApiError && error.status === 401) {
+    if (isAuthError(error)) {
       queryClient.removeQueries({ queryKey: authQueryKeys.me });
       // eslint-disable-next-line @typescript-eslint/only-throw-error
       throw redirect({
