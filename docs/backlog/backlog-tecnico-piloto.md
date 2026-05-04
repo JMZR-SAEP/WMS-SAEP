@@ -1241,6 +1241,12 @@ Status: `PIL-BE-AUD-001`, `PIL-BE-AUD-003`, `PIL-BE-NOT-001` e `PIL-BE-NOT-002` 
 
 Status do enablement do frontend: bloco 0 do backend concluído em código/contrato e fundação da SPA concluída em `frontend/`.
 
+Débito técnico residual do scaffold frontend:
+
+- `frontend/` ainda não executa autenticação real: `/login` segue placeholder, falta bootstrap de sessão via `GET /api/v1/auth/me/`, guards de rota e resolução de home por papel.
+- O repositório ainda não tem a primeira fatia de CI do frontend. Ela deve validar artefatos gerados (`frontend/src/routeTree.gen.ts` e OpenAPI/types), lint, typecheck, smoke tests e Playwright.
+- A árvore `src/features/` já foi criada, mas ainda sem módulos reais. As próximas fatias devem migrar comportamento de domínio para `features/` e evitar crescimento permanente de placeholders em `routes/`/`shared/`.
+
 Próxima fatia recomendada:
 
 1. login/bootstrap da SPA;
