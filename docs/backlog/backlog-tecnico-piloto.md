@@ -1239,14 +1239,16 @@ Status: concluída; itens 1 a 17 concluídos. O caminho de cancelamento pós-aut
 
 Status: `PIL-BE-AUD-001`, `PIL-BE-AUD-003`, `PIL-BE-NOT-001` e `PIL-BE-NOT-002` concluídas. Notificações continuam como side effects pós-commit, não como fonte de verdade do domínio. A leitura individual de notificações coletivas por papel não faz parte desta fatia; hoje notificações por papel são visíveis por escopo de admin, mas `marcar_notificacao_como_lida()` rejeita leitura individual quando não há destinatário individual. Implementado no PR/branch: feat/notificacoes-fluxo.
 
-Próxima fatia recomendada: executar o bloco 0 de APIs habilitadoras do frontend, nesta ordem:
+Status do enablement do frontend: bloco 0 do backend concluído em código/contrato e fundação da SPA concluída em `frontend/`.
 
-1. autenticação e sessão para SPA;
-2. lookup de beneficiário por nome;
-3. leituras canônicas de requisição;
-4. update explícito de rascunho.
+Próxima fatia recomendada:
 
-Depois do bloco 0, a próxima frente é a fundação da SPA e os fluxos operacionais do piloto. `PIL-DOC-IMP-001`, `PIL-DOC-IMP-002` e `PIL-DOC-IMP-003` continuam relevantes, mas deixam de ser a próxima prioridade imediata do backlog ativo.
+1. login/bootstrap da SPA;
+2. CI inicial do frontend;
+3. `Minhas requisições` + detalhe canônico;
+4. criação/edição de rascunho e envio.
+
+Depois disso, a próxima frente segue para as filas operacionais e a timeline básica da requisição. `PIL-DOC-IMP-001`, `PIL-DOC-IMP-002` e `PIL-DOC-IMP-003` continuam relevantes, mas deixam de ser a próxima prioridade imediata do backlog ativo.
 
 ### Tarefas de frontend/fullstack bloqueadas pelo bloco 0
 

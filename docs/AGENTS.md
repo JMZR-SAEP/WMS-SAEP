@@ -19,6 +19,7 @@ Em caso de conflito entre síntese rápida e documentação completa, prevalece 
 |---|---|---|
 | Stack, arquitetura, decisões técnicas | `design-acesso-rapido/stack.md` | Consultar backlog ou documentação completa se a decisão afetar escopo de app, fronteira de domínio ou CI. |
 | Arquitetura da SPA do piloto | `design-acesso-rapido/frontend-arquitetura-piloto.md` | Consultar o ADR em `adr/0001-frontend-piloto-spa-separada.md` quando a dúvida for sobre a decisão macro, trade-offs ou gate do bloco 0. |
+| Comandos e arquivos da fundação da SPA | `design-acesso-rapido/frontend-arquitetura-piloto.md` | Usar quando a tarefa tocar `frontend/`, `frontend/openapi/schema.json`, `src/shared/api/schema.d.ts`, `src/routeTree.gen.ts` ou rotinas `frontend-*` do `Makefile`. |
 | Contratos DRF, erros, paginação, OpenAPI | `design-acesso-rapido/api-contracts.md` | Consultar documentos de domínio quando o endpoint expõe regra crítica. |
 | Invariantes de domínio | `design-acesso-rapido/matriz-invariantes.md` | Consultar `design-acesso-ocasional/modelo-dominio-regras.md`, `processos-almoxarifado.md` e `criterios-aceite.md` para detalhe. |
 | Permissões, papéis e escopos | `design-acesso-rapido/matriz-permissoes.md` | Consultar `design-acesso-ocasional/modelo-dominio-regras.md` e `criterios-aceite.md` quando houver regra contextual por setor, objeto ou estado. |
@@ -45,6 +46,7 @@ Em caso de conflito entre síntese rápida e documentação completa, prevalece 
 - Não leia todos os documentos por padrão; escolha a rota pelo tipo de dúvida.
 - Não use backlog como fonte para contrariar regra de domínio já documentada.
 - Não inicie features da SPA do piloto sem confirmar antes o estado do bloco 0 no backlog e no guia operacional do frontend.
+- Não recrie a fundação da SPA: `frontend/` já existe e deve ser evoluído incrementalmente.
 - Não use síntese rápida para sobrescrever regra mais detalhada em `design-acesso-ocasional/`.
 - Não aceite mudança de contrato HTTP sem atualizar `design-acesso-rapido/api-contracts.md`, testes e OpenAPI quando aplicável.
 - Não aceite mudança de permissão sem revisar `design-acesso-rapido/matriz-permissoes.md`.

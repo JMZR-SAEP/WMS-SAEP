@@ -62,18 +62,24 @@ O `superusuário` permanece fora do foco da SPA no primeiro corte, usando admin 
 frontend/
   openapi/
     schema.json
+  tests/
+    e2e/
   package.json
+  tsr.config.json
   tsconfig.json
   vite.config.ts
+  vitest.config.ts
   playwright.config.ts
   src/
     app/
       layouts/
       providers/
-      router/
+      router.tsx
     routes/
+    routeTree.gen.ts
     shared/
       api/
+        schema.d.ts
       auth/
       config/
       lib/
@@ -92,6 +98,7 @@ Regras:
 - `routes/` orquestra páginas, search params, loaders e guards.
 - `features/` concentra blocos de domínio e fluxos.
 - `shared/` contém apenas primitives transversais.
+- `routeTree.gen.ts` e `shared/api/schema.d.ts` são artefatos gerados; não editar manualmente.
 - qualquer artefato que “conhece” requisição, autorização ou atendimento pertence a feature, não a `shared`.
 
 ## 6. Auth e sessão
@@ -242,10 +249,21 @@ Rotinas previstas:
 - `make frontend-gen-api`
 - `make seed-pilot-minimo`
 
+Significado operacional:
+
+- `make frontend-init`: instala dependências `pnpm` da SPA e prepara Chromium do Playwright;
+- `make frontend-gen-api`: exporta `frontend/openapi/schema.json` com `drf-spectacular` e regenera `src/shared/api/schema.d.ts`;
+- `make frontend-dev`: sobe a SPA local em `127.0.0.1:4173`;
+- `make frontend-build`: executa `frontend-gen-api` e gera o build;
+- `make frontend-lint`: executa `frontend-gen-api`, lint e typecheck;
+- `make frontend-test`: executa `frontend-gen-api` e smoke tests com Vitest;
+- `make frontend-e2e`: executa `frontend-gen-api` e smoke E2E com Playwright.
+
 ## 13. OpenAPI
 
 - o backend exporta o schema para arquivo;
 - o frontend consome `frontend/openapi/schema.json`;
+- os tipos TS gerados vivem em `frontend/src/shared/api/schema.d.ts`;
 - geração de tipos não deve depender do endpoint HTTP `/api/v1/schema/` em runtime de build;
 - arquivos gerados não devem ser editados manualmente.
 

@@ -70,3 +70,10 @@ Recorded from the 2026-05-02 architecture session.
 - frontend architecture is documented in `docs/design-acesso-rapido/frontend-arquitetura-piloto.md`
 - macro decision is documented in `docs/adr/0001-frontend-piloto-spa-separada.md`
 - backlog and AGENTS docs were updated to enforce the bloco 0 gate
+
+## Update after issue #36
+- `frontend/` now exists with the SPA foundation materialized.
+- Delivered base includes Vite, React, TypeScript, TanStack Router file-based routing, TanStack Query provider, Tailwind CSS baseline, `openapi-fetch` client, Vitest smoke tests, and Playwright smoke E2E.
+- Official repo entrypoints are `rtk make frontend-init`, `frontend-gen-api`, `frontend-dev`, `frontend-build`, `frontend-lint`, `frontend-test`, and `frontend-e2e`.
+- `frontend/openapi/schema.json`, `frontend/src/shared/api/schema.d.ts`, and `frontend/src/routeTree.gen.ts` are generated artifacts and should not be edited manually.
+- Next frontend slices move to `#37` login/bootstrap, `#42` initial frontend CI, then operational worklists and draft/detail flows.

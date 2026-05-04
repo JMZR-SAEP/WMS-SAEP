@@ -24,6 +24,8 @@ Approved pilot frontend stack:
 - Tailwind CSS + shadcn/ui + Radix UI
 - Playwright for E2E
 - exported OpenAPI input file at `frontend/openapi/schema.json`
+- generated OpenAPI types at `frontend/src/shared/api/schema.d.ts`
+- generated TanStack Router tree at `frontend/src/routeTree.gen.ts`
 
 Current dependency baseline after the 2026-04-27 audit/upgrade (`d7702de chore: upgrade python dependencies`):
 - Django 6.0.4, djangorestframework 3.17.1, drf-spectacular 0.29.0.
@@ -43,6 +45,7 @@ Current state: Django project initialized with technical infrastructure plus act
 - `apps/stock/` now contains `EstoqueMaterial`, immutable `MovimentacaoEstoque`, stock admin protections, and `registrar_saldo_inicial()` for import bootstrap.
 - Initial settings are `config.settings.base`, `config.settings.dev`, and `config.settings.test`; do not create a separate `test_postgres` settings module.
 - PostgreSQL is configured through `DATABASE_URL`; no Docker Compose or production settings are part of the active baseline.
+- `frontend/` is now materialized with Vite, Tailwind CSS, TanStack Router file-based routing, TanStack Query provider wiring, `openapi-fetch` client bootstrap, Vitest smoke tests, and Playwright smoke E2E.
 
 Current validation snapshot:
 - `rtk make test` passed locally on 2026-04-29 with 175 collected tests.

@@ -13,6 +13,13 @@ Project routines from `Makefile`:
 - `rtk make resetpostgres` - drop/recreate PostgreSQL public schema using `DATABASE_URL`.
 - `rtk make test` - run tests with `config.settings.test`.
 - `rtk make run` - run Django development server with `config.settings.dev`.
+- `rtk make frontend-init` - install SPA dependencies and prepare Chromium for Playwright.
+- `rtk make frontend-gen-api` - export `frontend/openapi/schema.json` and regenerate `frontend/src/shared/api/schema.d.ts`.
+- `rtk make frontend-dev` - run the SPA on `127.0.0.1:4173`.
+- `rtk make frontend-build` - regenerate API types and build the SPA.
+- `rtk make frontend-lint` - regenerate API types, then run frontend lint + typecheck.
+- `rtk make frontend-test` - regenerate API types, then run frontend smoke tests with Vitest.
+- `rtk make frontend-e2e` - regenerate API types, then run frontend smoke E2E with Playwright.
 - `rtk make resetdb` - migrate the current database to zero and back without deleting local migration files.
 
 Operational commands now commonly useful:
@@ -38,4 +45,4 @@ Useful Darwin/macOS development commands:
 - `rtk sed -n '1,200p' path`
 - `rtk proxy find . -maxdepth 3 -type f`
 
-Serena was initialized for `/Users/jmzr/Dev/WMS-SAEP-v2` with project name `WMS-SAEP-v2`.
+Serena is initialized for `/Users/jmzr/Dev/WMS-SAEP` with project name `WMS-SAEP`.

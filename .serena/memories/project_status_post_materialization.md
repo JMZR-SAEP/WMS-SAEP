@@ -78,8 +78,8 @@ Technical baseline:
    - leituras canônicas de requisição (`GET /requisitions/` e `GET /requisitions/{id}/`)
    - atualização explícita de rascunho por substituição completa
 3. depois do bloco 0:
-   - scaffold da SPA e integração com `Makefile`
    - login/bootstrap da SPA
+   - CI inicial do frontend
    - `Minhas requisições`
    - criação/edição de rascunho e envio
    - filas de autorizações e atendimento
@@ -98,6 +98,7 @@ Post-pilot/MVP technical follow-up:
 ## Notes For Future Agents
 
 - Prefer backend/API-first slices, but note that frontend pilot work is now active scope after the macro SPA decision; do not start operational SPA implementation before bloco 0 is done
+- The SPA scaffold already exists in `frontend/`; evolve it incrementally instead of recreating project setup or route foundations.
 - Reuse `apps/users/policies.py` from both services and views
 - Keep business rules in services/use cases, not in views/serializers/admin
 - Treat SCPI import as a service pipeline: parser/normalization + domain creation + stock initialization, with atomic persistence
