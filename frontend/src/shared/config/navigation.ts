@@ -53,7 +53,8 @@ export const navigationItems: NavigationItem[] = [
     label: "Detalhe canônico",
     hint: "#38",
     tag: "Detail",
-    matches: (pathname: string) => /^\/requisicoes\/[^/]+$/.test(pathname),
+    matches: (pathname: string) =>
+      pathname !== "/requisicoes/nova" && /^\/requisicoes\/[^/]+$/.test(pathname),
   },
   {
     to: "/autorizacoes",

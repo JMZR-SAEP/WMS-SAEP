@@ -354,6 +354,12 @@ export interface components {
             readonly id: number;
             readonly nome: string;
         };
+        BeneficiaryLookupOutput: {
+            readonly id: number;
+            readonly matricula_funcional: string;
+            readonly nome_completo: string;
+            readonly setor: components["schemas"]["AuthSetorOutput"];
+        };
         CsrfTokenOutput: {
             readonly csrf_token: string;
         };
@@ -399,36 +405,6 @@ export interface components {
             /** Format: uri */
             readonly previous: string | null;
             readonly results: components["schemas"]["MaterialListOutput"][];
-        };
-        PaginatedMaterialListPaginatedList: {
-            /** @example 123 */
-            count: number;
-            /**
-             * Format: uri
-             * @example http://api.example.org/accounts/?page=4
-             */
-            next?: string | null;
-            /**
-             * Format: uri
-             * @example http://api.example.org/accounts/?page=2
-             */
-            previous?: string | null;
-            results: components["schemas"]["MaterialListPaginated"][];
-        };
-        PaginatedRequisicaoListPaginatedList: {
-            /** @example 123 */
-            count: number;
-            /**
-             * Format: uri
-             * @example http://api.example.org/accounts/?page=4
-             */
-            next?: string | null;
-            /**
-             * Format: uri
-             * @example http://api.example.org/accounts/?page=2
-             */
-            previous?: string | null;
-            results: components["schemas"]["RequisicaoListPaginated"][];
         };
         RequisicaoActionOutput: {
             readonly id: number;
@@ -756,12 +732,6 @@ export interface components {
          * @enum {string}
          */
         TipoEventoEnum: "criacao" | "envio_autorizacao" | "retorno_rascunho" | "reenvio_autorizacao" | "autorizacao_total" | "autorizacao_parcial" | "recusa" | "atendimento_parcial" | "atendimento" | "cancelamento" | "estorno";
-        BeneficiaryLookupOutput: {
-            readonly id: number;
-            readonly matricula_funcional: string;
-            readonly nome_completo: string;
-            readonly setor: components["schemas"]["AuthSetorOutput"] | null;
-        };
     };
     responses: never;
     parameters: never;
@@ -909,7 +879,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PaginatedMaterialListPaginatedList"];
+                    "application/json": components["schemas"]["MaterialListPaginated"];
                 };
             };
             403: {
@@ -983,7 +953,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PaginatedRequisicaoListPaginatedList"];
+                    "application/json": components["schemas"]["RequisicaoListPaginated"];
                 };
             };
             403: {

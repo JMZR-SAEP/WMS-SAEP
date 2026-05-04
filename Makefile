@@ -128,11 +128,10 @@ frontend-init: ## Instalar dependências do frontend e preparar Playwright
 	cd $(FRONTEND_DIR) && $(PNPM) install
 	cd $(FRONTEND_DIR) && ./node_modules/.bin/playwright install chromium
 
-frontend-gen-api: ## Exportar OpenAPI do backend e regenerar tipos do frontend
+frontend-gen-api: frontend-init ## Exportar OpenAPI do backend e regenerar tipos do frontend
 	@test -d $(FRONTEND_DIR) || (echo "Diretório $(FRONTEND_DIR) não encontrado" && exit 1)
 	mkdir -p $(FRONTEND_DIR)/openapi
 	DJANGO_SETTINGS_MODULE=$(DJANGO_SETTINGS_MODULE) $(DJANGO_ADMIN) spectacular --format openapi-json --file $(FRONTEND_SCHEMA_FILE)
-	cd $(FRONTEND_DIR) && node ./scripts/normalize-openapi.mjs
 	cd $(FRONTEND_DIR) && ./node_modules/.bin/openapi-typescript ./openapi/schema.json -o ./src/shared/api/schema.d.ts
 
 frontend-dev: ## Subir SPA do piloto em modo desenvolvimento

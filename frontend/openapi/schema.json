@@ -1,2709 +1,2660 @@
 {
-  "openapi": "3.0.3",
-  "info": {
-    "title": "WMS-SAEP API",
-    "version": "0.1.0",
-    "description": "API do Sistema de Requisição de Materiais",
-    "contact": {
-      "email": "contato@saep.local"
+    "openapi": "3.0.3",
+    "info": {
+        "title": "WMS-SAEP API",
+        "version": "0.1.0",
+        "description": "API do Sistema de Requisição de Materiais",
+        "contact": {
+            "email": "contato@saep.local"
+        }
+    },
+    "paths": {
+        "/api/v1/auth/csrf/": {
+            "get": {
+                "operationId": "auth_csrf",
+                "tags": [
+                    "auth"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    },
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/CsrfTokenOutput"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/login/": {
+            "post": {
+                "operationId": "auth_login",
+                "tags": [
+                    "auth"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AuthLoginInput"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AuthLoginInput"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/AuthLoginInput"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    },
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AuthSessionOutput"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/logout/": {
+            "post": {
+                "operationId": "auth_logout",
+                "tags": [
+                    "auth"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    },
+                    {}
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No response body"
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/me/": {
+            "get": {
+                "operationId": "auth_me",
+                "tags": [
+                    "auth"
+                ],
+                "security": [
+                    {
+                        "sessionAuth401": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/AuthSessionOutput"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/materials/": {
+            "get": {
+                "operationId": "materials_list",
+                "description": "Lista paginada de materiais ativos com saldo disponível calculado. Retorna apenas materiais com is_active=True.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "grupo",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filtro por código do grupo (ex: 001)"
+                    },
+                    {
+                        "in": "query",
+                        "name": "page",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Número da página (padrão: 1)"
+                    },
+                    {
+                        "in": "query",
+                        "name": "page_size",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Quantidade de resultados por página (padrão: 20, máximo: 100)"
+                    },
+                    {
+                        "in": "query",
+                        "name": "search",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Busca textual em: codigo_completo, nome, descricao (case-insensitive)"
+                    },
+                    {
+                        "in": "query",
+                        "name": "subgrupo",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filtro por código do subgrupo (ex: 001)"
+                    }
+                ],
+                "tags": [
+                    "materials"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/MaterialListPaginated"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/materials/{id}/": {
+            "get": {
+                "operationId": "materials_retrieve",
+                "description": "Detalha um material ativo pelo identificador, incluindo o saldo disponível calculado.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Um valor inteiro único que identifica este Material.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "materials"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/MaterialListOutput"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/requisitions/": {
+            "get": {
+                "operationId": "requisitions_list",
+                "description": "Lista paginada das requisições visíveis ao usuário autenticado. Suporta busca textual simples e filtro por status.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "page",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Número da página (padrão: 1)"
+                    },
+                    {
+                        "in": "query",
+                        "name": "page_size",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Quantidade de resultados por página (padrão: 20, máximo: 100)"
+                    },
+                    {
+                        "in": "query",
+                        "name": "search",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Busca textual por número público, nome do beneficiário ou nome do criador."
+                    },
+                    {
+                        "in": "query",
+                        "name": "status",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filtro exato por status da requisição."
+                    }
+                ],
+                "tags": [
+                    "requisitions"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RequisicaoListPaginated"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            },
+            "post": {
+                "operationId": "requisitions_create_draft",
+                "tags": [
+                    "requisitions"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RequisicaoCreateInput"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RequisicaoCreateInput"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RequisicaoCreateInput"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RequisicaoDetailOutput"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/requisitions/{id}/": {
+            "get": {
+                "operationId": "requisitions_retrieve",
+                "description": "Detalhe canônico de uma requisição visível ao usuário autenticado, incluindo itens e resumo operacional da timeline.",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Um valor inteiro único que identifica este Requisição.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "requisitions"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RequisicaoDetailOutput"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/requisitions/{id}/authorize/": {
+            "post": {
+                "operationId": "requisitions_authorize",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Um valor inteiro único que identifica este Requisição.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "requisitions"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RequisicaoAuthorizeInput"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RequisicaoAuthorizeInput"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RequisicaoAuthorizeInput"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RequisicaoDetailOutput"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/requisitions/{id}/cancel/": {
+            "post": {
+                "operationId": "requisitions_cancel",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Um valor inteiro único que identifica este Requisição.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "requisitions"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RequisicaoCancelInput"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RequisicaoCancelInput"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RequisicaoCancelInput"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RequisicaoDetailOutput"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/requisitions/{id}/discard/": {
+            "delete": {
+                "operationId": "requisitions_discard",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Um valor inteiro único que identifica este Requisição.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "requisitions"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No response body"
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/requisitions/{id}/draft/": {
+            "put": {
+                "operationId": "requisitions_update_draft",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Um valor inteiro único que identifica este Requisição.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "requisitions"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RequisicaoCreateInput"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RequisicaoCreateInput"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RequisicaoCreateInput"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RequisicaoDetailOutput"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/requisitions/{id}/fulfill/": {
+            "post": {
+                "operationId": "requisitions_fulfill",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Um valor inteiro único que identifica este Requisição.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "requisitions"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RequisicaoFulfillInput"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RequisicaoFulfillInput"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RequisicaoFulfillInput"
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RequisicaoDetailOutput"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/requisitions/{id}/refuse/": {
+            "post": {
+                "operationId": "requisitions_refuse",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Um valor inteiro único que identifica este Requisição.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "requisitions"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RequisicaoRefuseInput"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RequisicaoRefuseInput"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RequisicaoRefuseInput"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RequisicaoDetailOutput"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/requisitions/{id}/return-to-draft/": {
+            "post": {
+                "operationId": "requisitions_return_to_draft",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Um valor inteiro único que identifica este Requisição.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "requisitions"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RequisicaoDetailOutput"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/requisitions/{id}/submit/": {
+            "post": {
+                "operationId": "requisitions_submit",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Um valor inteiro único que identifica este Requisição.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "requisitions"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RequisicaoDetailOutput"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/requisitions/pending-approvals/": {
+            "get": {
+                "operationId": "requisitions_pending_approvals",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "page",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Número da página (padrão: 1)"
+                    },
+                    {
+                        "in": "query",
+                        "name": "page_size",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Quantidade de resultados por página (padrão: 20, máximo: 100)"
+                    }
+                ],
+                "tags": [
+                    "requisitions"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RequisicaoPendingApprovalPaginated"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/requisitions/pending-fulfillments/": {
+            "get": {
+                "operationId": "requisitions_pending_fulfillments",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "page",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Número da página (padrão: 1)"
+                    },
+                    {
+                        "in": "query",
+                        "name": "page_size",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Quantidade de resultados por página (padrão: 20, máximo: 100)"
+                    }
+                ],
+                "tags": [
+                    "requisitions"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RequisicaoPendingFulfillmentPaginated"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/schema/": {
+            "get": {
+                "operationId": "schema_retrieve",
+                "description": "OpenApi3 schema for this API. Format can be selected via content negotiation.\n\n- YAML: application/vnd.oai.openapi\n- JSON: application/vnd.oai.openapi+json",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "format",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "json",
+                                "yaml"
+                            ]
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "lang",
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "af",
+                                "ar",
+                                "ar-dz",
+                                "ast",
+                                "az",
+                                "be",
+                                "bg",
+                                "bn",
+                                "br",
+                                "bs",
+                                "ca",
+                                "ckb",
+                                "cs",
+                                "cy",
+                                "da",
+                                "de",
+                                "dsb",
+                                "el",
+                                "en",
+                                "en-au",
+                                "en-gb",
+                                "eo",
+                                "es",
+                                "es-ar",
+                                "es-co",
+                                "es-mx",
+                                "es-ni",
+                                "es-ve",
+                                "et",
+                                "eu",
+                                "fa",
+                                "fi",
+                                "fr",
+                                "fy",
+                                "ga",
+                                "gd",
+                                "gl",
+                                "he",
+                                "hi",
+                                "hr",
+                                "hsb",
+                                "ht",
+                                "hu",
+                                "hy",
+                                "ia",
+                                "id",
+                                "ig",
+                                "io",
+                                "is",
+                                "it",
+                                "ja",
+                                "ka",
+                                "kab",
+                                "kk",
+                                "km",
+                                "kn",
+                                "ko",
+                                "ky",
+                                "lb",
+                                "lt",
+                                "lv",
+                                "mk",
+                                "ml",
+                                "mn",
+                                "mr",
+                                "ms",
+                                "my",
+                                "nb",
+                                "ne",
+                                "nl",
+                                "nn",
+                                "os",
+                                "pa",
+                                "pl",
+                                "pt",
+                                "pt-br",
+                                "ro",
+                                "ru",
+                                "sk",
+                                "sl",
+                                "sq",
+                                "sr",
+                                "sr-latn",
+                                "sv",
+                                "sw",
+                                "ta",
+                                "te",
+                                "tg",
+                                "th",
+                                "tk",
+                                "tr",
+                                "tt",
+                                "udm",
+                                "ug",
+                                "uk",
+                                "ur",
+                                "uz",
+                                "vi",
+                                "zh-hans",
+                                "zh-hant"
+                            ]
+                        }
+                    }
+                ],
+                "tags": [
+                    "schema"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    },
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/vnd.oai.openapi": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            },
+                            "application/yaml": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            },
+                            "application/vnd.oai.openapi+json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            },
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/users/beneficiary-lookup/": {
+            "get": {
+                "operationId": "users_beneficiary_lookup",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "q",
+                        "schema": {
+                            "type": "string",
+                            "minLength": 3
+                        },
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "users"
+                ],
+                "security": [
+                    {
+                        "sessionAuth401": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "$ref": "#/components/schemas/BeneficiaryLookupOutput"
+                                    }
+                                }
+                            }
+                        },
+                        "description": "Lista curta de beneficiários elegíveis, limitada a 10 resultados."
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "401": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "AuthLoginInput": {
+                "type": "object",
+                "properties": {
+                    "matricula_funcional": {
+                        "type": "string"
+                    },
+                    "password": {
+                        "type": "string",
+                        "writeOnly": true
+                    }
+                },
+                "required": [
+                    "matricula_funcional",
+                    "password"
+                ]
+            },
+            "AuthSessionOutput": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "matricula_funcional": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "nome_completo": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "papel": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "setor": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/AuthSetorOutput"
+                            }
+                        ],
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "is_authenticated": {
+                        "type": "boolean",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "id",
+                    "is_authenticated",
+                    "matricula_funcional",
+                    "nome_completo",
+                    "papel",
+                    "setor"
+                ]
+            },
+            "AuthSetorOutput": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "nome": {
+                        "type": "string",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "id",
+                    "nome"
+                ]
+            },
+            "BeneficiaryLookupOutput": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "matricula_funcional": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "nome_completo": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "setor": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/AuthSetorOutput"
+                            }
+                        ],
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "id",
+                    "matricula_funcional",
+                    "nome_completo",
+                    "setor"
+                ]
+            },
+            "CsrfTokenOutput": {
+                "type": "object",
+                "properties": {
+                    "csrf_token": {
+                        "type": "string",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "csrf_token"
+                ]
+            },
+            "ErrorDetail": {
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "string"
+                    },
+                    "message": {
+                        "type": "string"
+                    },
+                    "details": {
+                        "nullable": true
+                    },
+                    "trace_id": {
+                        "type": "string",
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "code",
+                    "message"
+                ]
+            },
+            "ErrorResponse": {
+                "type": "object",
+                "properties": {
+                    "error": {
+                        "$ref": "#/components/schemas/ErrorDetail"
+                    }
+                },
+                "required": [
+                    "error"
+                ]
+            },
+            "MaterialListOutput": {
+                "type": "object",
+                "description": "Serializer para listagem de materiais disponíveis.\n\nCampo saldo_disponivel é calculado dinamicamente (saldo_fisico - saldo_reservado).\nBloqueios por saldo insuficiente ou divergência crítica são validados na criação da requisição.",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "codigo_completo": {
+                        "type": "string",
+                        "readOnly": true,
+                        "description": "Código completo xxx.yyy.zzz do material no SCPI"
+                    },
+                    "nome": {
+                        "type": "string",
+                        "readOnly": true,
+                        "description": "Nome descritivo vindo do SCPI"
+                    },
+                    "descricao": {
+                        "type": "string",
+                        "readOnly": true,
+                        "description": "Descrição vinda do SCPI"
+                    },
+                    "unidade_medida": {
+                        "type": "string",
+                        "readOnly": true,
+                        "description": "Unidade de medida vinda do SCPI"
+                    },
+                    "saldo_disponivel": {
+                        "type": "number",
+                        "format": "double",
+                        "nullable": true,
+                        "description": "Retorna saldo_disponivel do EstoqueMaterial associado, ou None se não existir.",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "codigo_completo",
+                    "descricao",
+                    "id",
+                    "nome",
+                    "saldo_disponivel",
+                    "unidade_medida"
+                ]
+            },
+            "MaterialListPaginated": {
+                "type": "object",
+                "description": "Envelope paginado padrão para listagem de materiais.",
+                "properties": {
+                    "count": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "page": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "page_size": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "total_pages": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "next": {
+                        "type": "string",
+                        "format": "uri",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "previous": {
+                        "type": "string",
+                        "format": "uri",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "results": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/MaterialListOutput"
+                        },
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "count",
+                    "next",
+                    "page",
+                    "page_size",
+                    "previous",
+                    "results",
+                    "total_pages"
+                ]
+            },
+            "RequisicaoActionOutput": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "material": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/RequisicaoMaterialOutput"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "unidade_medida": {
+                        "type": "string",
+                        "readOnly": true,
+                        "description": "Unidade de medida (snapshot do material no momento da criação)"
+                    },
+                    "quantidade_solicitada": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,9}(?:\\.\\d{0,3})?$",
+                        "readOnly": true,
+                        "description": "Quantidade solicitada"
+                    },
+                    "quantidade_autorizada": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,9}(?:\\.\\d{0,3})?$",
+                        "readOnly": true,
+                        "description": "Quantidade autorizada"
+                    },
+                    "quantidade_entregue": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,9}(?:\\.\\d{0,3})?$",
+                        "readOnly": true,
+                        "description": "Quantidade efetivamente entregue"
+                    },
+                    "justificativa_autorizacao_parcial": {
+                        "type": "string",
+                        "readOnly": true,
+                        "description": "Justificativa se autorizado em quantidade menor que solicitado"
+                    },
+                    "justificativa_atendimento_parcial": {
+                        "type": "string",
+                        "readOnly": true,
+                        "description": "Justificativa se entregue em quantidade menor que autorizado"
+                    },
+                    "observacao": {
+                        "type": "string",
+                        "readOnly": true,
+                        "description": "Observações sobre o item"
+                    }
+                },
+                "required": [
+                    "id",
+                    "justificativa_atendimento_parcial",
+                    "justificativa_autorizacao_parcial",
+                    "material",
+                    "observacao",
+                    "quantidade_autorizada",
+                    "quantidade_entregue",
+                    "quantidade_solicitada",
+                    "unidade_medida"
+                ]
+            },
+            "RequisicaoAuthorizeInput": {
+                "type": "object",
+                "properties": {
+                    "itens": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/RequisicaoItemAuthorizeInput"
+                        }
+                    }
+                },
+                "required": [
+                    "itens"
+                ]
+            },
+            "RequisicaoCancelInput": {
+                "type": "object",
+                "properties": {
+                    "motivo_cancelamento": {
+                        "type": "string",
+                        "default": ""
+                    }
+                }
+            },
+            "RequisicaoCreateInput": {
+                "type": "object",
+                "properties": {
+                    "beneficiario_id": {
+                        "type": "integer"
+                    },
+                    "observacao": {
+                        "type": "string",
+                        "default": ""
+                    },
+                    "itens": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/RequisicaoItemCreateInput"
+                        }
+                    }
+                },
+                "required": [
+                    "beneficiario_id",
+                    "itens"
+                ]
+            },
+            "RequisicaoDetailOutput": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "numero_publico": {
+                        "type": "string",
+                        "readOnly": true,
+                        "nullable": true,
+                        "description": "Número público da requisição (formato REQ-AAAA-NNNNNN), atribuído no primeiro envio"
+                    },
+                    "status": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/StatusEnum"
+                            }
+                        ],
+                        "readOnly": true,
+                        "description": "Status atual da requisição\n\n* `rascunho` - Rascunho\n* `aguardando_autorizacao` - Aguardando Autorização\n* `recusada` - Recusada\n* `autorizada` - Autorizada\n* `atendida_parcialmente` - Atendida Parcialmente\n* `atendida` - Atendida\n* `cancelada` - Cancelada\n* `estornada` - Estornada"
+                    },
+                    "criador": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/RequisicaoUserOutput"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "beneficiario": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/RequisicaoUserOutput"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "setor_beneficiario": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/RequisicaoSetorOutput"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "chefe_autorizador": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/RequisicaoUserOutput"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "responsavel_atendimento": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/RequisicaoUserOutput"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "data_criacao": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "description": "Data e hora de criação da requisição"
+                    },
+                    "data_envio_autorizacao": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true,
+                        "description": "Data do primeiro envio para autorização"
+                    },
+                    "data_autorizacao_ou_recusa": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true,
+                        "description": "Data da autorização ou recusa"
+                    },
+                    "motivo_recusa": {
+                        "type": "string",
+                        "readOnly": true,
+                        "description": "Motivo da recusa (obrigatório quando status=recusada)"
+                    },
+                    "motivo_cancelamento": {
+                        "type": "string",
+                        "readOnly": true,
+                        "description": "Motivo do cancelamento (obrigatório quando cancelada)"
+                    },
+                    "data_finalizacao": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true,
+                        "description": "Data de finalização ou cancelamento"
+                    },
+                    "retirante_fisico": {
+                        "type": "string",
+                        "readOnly": true,
+                        "description": "Nome de quem retirou (diferente do beneficiário)"
+                    },
+                    "observacao": {
+                        "type": "string",
+                        "readOnly": true,
+                        "description": "Observações gerais"
+                    },
+                    "observacao_atendimento": {
+                        "type": "string",
+                        "readOnly": true,
+                        "description": "Observações gerais do atendimento"
+                    },
+                    "itens": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/RequisicaoActionOutput"
+                        },
+                        "readOnly": true
+                    },
+                    "eventos": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/RequisicaoTimelineEventOutput"
+                        },
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "beneficiario",
+                    "chefe_autorizador",
+                    "criador",
+                    "data_autorizacao_ou_recusa",
+                    "data_criacao",
+                    "data_envio_autorizacao",
+                    "data_finalizacao",
+                    "eventos",
+                    "id",
+                    "itens",
+                    "motivo_cancelamento",
+                    "motivo_recusa",
+                    "numero_publico",
+                    "observacao",
+                    "observacao_atendimento",
+                    "responsavel_atendimento",
+                    "retirante_fisico",
+                    "setor_beneficiario",
+                    "status"
+                ]
+            },
+            "RequisicaoFulfillInput": {
+                "type": "object",
+                "properties": {
+                    "retirante_fisico": {
+                        "type": "string",
+                        "default": ""
+                    },
+                    "observacao_atendimento": {
+                        "type": "string",
+                        "default": ""
+                    },
+                    "itens": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/RequisicaoItemFulfillInput"
+                        }
+                    }
+                }
+            },
+            "RequisicaoItemAuthorizeInput": {
+                "type": "object",
+                "properties": {
+                    "item_id": {
+                        "type": "integer"
+                    },
+                    "quantidade_autorizada": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,9}(?:\\.\\d{0,3})?$"
+                    },
+                    "justificativa_autorizacao_parcial": {
+                        "type": "string",
+                        "default": ""
+                    }
+                },
+                "required": [
+                    "item_id",
+                    "quantidade_autorizada"
+                ]
+            },
+            "RequisicaoItemCreateInput": {
+                "type": "object",
+                "properties": {
+                    "material_id": {
+                        "type": "integer"
+                    },
+                    "quantidade_solicitada": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,9}(?:\\.\\d{0,3})?$"
+                    },
+                    "observacao": {
+                        "type": "string",
+                        "default": ""
+                    }
+                },
+                "required": [
+                    "material_id",
+                    "quantidade_solicitada"
+                ]
+            },
+            "RequisicaoItemFulfillInput": {
+                "type": "object",
+                "properties": {
+                    "item_id": {
+                        "type": "integer"
+                    },
+                    "quantidade_entregue": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,9}(?:\\.\\d{0,3})?$"
+                    },
+                    "justificativa_atendimento_parcial": {
+                        "type": "string",
+                        "default": ""
+                    }
+                },
+                "required": [
+                    "item_id",
+                    "quantidade_entregue"
+                ]
+            },
+            "RequisicaoListOutput": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "numero_publico": {
+                        "type": "string",
+                        "readOnly": true,
+                        "nullable": true,
+                        "description": "Número público da requisição (formato REQ-AAAA-NNNNNN), atribuído no primeiro envio"
+                    },
+                    "status": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/StatusEnum"
+                            }
+                        ],
+                        "readOnly": true,
+                        "description": "Status atual da requisição\n\n* `rascunho` - Rascunho\n* `aguardando_autorizacao` - Aguardando Autorização\n* `recusada` - Recusada\n* `autorizada` - Autorizada\n* `atendida_parcialmente` - Atendida Parcialmente\n* `atendida` - Atendida\n* `cancelada` - Cancelada\n* `estornada` - Estornada"
+                    },
+                    "criador": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/RequisicaoUserOutput"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "beneficiario": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/RequisicaoUserOutput"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "setor_beneficiario": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/RequisicaoSetorOutput"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "data_criacao": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "description": "Data e hora de criação da requisição"
+                    },
+                    "data_envio_autorizacao": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true,
+                        "description": "Data do primeiro envio para autorização"
+                    },
+                    "data_autorizacao_ou_recusa": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true,
+                        "description": "Data da autorização ou recusa"
+                    },
+                    "data_finalizacao": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true,
+                        "description": "Data de finalização ou cancelamento"
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "total_itens": {
+                        "type": "integer",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "beneficiario",
+                    "criador",
+                    "data_autorizacao_ou_recusa",
+                    "data_criacao",
+                    "data_envio_autorizacao",
+                    "data_finalizacao",
+                    "id",
+                    "numero_publico",
+                    "setor_beneficiario",
+                    "status",
+                    "total_itens",
+                    "updated_at"
+                ]
+            },
+            "RequisicaoListPaginated": {
+                "type": "object",
+                "properties": {
+                    "count": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "page": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "page_size": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "total_pages": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "next": {
+                        "type": "string",
+                        "format": "uri",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "previous": {
+                        "type": "string",
+                        "format": "uri",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "results": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/RequisicaoListOutput"
+                        },
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "count",
+                    "next",
+                    "page",
+                    "page_size",
+                    "previous",
+                    "results",
+                    "total_pages"
+                ]
+            },
+            "RequisicaoMaterialOutput": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "codigo_completo": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "nome": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "unidade_medida": {
+                        "type": "string",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "codigo_completo",
+                    "id",
+                    "nome",
+                    "unidade_medida"
+                ]
+            },
+            "RequisicaoPendingApprovalOutput": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "numero_publico": {
+                        "type": "string",
+                        "readOnly": true,
+                        "nullable": true,
+                        "description": "Número público da requisição (formato REQ-AAAA-NNNNNN), atribuído no primeiro envio"
+                    },
+                    "status": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/StatusEnum"
+                            }
+                        ],
+                        "readOnly": true,
+                        "description": "Status atual da requisição\n\n* `rascunho` - Rascunho\n* `aguardando_autorizacao` - Aguardando Autorização\n* `recusada` - Recusada\n* `autorizada` - Autorizada\n* `atendida_parcialmente` - Atendida Parcialmente\n* `atendida` - Atendida\n* `cancelada` - Cancelada\n* `estornada` - Estornada"
+                    },
+                    "data_envio_autorizacao": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true,
+                        "description": "Data do primeiro envio para autorização"
+                    },
+                    "criador": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/RequisicaoUserOutput"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "beneficiario": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/RequisicaoUserOutput"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "setor_beneficiario": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/RequisicaoSetorOutput"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "total_itens": {
+                        "type": "integer",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "beneficiario",
+                    "criador",
+                    "data_envio_autorizacao",
+                    "id",
+                    "numero_publico",
+                    "setor_beneficiario",
+                    "status",
+                    "total_itens"
+                ]
+            },
+            "RequisicaoPendingApprovalPaginated": {
+                "type": "object",
+                "properties": {
+                    "count": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "page": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "page_size": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "total_pages": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "next": {
+                        "type": "string",
+                        "format": "uri",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "previous": {
+                        "type": "string",
+                        "format": "uri",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "results": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/RequisicaoPendingApprovalOutput"
+                        },
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "count",
+                    "next",
+                    "page",
+                    "page_size",
+                    "previous",
+                    "results",
+                    "total_pages"
+                ]
+            },
+            "RequisicaoPendingFulfillmentOutput": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "numero_publico": {
+                        "type": "string",
+                        "readOnly": true,
+                        "nullable": true,
+                        "description": "Número público da requisição (formato REQ-AAAA-NNNNNN), atribuído no primeiro envio"
+                    },
+                    "status": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/StatusEnum"
+                            }
+                        ],
+                        "readOnly": true,
+                        "description": "Status atual da requisição\n\n* `rascunho` - Rascunho\n* `aguardando_autorizacao` - Aguardando Autorização\n* `recusada` - Recusada\n* `autorizada` - Autorizada\n* `atendida_parcialmente` - Atendida Parcialmente\n* `atendida` - Atendida\n* `cancelada` - Cancelada\n* `estornada` - Estornada"
+                    },
+                    "beneficiario": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/RequisicaoUserOutput"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "setor_beneficiario": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/RequisicaoSetorOutput"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "chefe_autorizador": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/RequisicaoUserOutput"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "data_autorizacao_ou_recusa": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true,
+                        "description": "Data da autorização ou recusa"
+                    },
+                    "total_itens": {
+                        "type": "integer",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "beneficiario",
+                    "chefe_autorizador",
+                    "data_autorizacao_ou_recusa",
+                    "id",
+                    "numero_publico",
+                    "setor_beneficiario",
+                    "status",
+                    "total_itens"
+                ]
+            },
+            "RequisicaoPendingFulfillmentPaginated": {
+                "type": "object",
+                "properties": {
+                    "count": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "page": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "page_size": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "total_pages": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "next": {
+                        "type": "string",
+                        "format": "uri",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "previous": {
+                        "type": "string",
+                        "format": "uri",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "results": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/RequisicaoPendingFulfillmentOutput"
+                        },
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "count",
+                    "next",
+                    "page",
+                    "page_size",
+                    "previous",
+                    "results",
+                    "total_pages"
+                ]
+            },
+            "RequisicaoRefuseInput": {
+                "type": "object",
+                "properties": {
+                    "motivo_recusa": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "motivo_recusa"
+                ]
+            },
+            "RequisicaoSetorOutput": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "nome": {
+                        "type": "string",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "id",
+                    "nome"
+                ]
+            },
+            "RequisicaoTimelineEventOutput": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "tipo_evento": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/TipoEventoEnum"
+                            }
+                        ],
+                        "readOnly": true,
+                        "description": "Tipo de evento registrado\n\n* `criacao` - Criação\n* `envio_autorizacao` - Envio para Autorização\n* `retorno_rascunho` - Retorno para Rascunho\n* `reenvio_autorizacao` - Reenvio para Autorização\n* `autorizacao_total` - Autorização Total\n* `autorizacao_parcial` - Autorização Parcial\n* `recusa` - Recusa\n* `atendimento_parcial` - Atendimento Parcial\n* `atendimento` - Atendimento\n* `cancelamento` - Cancelamento\n* `estorno` - Estorno"
+                    },
+                    "usuario": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/RequisicaoUserOutput"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "data_hora": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "description": "Data e hora do evento"
+                    },
+                    "observacao": {
+                        "type": "string",
+                        "readOnly": true,
+                        "description": "Observações sobre o evento"
+                    }
+                },
+                "required": [
+                    "data_hora",
+                    "id",
+                    "observacao",
+                    "tipo_evento",
+                    "usuario"
+                ]
+            },
+            "RequisicaoUserOutput": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "matricula_funcional": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "nome_completo": {
+                        "type": "string",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "id",
+                    "matricula_funcional",
+                    "nome_completo"
+                ]
+            },
+            "StatusEnum": {
+                "enum": [
+                    "rascunho",
+                    "aguardando_autorizacao",
+                    "recusada",
+                    "autorizada",
+                    "atendida_parcialmente",
+                    "atendida",
+                    "cancelada",
+                    "estornada"
+                ],
+                "type": "string",
+                "description": "* `rascunho` - Rascunho\n* `aguardando_autorizacao` - Aguardando Autorização\n* `recusada` - Recusada\n* `autorizada` - Autorizada\n* `atendida_parcialmente` - Atendida Parcialmente\n* `atendida` - Atendida\n* `cancelada` - Cancelada\n* `estornada` - Estornada"
+            },
+            "TipoEventoEnum": {
+                "enum": [
+                    "criacao",
+                    "envio_autorizacao",
+                    "retorno_rascunho",
+                    "reenvio_autorizacao",
+                    "autorizacao_total",
+                    "autorizacao_parcial",
+                    "recusa",
+                    "atendimento_parcial",
+                    "atendimento",
+                    "cancelamento",
+                    "estorno"
+                ],
+                "type": "string",
+                "description": "* `criacao` - Criação\n* `envio_autorizacao` - Envio para Autorização\n* `retorno_rascunho` - Retorno para Rascunho\n* `reenvio_autorizacao` - Reenvio para Autorização\n* `autorizacao_total` - Autorização Total\n* `autorizacao_parcial` - Autorização Parcial\n* `recusa` - Recusa\n* `atendimento_parcial` - Atendimento Parcial\n* `atendimento` - Atendimento\n* `cancelamento` - Cancelamento\n* `estorno` - Estorno"
+            }
+        },
+        "securitySchemes": {
+            "cookieAuth": {
+                "type": "apiKey",
+                "in": "cookie",
+                "name": "sessionid"
+            },
+            "sessionAuth401": {
+                "type": "apiKey",
+                "in": "cookie",
+                "name": "sessionid"
+            }
+        }
     }
-  },
-  "paths": {
-    "/api/v1/auth/csrf/": {
-      "get": {
-        "operationId": "auth_csrf",
-        "tags": [
-          "auth"
-        ],
-        "security": [
-          {
-            "cookieAuth": []
-          },
-          {}
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CsrfTokenOutput"
-                }
-              }
-            },
-            "description": ""
-          }
-        }
-      }
-    },
-    "/api/v1/auth/login/": {
-      "post": {
-        "operationId": "auth_login",
-        "tags": [
-          "auth"
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AuthLoginInput"
-              }
-            },
-            "application/x-www-form-urlencoded": {
-              "schema": {
-                "$ref": "#/components/schemas/AuthLoginInput"
-              }
-            },
-            "multipart/form-data": {
-              "schema": {
-                "$ref": "#/components/schemas/AuthLoginInput"
-              }
-            }
-          },
-          "required": true
-        },
-        "security": [
-          {
-            "cookieAuth": []
-          },
-          {}
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AuthSessionOutput"
-                }
-              }
-            },
-            "description": ""
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": ""
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": ""
-          }
-        }
-      }
-    },
-    "/api/v1/auth/logout/": {
-      "post": {
-        "operationId": "auth_logout",
-        "tags": [
-          "auth"
-        ],
-        "security": [
-          {
-            "cookieAuth": []
-          },
-          {}
-        ],
-        "responses": {
-          "204": {
-            "description": "No response body"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": ""
-          }
-        }
-      }
-    },
-    "/api/v1/auth/me/": {
-      "get": {
-        "operationId": "auth_me",
-        "tags": [
-          "auth"
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AuthSessionOutput"
-                }
-              }
-            },
-            "description": ""
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": ""
-          }
-        }
-      }
-    },
-    "/api/v1/materials/": {
-      "get": {
-        "operationId": "materials_list",
-        "description": "Lista paginada de materiais ativos com saldo disponível calculado. Retorna apenas materiais com is_active=True.",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "grupo",
-            "schema": {
-              "type": "string"
-            },
-            "description": "Filtro por código do grupo (ex: 001)"
-          },
-          {
-            "in": "query",
-            "name": "page",
-            "schema": {
-              "type": "integer"
-            },
-            "description": "Número da página (padrão: 1)"
-          },
-          {
-            "in": "query",
-            "name": "page_size",
-            "schema": {
-              "type": "integer"
-            },
-            "description": "Quantidade de resultados por página (padrão: 20, máximo: 100)"
-          },
-          {
-            "in": "query",
-            "name": "search",
-            "schema": {
-              "type": "string"
-            },
-            "description": "Busca textual em: codigo_completo, nome, descricao (case-insensitive)"
-          },
-          {
-            "in": "query",
-            "name": "subgrupo",
-            "schema": {
-              "type": "string"
-            },
-            "description": "Filtro por código do subgrupo (ex: 001)"
-          }
-        ],
-        "tags": [
-          "materials"
-        ],
-        "security": [
-          {
-            "cookieAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PaginatedMaterialListPaginatedList"
-                }
-              }
-            },
-            "description": ""
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": ""
-          }
-        }
-      }
-    },
-    "/api/v1/materials/{id}/": {
-      "get": {
-        "operationId": "materials_retrieve",
-        "description": "Detalha um material ativo pelo identificador, incluindo o saldo disponível calculado.",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "schema": {
-              "type": "integer"
-            },
-            "description": "Um valor inteiro único que identifica este Material.",
-            "required": true
-          }
-        ],
-        "tags": [
-          "materials"
-        ],
-        "security": [
-          {
-            "cookieAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MaterialListOutput"
-                }
-              }
-            },
-            "description": ""
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": ""
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": ""
-          }
-        }
-      }
-    },
-    "/api/v1/requisitions/": {
-      "get": {
-        "operationId": "requisitions_list",
-        "description": "Lista paginada das requisições visíveis ao usuário autenticado. Suporta busca textual simples e filtro por status.",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "page",
-            "schema": {
-              "type": "integer"
-            },
-            "description": "Número da página (padrão: 1)"
-          },
-          {
-            "in": "query",
-            "name": "page_size",
-            "schema": {
-              "type": "integer"
-            },
-            "description": "Quantidade de resultados por página (padrão: 20, máximo: 100)"
-          },
-          {
-            "in": "query",
-            "name": "search",
-            "schema": {
-              "type": "string"
-            },
-            "description": "Busca textual por número público, nome do beneficiário ou nome do criador."
-          },
-          {
-            "in": "query",
-            "name": "status",
-            "schema": {
-              "type": "string"
-            },
-            "description": "Filtro exato por status da requisição."
-          }
-        ],
-        "tags": [
-          "requisitions"
-        ],
-        "security": [
-          {
-            "cookieAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PaginatedRequisicaoListPaginatedList"
-                }
-              }
-            },
-            "description": ""
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": ""
-          }
-        }
-      },
-      "post": {
-        "operationId": "requisitions_create_draft",
-        "tags": [
-          "requisitions"
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RequisicaoCreateInput"
-              }
-            },
-            "application/x-www-form-urlencoded": {
-              "schema": {
-                "$ref": "#/components/schemas/RequisicaoCreateInput"
-              }
-            },
-            "multipart/form-data": {
-              "schema": {
-                "$ref": "#/components/schemas/RequisicaoCreateInput"
-              }
-            }
-          },
-          "required": true
-        },
-        "security": [
-          {
-            "cookieAuth": []
-          }
-        ],
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RequisicaoDetailOutput"
-                }
-              }
-            },
-            "description": ""
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": ""
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": ""
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": ""
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": ""
-          }
-        }
-      }
-    },
-    "/api/v1/requisitions/{id}/": {
-      "get": {
-        "operationId": "requisitions_retrieve",
-        "description": "Detalhe canônico de uma requisição visível ao usuário autenticado, incluindo itens e resumo operacional da timeline.",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "schema": {
-              "type": "integer"
-            },
-            "description": "Um valor inteiro único que identifica este Requisição.",
-            "required": true
-          }
-        ],
-        "tags": [
-          "requisitions"
-        ],
-        "security": [
-          {
-            "cookieAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RequisicaoDetailOutput"
-                }
-              }
-            },
-            "description": ""
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": ""
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": ""
-          }
-        }
-      }
-    },
-    "/api/v1/requisitions/{id}/authorize/": {
-      "post": {
-        "operationId": "requisitions_authorize",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "schema": {
-              "type": "integer"
-            },
-            "description": "Um valor inteiro único que identifica este Requisição.",
-            "required": true
-          }
-        ],
-        "tags": [
-          "requisitions"
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RequisicaoAuthorizeInput"
-              }
-            },
-            "application/x-www-form-urlencoded": {
-              "schema": {
-                "$ref": "#/components/schemas/RequisicaoAuthorizeInput"
-              }
-            },
-            "multipart/form-data": {
-              "schema": {
-                "$ref": "#/components/schemas/RequisicaoAuthorizeInput"
-              }
-            }
-          },
-          "required": true
-        },
-        "security": [
-          {
-            "cookieAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RequisicaoDetailOutput"
-                }
-              }
-            },
-            "description": ""
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": ""
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": ""
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": ""
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": ""
-          }
-        }
-      }
-    },
-    "/api/v1/requisitions/{id}/cancel/": {
-      "post": {
-        "operationId": "requisitions_cancel",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "schema": {
-              "type": "integer"
-            },
-            "description": "Um valor inteiro único que identifica este Requisição.",
-            "required": true
-          }
-        ],
-        "tags": [
-          "requisitions"
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RequisicaoCancelInput"
-              }
-            },
-            "application/x-www-form-urlencoded": {
-              "schema": {
-                "$ref": "#/components/schemas/RequisicaoCancelInput"
-              }
-            },
-            "multipart/form-data": {
-              "schema": {
-                "$ref": "#/components/schemas/RequisicaoCancelInput"
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "cookieAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RequisicaoDetailOutput"
-                }
-              }
-            },
-            "description": ""
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": ""
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": ""
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": ""
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": ""
-          }
-        }
-      }
-    },
-    "/api/v1/requisitions/{id}/discard/": {
-      "delete": {
-        "operationId": "requisitions_discard",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "schema": {
-              "type": "integer"
-            },
-            "description": "Um valor inteiro único que identifica este Requisição.",
-            "required": true
-          }
-        ],
-        "tags": [
-          "requisitions"
-        ],
-        "security": [
-          {
-            "cookieAuth": []
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "No response body"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": ""
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": ""
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": ""
-          }
-        }
-      }
-    },
-    "/api/v1/requisitions/{id}/draft/": {
-      "put": {
-        "operationId": "requisitions_update_draft",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "schema": {
-              "type": "integer"
-            },
-            "description": "Um valor inteiro único que identifica este Requisição.",
-            "required": true
-          }
-        ],
-        "tags": [
-          "requisitions"
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RequisicaoCreateInput"
-              }
-            },
-            "application/x-www-form-urlencoded": {
-              "schema": {
-                "$ref": "#/components/schemas/RequisicaoCreateInput"
-              }
-            },
-            "multipart/form-data": {
-              "schema": {
-                "$ref": "#/components/schemas/RequisicaoCreateInput"
-              }
-            }
-          },
-          "required": true
-        },
-        "security": [
-          {
-            "cookieAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RequisicaoDetailOutput"
-                }
-              }
-            },
-            "description": ""
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": ""
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": ""
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": ""
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": ""
-          }
-        }
-      }
-    },
-    "/api/v1/requisitions/{id}/fulfill/": {
-      "post": {
-        "operationId": "requisitions_fulfill",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "schema": {
-              "type": "integer"
-            },
-            "description": "Um valor inteiro único que identifica este Requisição.",
-            "required": true
-          }
-        ],
-        "tags": [
-          "requisitions"
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RequisicaoFulfillInput"
-              }
-            },
-            "application/x-www-form-urlencoded": {
-              "schema": {
-                "$ref": "#/components/schemas/RequisicaoFulfillInput"
-              }
-            },
-            "multipart/form-data": {
-              "schema": {
-                "$ref": "#/components/schemas/RequisicaoFulfillInput"
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "cookieAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RequisicaoDetailOutput"
-                }
-              }
-            },
-            "description": ""
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": ""
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": ""
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": ""
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": ""
-          }
-        }
-      }
-    },
-    "/api/v1/requisitions/{id}/refuse/": {
-      "post": {
-        "operationId": "requisitions_refuse",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "schema": {
-              "type": "integer"
-            },
-            "description": "Um valor inteiro único que identifica este Requisição.",
-            "required": true
-          }
-        ],
-        "tags": [
-          "requisitions"
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RequisicaoRefuseInput"
-              }
-            },
-            "application/x-www-form-urlencoded": {
-              "schema": {
-                "$ref": "#/components/schemas/RequisicaoRefuseInput"
-              }
-            },
-            "multipart/form-data": {
-              "schema": {
-                "$ref": "#/components/schemas/RequisicaoRefuseInput"
-              }
-            }
-          },
-          "required": true
-        },
-        "security": [
-          {
-            "cookieAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RequisicaoDetailOutput"
-                }
-              }
-            },
-            "description": ""
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": ""
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": ""
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": ""
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": ""
-          }
-        }
-      }
-    },
-    "/api/v1/requisitions/{id}/return-to-draft/": {
-      "post": {
-        "operationId": "requisitions_return_to_draft",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "schema": {
-              "type": "integer"
-            },
-            "description": "Um valor inteiro único que identifica este Requisição.",
-            "required": true
-          }
-        ],
-        "tags": [
-          "requisitions"
-        ],
-        "security": [
-          {
-            "cookieAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RequisicaoDetailOutput"
-                }
-              }
-            },
-            "description": ""
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": ""
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": ""
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": ""
-          }
-        }
-      }
-    },
-    "/api/v1/requisitions/{id}/submit/": {
-      "post": {
-        "operationId": "requisitions_submit",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "schema": {
-              "type": "integer"
-            },
-            "description": "Um valor inteiro único que identifica este Requisição.",
-            "required": true
-          }
-        ],
-        "tags": [
-          "requisitions"
-        ],
-        "security": [
-          {
-            "cookieAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RequisicaoDetailOutput"
-                }
-              }
-            },
-            "description": ""
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": ""
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": ""
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": ""
-          }
-        }
-      }
-    },
-    "/api/v1/requisitions/pending-approvals/": {
-      "get": {
-        "operationId": "requisitions_pending_approvals",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "page",
-            "schema": {
-              "type": "integer"
-            },
-            "description": "Número da página (padrão: 1)"
-          },
-          {
-            "in": "query",
-            "name": "page_size",
-            "schema": {
-              "type": "integer"
-            },
-            "description": "Quantidade de resultados por página (padrão: 20, máximo: 100)"
-          }
-        ],
-        "tags": [
-          "requisitions"
-        ],
-        "security": [
-          {
-            "cookieAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RequisicaoPendingApprovalPaginated"
-                }
-              }
-            },
-            "description": ""
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": ""
-          }
-        }
-      }
-    },
-    "/api/v1/requisitions/pending-fulfillments/": {
-      "get": {
-        "operationId": "requisitions_pending_fulfillments",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "page",
-            "schema": {
-              "type": "integer"
-            },
-            "description": "Número da página (padrão: 1)"
-          },
-          {
-            "in": "query",
-            "name": "page_size",
-            "schema": {
-              "type": "integer"
-            },
-            "description": "Quantidade de resultados por página (padrão: 20, máximo: 100)"
-          }
-        ],
-        "tags": [
-          "requisitions"
-        ],
-        "security": [
-          {
-            "cookieAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RequisicaoPendingFulfillmentPaginated"
-                }
-              }
-            },
-            "description": ""
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": ""
-          }
-        }
-      }
-    },
-    "/api/v1/schema/": {
-      "get": {
-        "operationId": "schema_retrieve",
-        "description": "OpenApi3 schema for this API. Format can be selected via content negotiation.\n\n- YAML: application/vnd.oai.openapi\n- JSON: application/vnd.oai.openapi+json",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "format",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "json",
-                "yaml"
-              ]
-            }
-          },
-          {
-            "in": "query",
-            "name": "lang",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "af",
-                "ar",
-                "ar-dz",
-                "ast",
-                "az",
-                "be",
-                "bg",
-                "bn",
-                "br",
-                "bs",
-                "ca",
-                "ckb",
-                "cs",
-                "cy",
-                "da",
-                "de",
-                "dsb",
-                "el",
-                "en",
-                "en-au",
-                "en-gb",
-                "eo",
-                "es",
-                "es-ar",
-                "es-co",
-                "es-mx",
-                "es-ni",
-                "es-ve",
-                "et",
-                "eu",
-                "fa",
-                "fi",
-                "fr",
-                "fy",
-                "ga",
-                "gd",
-                "gl",
-                "he",
-                "hi",
-                "hr",
-                "hsb",
-                "ht",
-                "hu",
-                "hy",
-                "ia",
-                "id",
-                "ig",
-                "io",
-                "is",
-                "it",
-                "ja",
-                "ka",
-                "kab",
-                "kk",
-                "km",
-                "kn",
-                "ko",
-                "ky",
-                "lb",
-                "lt",
-                "lv",
-                "mk",
-                "ml",
-                "mn",
-                "mr",
-                "ms",
-                "my",
-                "nb",
-                "ne",
-                "nl",
-                "nn",
-                "os",
-                "pa",
-                "pl",
-                "pt",
-                "pt-br",
-                "ro",
-                "ru",
-                "sk",
-                "sl",
-                "sq",
-                "sr",
-                "sr-latn",
-                "sv",
-                "sw",
-                "ta",
-                "te",
-                "tg",
-                "th",
-                "tk",
-                "tr",
-                "tt",
-                "udm",
-                "ug",
-                "uk",
-                "ur",
-                "uz",
-                "vi",
-                "zh-hans",
-                "zh-hant"
-              ]
-            }
-          }
-        ],
-        "tags": [
-          "schema"
-        ],
-        "security": [
-          {
-            "cookieAuth": []
-          },
-          {}
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/vnd.oai.openapi": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": {}
-                }
-              },
-              "application/yaml": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": {}
-                }
-              },
-              "application/vnd.oai.openapi+json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": {}
-                }
-              },
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": {}
-                }
-              }
-            },
-            "description": ""
-          }
-        }
-      }
-    },
-    "/api/v1/users/beneficiary-lookup/": {
-      "get": {
-        "operationId": "users_beneficiary_lookup",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "q",
-            "schema": {
-              "type": "string",
-              "minLength": 3
-            },
-            "required": true
-          }
-        ],
-        "tags": [
-          "users"
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/BeneficiaryLookupOutput"
-                  },
-                  "maxItems": 10
-                }
-              }
-            },
-            "description": "Lista curta de beneficiários elegíveis, limitada a 10 resultados."
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": ""
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": ""
-          }
-        }
-      }
-    }
-  },
-  "components": {
-    "schemas": {
-      "AuthLoginInput": {
-        "type": "object",
-        "properties": {
-          "matricula_funcional": {
-            "type": "string"
-          },
-          "password": {
-            "type": "string",
-            "writeOnly": true
-          }
-        },
-        "required": [
-          "matricula_funcional",
-          "password"
-        ]
-      },
-      "AuthSessionOutput": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "integer",
-            "readOnly": true
-          },
-          "matricula_funcional": {
-            "type": "string",
-            "readOnly": true
-          },
-          "nome_completo": {
-            "type": "string",
-            "readOnly": true
-          },
-          "papel": {
-            "type": "string",
-            "readOnly": true
-          },
-          "setor": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/AuthSetorOutput"
-              }
-            ],
-            "readOnly": true,
-            "nullable": true
-          },
-          "is_authenticated": {
-            "type": "boolean",
-            "readOnly": true
-          }
-        },
-        "required": [
-          "id",
-          "is_authenticated",
-          "matricula_funcional",
-          "nome_completo",
-          "papel",
-          "setor"
-        ]
-      },
-      "AuthSetorOutput": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "integer",
-            "readOnly": true
-          },
-          "nome": {
-            "type": "string",
-            "readOnly": true
-          }
-        },
-        "required": [
-          "id",
-          "nome"
-        ]
-      },
-      "CsrfTokenOutput": {
-        "type": "object",
-        "properties": {
-          "csrf_token": {
-            "type": "string",
-            "readOnly": true
-          }
-        },
-        "required": [
-          "csrf_token"
-        ]
-      },
-      "ErrorDetail": {
-        "type": "object",
-        "properties": {
-          "code": {
-            "type": "string"
-          },
-          "message": {
-            "type": "string"
-          },
-          "details": {
-            "nullable": true
-          },
-          "trace_id": {
-            "type": "string",
-            "nullable": true
-          }
-        },
-        "required": [
-          "code",
-          "message"
-        ]
-      },
-      "ErrorResponse": {
-        "type": "object",
-        "properties": {
-          "error": {
-            "$ref": "#/components/schemas/ErrorDetail"
-          }
-        },
-        "required": [
-          "error"
-        ]
-      },
-      "MaterialListOutput": {
-        "type": "object",
-        "description": "Serializer para listagem de materiais disponíveis.\n\nCampo saldo_disponivel é calculado dinamicamente (saldo_fisico - saldo_reservado).\nBloqueios por saldo insuficiente ou divergência crítica são validados na criação da requisição.",
-        "properties": {
-          "id": {
-            "type": "integer",
-            "readOnly": true
-          },
-          "codigo_completo": {
-            "type": "string",
-            "readOnly": true,
-            "description": "Código completo xxx.yyy.zzz do material no SCPI"
-          },
-          "nome": {
-            "type": "string",
-            "readOnly": true,
-            "description": "Nome descritivo vindo do SCPI"
-          },
-          "descricao": {
-            "type": "string",
-            "readOnly": true,
-            "description": "Descrição vinda do SCPI"
-          },
-          "unidade_medida": {
-            "type": "string",
-            "readOnly": true,
-            "description": "Unidade de medida vinda do SCPI"
-          },
-          "saldo_disponivel": {
-            "type": "number",
-            "format": "double",
-            "nullable": true,
-            "description": "Retorna saldo_disponivel do EstoqueMaterial associado, ou None se não existir.",
-            "readOnly": true
-          }
-        },
-        "required": [
-          "codigo_completo",
-          "descricao",
-          "id",
-          "nome",
-          "saldo_disponivel",
-          "unidade_medida"
-        ]
-      },
-      "MaterialListPaginated": {
-        "type": "object",
-        "description": "Envelope paginado padrão para listagem de materiais.",
-        "properties": {
-          "count": {
-            "type": "integer",
-            "readOnly": true
-          },
-          "page": {
-            "type": "integer",
-            "readOnly": true
-          },
-          "page_size": {
-            "type": "integer",
-            "readOnly": true
-          },
-          "total_pages": {
-            "type": "integer",
-            "readOnly": true
-          },
-          "next": {
-            "type": "string",
-            "format": "uri",
-            "readOnly": true,
-            "nullable": true
-          },
-          "previous": {
-            "type": "string",
-            "format": "uri",
-            "readOnly": true,
-            "nullable": true
-          },
-          "results": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/MaterialListOutput"
-            },
-            "readOnly": true
-          }
-        },
-        "required": [
-          "count",
-          "next",
-          "page",
-          "page_size",
-          "previous",
-          "results",
-          "total_pages"
-        ]
-      },
-      "PaginatedMaterialListPaginatedList": {
-        "type": "object",
-        "required": [
-          "count",
-          "results"
-        ],
-        "properties": {
-          "count": {
-            "type": "integer",
-            "example": 123
-          },
-          "next": {
-            "type": "string",
-            "nullable": true,
-            "format": "uri",
-            "example": "http://api.example.org/accounts/?page=4"
-          },
-          "previous": {
-            "type": "string",
-            "nullable": true,
-            "format": "uri",
-            "example": "http://api.example.org/accounts/?page=2"
-          },
-          "results": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/MaterialListPaginated"
-            }
-          }
-        }
-      },
-      "PaginatedRequisicaoListPaginatedList": {
-        "type": "object",
-        "required": [
-          "count",
-          "results"
-        ],
-        "properties": {
-          "count": {
-            "type": "integer",
-            "example": 123
-          },
-          "next": {
-            "type": "string",
-            "nullable": true,
-            "format": "uri",
-            "example": "http://api.example.org/accounts/?page=4"
-          },
-          "previous": {
-            "type": "string",
-            "nullable": true,
-            "format": "uri",
-            "example": "http://api.example.org/accounts/?page=2"
-          },
-          "results": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/RequisicaoListPaginated"
-            }
-          }
-        }
-      },
-      "RequisicaoActionOutput": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "integer",
-            "readOnly": true
-          },
-          "material": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/RequisicaoMaterialOutput"
-              }
-            ],
-            "readOnly": true
-          },
-          "unidade_medida": {
-            "type": "string",
-            "readOnly": true,
-            "description": "Unidade de medida (snapshot do material no momento da criação)"
-          },
-          "quantidade_solicitada": {
-            "type": "string",
-            "format": "decimal",
-            "pattern": "^-?\\d{0,9}(?:\\.\\d{0,3})?$",
-            "readOnly": true,
-            "description": "Quantidade solicitada"
-          },
-          "quantidade_autorizada": {
-            "type": "string",
-            "format": "decimal",
-            "pattern": "^-?\\d{0,9}(?:\\.\\d{0,3})?$",
-            "readOnly": true,
-            "description": "Quantidade autorizada"
-          },
-          "quantidade_entregue": {
-            "type": "string",
-            "format": "decimal",
-            "pattern": "^-?\\d{0,9}(?:\\.\\d{0,3})?$",
-            "readOnly": true,
-            "description": "Quantidade efetivamente entregue"
-          },
-          "justificativa_autorizacao_parcial": {
-            "type": "string",
-            "readOnly": true,
-            "description": "Justificativa se autorizado em quantidade menor que solicitado"
-          },
-          "justificativa_atendimento_parcial": {
-            "type": "string",
-            "readOnly": true,
-            "description": "Justificativa se entregue em quantidade menor que autorizado"
-          },
-          "observacao": {
-            "type": "string",
-            "readOnly": true,
-            "description": "Observações sobre o item"
-          }
-        },
-        "required": [
-          "id",
-          "justificativa_atendimento_parcial",
-          "justificativa_autorizacao_parcial",
-          "material",
-          "observacao",
-          "quantidade_autorizada",
-          "quantidade_entregue",
-          "quantidade_solicitada",
-          "unidade_medida"
-        ]
-      },
-      "RequisicaoAuthorizeInput": {
-        "type": "object",
-        "properties": {
-          "itens": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/RequisicaoItemAuthorizeInput"
-            }
-          }
-        },
-        "required": [
-          "itens"
-        ]
-      },
-      "RequisicaoCancelInput": {
-        "type": "object",
-        "properties": {
-          "motivo_cancelamento": {
-            "type": "string",
-            "default": ""
-          }
-        }
-      },
-      "RequisicaoCreateInput": {
-        "type": "object",
-        "properties": {
-          "beneficiario_id": {
-            "type": "integer"
-          },
-          "observacao": {
-            "type": "string",
-            "default": ""
-          },
-          "itens": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/RequisicaoItemCreateInput"
-            }
-          }
-        },
-        "required": [
-          "beneficiario_id",
-          "itens"
-        ]
-      },
-      "RequisicaoDetailOutput": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "integer",
-            "readOnly": true
-          },
-          "numero_publico": {
-            "type": "string",
-            "readOnly": true,
-            "nullable": true,
-            "description": "Número público da requisição (formato REQ-AAAA-NNNNNN), atribuído no primeiro envio"
-          },
-          "status": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/StatusEnum"
-              }
-            ],
-            "readOnly": true,
-            "description": "Status atual da requisição\n\n* `rascunho` - Rascunho\n* `aguardando_autorizacao` - Aguardando Autorização\n* `recusada` - Recusada\n* `autorizada` - Autorizada\n* `atendida_parcialmente` - Atendida Parcialmente\n* `atendida` - Atendida\n* `cancelada` - Cancelada\n* `estornada` - Estornada"
-          },
-          "criador": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/RequisicaoUserOutput"
-              }
-            ],
-            "readOnly": true
-          },
-          "beneficiario": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/RequisicaoUserOutput"
-              }
-            ],
-            "readOnly": true
-          },
-          "setor_beneficiario": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/RequisicaoSetorOutput"
-              }
-            ],
-            "readOnly": true
-          },
-          "chefe_autorizador": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/RequisicaoUserOutput"
-              }
-            ],
-            "readOnly": true
-          },
-          "responsavel_atendimento": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/RequisicaoUserOutput"
-              }
-            ],
-            "readOnly": true
-          },
-          "data_criacao": {
-            "type": "string",
-            "format": "date-time",
-            "readOnly": true,
-            "description": "Data e hora de criação da requisição"
-          },
-          "data_envio_autorizacao": {
-            "type": "string",
-            "format": "date-time",
-            "readOnly": true,
-            "nullable": true,
-            "description": "Data do primeiro envio para autorização"
-          },
-          "data_autorizacao_ou_recusa": {
-            "type": "string",
-            "format": "date-time",
-            "readOnly": true,
-            "nullable": true,
-            "description": "Data da autorização ou recusa"
-          },
-          "motivo_recusa": {
-            "type": "string",
-            "readOnly": true,
-            "description": "Motivo da recusa (obrigatório quando status=recusada)"
-          },
-          "motivo_cancelamento": {
-            "type": "string",
-            "readOnly": true,
-            "description": "Motivo do cancelamento (obrigatório quando cancelada)"
-          },
-          "data_finalizacao": {
-            "type": "string",
-            "format": "date-time",
-            "readOnly": true,
-            "nullable": true,
-            "description": "Data de finalização ou cancelamento"
-          },
-          "retirante_fisico": {
-            "type": "string",
-            "readOnly": true,
-            "description": "Nome de quem retirou (diferente do beneficiário)"
-          },
-          "observacao": {
-            "type": "string",
-            "readOnly": true,
-            "description": "Observações gerais"
-          },
-          "observacao_atendimento": {
-            "type": "string",
-            "readOnly": true,
-            "description": "Observações gerais do atendimento"
-          },
-          "itens": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/RequisicaoActionOutput"
-            },
-            "readOnly": true
-          },
-          "eventos": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/RequisicaoTimelineEventOutput"
-            },
-            "readOnly": true
-          }
-        },
-        "required": [
-          "beneficiario",
-          "chefe_autorizador",
-          "criador",
-          "data_autorizacao_ou_recusa",
-          "data_criacao",
-          "data_envio_autorizacao",
-          "data_finalizacao",
-          "eventos",
-          "id",
-          "itens",
-          "motivo_cancelamento",
-          "motivo_recusa",
-          "numero_publico",
-          "observacao",
-          "observacao_atendimento",
-          "responsavel_atendimento",
-          "retirante_fisico",
-          "setor_beneficiario",
-          "status"
-        ]
-      },
-      "RequisicaoFulfillInput": {
-        "type": "object",
-        "properties": {
-          "retirante_fisico": {
-            "type": "string",
-            "default": ""
-          },
-          "observacao_atendimento": {
-            "type": "string",
-            "default": ""
-          },
-          "itens": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/RequisicaoItemFulfillInput"
-            }
-          }
-        }
-      },
-      "RequisicaoItemAuthorizeInput": {
-        "type": "object",
-        "properties": {
-          "item_id": {
-            "type": "integer"
-          },
-          "quantidade_autorizada": {
-            "type": "string",
-            "format": "decimal",
-            "pattern": "^-?\\d{0,9}(?:\\.\\d{0,3})?$"
-          },
-          "justificativa_autorizacao_parcial": {
-            "type": "string",
-            "default": ""
-          }
-        },
-        "required": [
-          "item_id",
-          "quantidade_autorizada"
-        ]
-      },
-      "RequisicaoItemCreateInput": {
-        "type": "object",
-        "properties": {
-          "material_id": {
-            "type": "integer"
-          },
-          "quantidade_solicitada": {
-            "type": "string",
-            "format": "decimal",
-            "pattern": "^-?\\d{0,9}(?:\\.\\d{0,3})?$"
-          },
-          "observacao": {
-            "type": "string",
-            "default": ""
-          }
-        },
-        "required": [
-          "material_id",
-          "quantidade_solicitada"
-        ]
-      },
-      "RequisicaoItemFulfillInput": {
-        "type": "object",
-        "properties": {
-          "item_id": {
-            "type": "integer"
-          },
-          "quantidade_entregue": {
-            "type": "string",
-            "format": "decimal",
-            "pattern": "^-?\\d{0,9}(?:\\.\\d{0,3})?$"
-          },
-          "justificativa_atendimento_parcial": {
-            "type": "string",
-            "default": ""
-          }
-        },
-        "required": [
-          "item_id",
-          "quantidade_entregue"
-        ]
-      },
-      "RequisicaoListOutput": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "integer",
-            "readOnly": true
-          },
-          "numero_publico": {
-            "type": "string",
-            "readOnly": true,
-            "nullable": true,
-            "description": "Número público da requisição (formato REQ-AAAA-NNNNNN), atribuído no primeiro envio"
-          },
-          "status": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/StatusEnum"
-              }
-            ],
-            "readOnly": true,
-            "description": "Status atual da requisição\n\n* `rascunho` - Rascunho\n* `aguardando_autorizacao` - Aguardando Autorização\n* `recusada` - Recusada\n* `autorizada` - Autorizada\n* `atendida_parcialmente` - Atendida Parcialmente\n* `atendida` - Atendida\n* `cancelada` - Cancelada\n* `estornada` - Estornada"
-          },
-          "criador": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/RequisicaoUserOutput"
-              }
-            ],
-            "readOnly": true
-          },
-          "beneficiario": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/RequisicaoUserOutput"
-              }
-            ],
-            "readOnly": true
-          },
-          "setor_beneficiario": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/RequisicaoSetorOutput"
-              }
-            ],
-            "readOnly": true
-          },
-          "data_criacao": {
-            "type": "string",
-            "format": "date-time",
-            "readOnly": true,
-            "description": "Data e hora de criação da requisição"
-          },
-          "data_envio_autorizacao": {
-            "type": "string",
-            "format": "date-time",
-            "readOnly": true,
-            "nullable": true,
-            "description": "Data do primeiro envio para autorização"
-          },
-          "data_autorizacao_ou_recusa": {
-            "type": "string",
-            "format": "date-time",
-            "readOnly": true,
-            "nullable": true,
-            "description": "Data da autorização ou recusa"
-          },
-          "data_finalizacao": {
-            "type": "string",
-            "format": "date-time",
-            "readOnly": true,
-            "nullable": true,
-            "description": "Data de finalização ou cancelamento"
-          },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time",
-            "readOnly": true
-          },
-          "total_itens": {
-            "type": "integer",
-            "readOnly": true
-          }
-        },
-        "required": [
-          "beneficiario",
-          "criador",
-          "data_autorizacao_ou_recusa",
-          "data_criacao",
-          "data_envio_autorizacao",
-          "data_finalizacao",
-          "id",
-          "numero_publico",
-          "setor_beneficiario",
-          "status",
-          "total_itens",
-          "updated_at"
-        ]
-      },
-      "RequisicaoListPaginated": {
-        "type": "object",
-        "properties": {
-          "count": {
-            "type": "integer",
-            "readOnly": true
-          },
-          "page": {
-            "type": "integer",
-            "readOnly": true
-          },
-          "page_size": {
-            "type": "integer",
-            "readOnly": true
-          },
-          "total_pages": {
-            "type": "integer",
-            "readOnly": true
-          },
-          "next": {
-            "type": "string",
-            "format": "uri",
-            "readOnly": true,
-            "nullable": true
-          },
-          "previous": {
-            "type": "string",
-            "format": "uri",
-            "readOnly": true,
-            "nullable": true
-          },
-          "results": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/RequisicaoListOutput"
-            },
-            "readOnly": true
-          }
-        },
-        "required": [
-          "count",
-          "next",
-          "page",
-          "page_size",
-          "previous",
-          "results",
-          "total_pages"
-        ]
-      },
-      "RequisicaoMaterialOutput": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "integer",
-            "readOnly": true
-          },
-          "codigo_completo": {
-            "type": "string",
-            "readOnly": true
-          },
-          "nome": {
-            "type": "string",
-            "readOnly": true
-          },
-          "unidade_medida": {
-            "type": "string",
-            "readOnly": true
-          }
-        },
-        "required": [
-          "codigo_completo",
-          "id",
-          "nome",
-          "unidade_medida"
-        ]
-      },
-      "RequisicaoPendingApprovalOutput": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "integer",
-            "readOnly": true
-          },
-          "numero_publico": {
-            "type": "string",
-            "readOnly": true,
-            "nullable": true,
-            "description": "Número público da requisição (formato REQ-AAAA-NNNNNN), atribuído no primeiro envio"
-          },
-          "status": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/StatusEnum"
-              }
-            ],
-            "readOnly": true,
-            "description": "Status atual da requisição\n\n* `rascunho` - Rascunho\n* `aguardando_autorizacao` - Aguardando Autorização\n* `recusada` - Recusada\n* `autorizada` - Autorizada\n* `atendida_parcialmente` - Atendida Parcialmente\n* `atendida` - Atendida\n* `cancelada` - Cancelada\n* `estornada` - Estornada"
-          },
-          "data_envio_autorizacao": {
-            "type": "string",
-            "format": "date-time",
-            "readOnly": true,
-            "nullable": true,
-            "description": "Data do primeiro envio para autorização"
-          },
-          "criador": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/RequisicaoUserOutput"
-              }
-            ],
-            "readOnly": true
-          },
-          "beneficiario": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/RequisicaoUserOutput"
-              }
-            ],
-            "readOnly": true
-          },
-          "setor_beneficiario": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/RequisicaoSetorOutput"
-              }
-            ],
-            "readOnly": true
-          },
-          "total_itens": {
-            "type": "integer",
-            "readOnly": true
-          }
-        },
-        "required": [
-          "beneficiario",
-          "criador",
-          "data_envio_autorizacao",
-          "id",
-          "numero_publico",
-          "setor_beneficiario",
-          "status",
-          "total_itens"
-        ]
-      },
-      "RequisicaoPendingApprovalPaginated": {
-        "type": "object",
-        "properties": {
-          "count": {
-            "type": "integer",
-            "readOnly": true
-          },
-          "page": {
-            "type": "integer",
-            "readOnly": true
-          },
-          "page_size": {
-            "type": "integer",
-            "readOnly": true
-          },
-          "total_pages": {
-            "type": "integer",
-            "readOnly": true
-          },
-          "next": {
-            "type": "string",
-            "format": "uri",
-            "readOnly": true,
-            "nullable": true
-          },
-          "previous": {
-            "type": "string",
-            "format": "uri",
-            "readOnly": true,
-            "nullable": true
-          },
-          "results": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/RequisicaoPendingApprovalOutput"
-            },
-            "readOnly": true
-          }
-        },
-        "required": [
-          "count",
-          "next",
-          "page",
-          "page_size",
-          "previous",
-          "results",
-          "total_pages"
-        ]
-      },
-      "RequisicaoPendingFulfillmentOutput": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "integer",
-            "readOnly": true
-          },
-          "numero_publico": {
-            "type": "string",
-            "readOnly": true,
-            "nullable": true,
-            "description": "Número público da requisição (formato REQ-AAAA-NNNNNN), atribuído no primeiro envio"
-          },
-          "status": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/StatusEnum"
-              }
-            ],
-            "readOnly": true,
-            "description": "Status atual da requisição\n\n* `rascunho` - Rascunho\n* `aguardando_autorizacao` - Aguardando Autorização\n* `recusada` - Recusada\n* `autorizada` - Autorizada\n* `atendida_parcialmente` - Atendida Parcialmente\n* `atendida` - Atendida\n* `cancelada` - Cancelada\n* `estornada` - Estornada"
-          },
-          "beneficiario": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/RequisicaoUserOutput"
-              }
-            ],
-            "readOnly": true
-          },
-          "setor_beneficiario": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/RequisicaoSetorOutput"
-              }
-            ],
-            "readOnly": true
-          },
-          "chefe_autorizador": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/RequisicaoUserOutput"
-              }
-            ],
-            "readOnly": true
-          },
-          "data_autorizacao_ou_recusa": {
-            "type": "string",
-            "format": "date-time",
-            "readOnly": true,
-            "nullable": true,
-            "description": "Data da autorização ou recusa"
-          },
-          "total_itens": {
-            "type": "integer",
-            "readOnly": true
-          }
-        },
-        "required": [
-          "beneficiario",
-          "chefe_autorizador",
-          "data_autorizacao_ou_recusa",
-          "id",
-          "numero_publico",
-          "setor_beneficiario",
-          "status",
-          "total_itens"
-        ]
-      },
-      "RequisicaoPendingFulfillmentPaginated": {
-        "type": "object",
-        "properties": {
-          "count": {
-            "type": "integer",
-            "readOnly": true
-          },
-          "page": {
-            "type": "integer",
-            "readOnly": true
-          },
-          "page_size": {
-            "type": "integer",
-            "readOnly": true
-          },
-          "total_pages": {
-            "type": "integer",
-            "readOnly": true
-          },
-          "next": {
-            "type": "string",
-            "format": "uri",
-            "readOnly": true,
-            "nullable": true
-          },
-          "previous": {
-            "type": "string",
-            "format": "uri",
-            "readOnly": true,
-            "nullable": true
-          },
-          "results": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/RequisicaoPendingFulfillmentOutput"
-            },
-            "readOnly": true
-          }
-        },
-        "required": [
-          "count",
-          "next",
-          "page",
-          "page_size",
-          "previous",
-          "results",
-          "total_pages"
-        ]
-      },
-      "RequisicaoRefuseInput": {
-        "type": "object",
-        "properties": {
-          "motivo_recusa": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "motivo_recusa"
-        ]
-      },
-      "RequisicaoSetorOutput": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "integer",
-            "readOnly": true
-          },
-          "nome": {
-            "type": "string",
-            "readOnly": true
-          }
-        },
-        "required": [
-          "id",
-          "nome"
-        ]
-      },
-      "RequisicaoTimelineEventOutput": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "integer",
-            "readOnly": true
-          },
-          "tipo_evento": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/TipoEventoEnum"
-              }
-            ],
-            "readOnly": true,
-            "description": "Tipo de evento registrado\n\n* `criacao` - Criação\n* `envio_autorizacao` - Envio para Autorização\n* `retorno_rascunho` - Retorno para Rascunho\n* `reenvio_autorizacao` - Reenvio para Autorização\n* `autorizacao_total` - Autorização Total\n* `autorizacao_parcial` - Autorização Parcial\n* `recusa` - Recusa\n* `atendimento_parcial` - Atendimento Parcial\n* `atendimento` - Atendimento\n* `cancelamento` - Cancelamento\n* `estorno` - Estorno"
-          },
-          "usuario": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/RequisicaoUserOutput"
-              }
-            ],
-            "readOnly": true
-          },
-          "data_hora": {
-            "type": "string",
-            "format": "date-time",
-            "readOnly": true,
-            "description": "Data e hora do evento"
-          },
-          "observacao": {
-            "type": "string",
-            "readOnly": true,
-            "description": "Observações sobre o evento"
-          }
-        },
-        "required": [
-          "data_hora",
-          "id",
-          "observacao",
-          "tipo_evento",
-          "usuario"
-        ]
-      },
-      "RequisicaoUserOutput": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "integer",
-            "readOnly": true
-          },
-          "matricula_funcional": {
-            "type": "string",
-            "readOnly": true
-          },
-          "nome_completo": {
-            "type": "string",
-            "readOnly": true
-          }
-        },
-        "required": [
-          "id",
-          "matricula_funcional",
-          "nome_completo"
-        ]
-      },
-      "StatusEnum": {
-        "enum": [
-          "rascunho",
-          "aguardando_autorizacao",
-          "recusada",
-          "autorizada",
-          "atendida_parcialmente",
-          "atendida",
-          "cancelada",
-          "estornada"
-        ],
-        "type": "string",
-        "description": "* `rascunho` - Rascunho\n* `aguardando_autorizacao` - Aguardando Autorização\n* `recusada` - Recusada\n* `autorizada` - Autorizada\n* `atendida_parcialmente` - Atendida Parcialmente\n* `atendida` - Atendida\n* `cancelada` - Cancelada\n* `estornada` - Estornada"
-      },
-      "TipoEventoEnum": {
-        "enum": [
-          "criacao",
-          "envio_autorizacao",
-          "retorno_rascunho",
-          "reenvio_autorizacao",
-          "autorizacao_total",
-          "autorizacao_parcial",
-          "recusa",
-          "atendimento_parcial",
-          "atendimento",
-          "cancelamento",
-          "estorno"
-        ],
-        "type": "string",
-        "description": "* `criacao` - Criação\n* `envio_autorizacao` - Envio para Autorização\n* `retorno_rascunho` - Retorno para Rascunho\n* `reenvio_autorizacao` - Reenvio para Autorização\n* `autorizacao_total` - Autorização Total\n* `autorizacao_parcial` - Autorização Parcial\n* `recusa` - Recusa\n* `atendimento_parcial` - Atendimento Parcial\n* `atendimento` - Atendimento\n* `cancelamento` - Cancelamento\n* `estorno` - Estorno"
-      },
-      "BeneficiaryLookupOutput": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "integer",
-            "readOnly": true
-          },
-          "matricula_funcional": {
-            "type": "string",
-            "readOnly": true
-          },
-          "nome_completo": {
-            "type": "string",
-            "readOnly": true
-          },
-          "setor": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/AuthSetorOutput"
-              }
-            ],
-            "readOnly": true,
-            "nullable": true
-          }
-        },
-        "required": [
-          "id",
-          "matricula_funcional",
-          "nome_completo",
-          "setor"
-        ]
-      }
-    },
-    "securitySchemes": {
-      "cookieAuth": {
-        "type": "apiKey",
-        "in": "cookie",
-        "name": "sessionid"
-      }
-    }
-  }
 }

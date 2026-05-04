@@ -23,50 +23,26 @@ export function AppShell() {
           <nav className="space-y-2 px-4 py-4">
             {navigationItems.map((item) => {
               const active = item.matches(location.pathname);
+              const className = active ? "nav-link nav-link-active" : "nav-link nav-link-idle";
+              const linkProps = item.params ? { to: item.to, params: item.params } : { to: item.to };
+              const navContent = (
+                <>
+                  <div>
+                    <p className="text-[0.68rem] uppercase tracking-[0.28em] text-[var(--ink-muted)]">
+                      {item.tag}
+                    </p>
+                    <p className="mt-1 text-base font-semibold text-[var(--ink-strong)]">
+                      {item.label}
+                    </p>
+                  </div>
+                  <span className="text-sm text-[var(--ink-soft)]">{item.hint}</span>
+                </>
+              );
 
               return (
-                item.params ? (
-                  <Link
-                    key={item.label}
-                    to={item.to}
-                    params={item.params}
-                    className={
-                      active
-                        ? "nav-link nav-link-active"
-                        : "nav-link nav-link-idle"
-                    }
-                  >
-                    <div>
-                      <p className="text-[0.68rem] uppercase tracking-[0.28em] text-[var(--ink-muted)]">
-                        {item.tag}
-                      </p>
-                      <p className="mt-1 text-base font-semibold text-[var(--ink-strong)]">
-                        {item.label}
-                      </p>
-                    </div>
-                    <span className="text-sm text-[var(--ink-soft)]">{item.hint}</span>
-                  </Link>
-                ) : (
-                  <Link
-                    key={item.label}
-                    to={item.to}
-                    className={
-                      active
-                        ? "nav-link nav-link-active"
-                        : "nav-link nav-link-idle"
-                    }
-                  >
-                    <div>
-                      <p className="text-[0.68rem] uppercase tracking-[0.28em] text-[var(--ink-muted)]">
-                        {item.tag}
-                      </p>
-                      <p className="mt-1 text-base font-semibold text-[var(--ink-strong)]">
-                        {item.label}
-                      </p>
-                    </div>
-                    <span className="text-sm text-[var(--ink-soft)]">{item.hint}</span>
-                  </Link>
-                )
+                <Link key={item.label} {...linkProps} className={className}>
+                  {navContent}
+                </Link>
               );
             })}
           </nav>

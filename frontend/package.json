@@ -13,7 +13,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "gen:api": "node ./scripts/normalize-openapi.mjs && openapi-typescript ./openapi/schema.json -o ./src/shared/api/schema.d.ts"
+    "gen:api": "openapi-typescript ./openapi/schema.json -o ./src/shared/api/schema.d.ts"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.100.9",

@@ -12,11 +12,12 @@
   --ink-muted: #73809b;
   --accent: #b9522c;
   --accent-soft: rgba(185, 82, 44, 0.14);
+
   font-family: "Avenir Next", "Segoe UI", sans-serif;
   line-height: 1.5;
   font-weight: 400;
   font-synthesis: none;
-  text-rendering: optimizeLegibility;
+  text-rendering: optimizelegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }

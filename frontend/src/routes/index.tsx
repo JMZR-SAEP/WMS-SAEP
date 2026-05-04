@@ -37,9 +37,10 @@ function HomePage() {
       <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
         {navigationItems
           .filter((item) => item.to !== "/")
-          .map((item) =>
-            item.params ? (
-              <Link key={item.label} to={item.to} params={item.params} className="route-card">
+          .map((item) => {
+            const linkProps = item.params ? { to: item.to, params: item.params } : { to: item.to };
+            const cardContent = (
+              <>
                 <p className="eyebrow">{item.tag}</p>
                 <h4 className="mt-3 font-title text-2xl leading-none tracking-[-0.03em]">
                   {item.label}
@@ -51,23 +52,15 @@ function HomePage() {
                 <span className="mt-5 inline-flex w-fit rounded-full border border-[var(--line-soft)] px-3 py-1 text-xs uppercase tracking-[0.22em] text-[var(--ink-muted)]">
                   {item.hint}
                 </span>
+              </>
+            );
+
+            return (
+              <Link key={item.label} {...linkProps} className="route-card">
+                {cardContent}
               </Link>
-            ) : (
-              <Link key={item.label} to={item.to} className="route-card">
-                <p className="eyebrow">{item.tag}</p>
-                <h4 className="mt-3 font-title text-2xl leading-none tracking-[-0.03em]">
-                  {item.label}
-                </h4>
-                <p className="mt-4 text-sm leading-6 text-[var(--ink-soft)]">
-                  Placeholder navegável. Mantém rota, vocabulário e contexto prontos para a
-                  próxima fatia.
-                </p>
-                <span className="mt-5 inline-flex w-fit rounded-full border border-[var(--line-soft)] px-3 py-1 text-xs uppercase tracking-[0.22em] text-[var(--ink-muted)]">
-                  {item.hint}
-                </span>
-              </Link>
-            ),
-          )}
+            );
+          })}
       </div>
     </section>
   );
