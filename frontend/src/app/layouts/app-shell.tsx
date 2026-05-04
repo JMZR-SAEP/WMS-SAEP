@@ -10,9 +10,9 @@ export function AppShell() {
       <div className="mx-auto flex min-h-screen max-w-[1440px] flex-col px-4 py-4 lg:flex-row lg:px-6">
         <aside className="glass-panel mb-4 w-full shrink-0 overflow-hidden lg:mb-0 lg:w-[320px]">
           <div className="border-b border-[var(--line-soft)] px-6 py-5">
-            <p className="eyebrow">Issue #36</p>
+            <p className="eyebrow">Scaffold</p>
             <h1 className="mt-3 font-title text-3xl leading-none tracking-[-0.03em]">
-              Fundação da SPA
+              SPA do piloto
             </h1>
             <p className="mt-3 max-w-[28ch] text-sm text-[var(--ink-soft)]">
               Base operacional do piloto, sem fluxos reais ainda. Backend segue dono de domínio,
@@ -66,7 +66,7 @@ export function AppShell() {
               <div className="mt-3 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                 <div>
                   <h2 className="font-title text-3xl tracking-[-0.03em] text-[var(--ink-strong)]">
-                    Repositório pronto para #37 e #42
+                    Repositório pronto para próximas fatias
                   </h2>
                   <p className="mt-2 max-w-[52ch] text-sm text-[var(--ink-soft)]">
                     Router file-based, Query provider, client OpenAPI, smoke tests e comandos
