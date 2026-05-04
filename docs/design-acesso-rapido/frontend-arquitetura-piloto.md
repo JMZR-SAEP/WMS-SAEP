@@ -186,6 +186,13 @@ Regras complementares:
 7. `Fila de atendimento` + atendimento total/parcial + cancelamento operacional permitido
 8. Notificações como segunda onda
 
+Estado atual após a fatia #37:
+
+- bloco 0 de backend concluído;
+- fundação `frontend/` concluída;
+- login real, bootstrap via `GET /api/v1/auth/me/`, guards, logout e home por papel implementados;
+- próxima fatia funcional da SPA deve partir de `Minhas requisições` e detalhe canônico.
+
 ## 10. Worklists e detalhe
 
 ### Minhas requisições
