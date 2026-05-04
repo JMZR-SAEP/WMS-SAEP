@@ -179,27 +179,28 @@ describe("frontend scaffold router", () => {
       "fetch",
       vi.fn((request: Request) => {
         if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
-          return new Response(JSON.stringify({ error: { code: "not_authenticated" } }), {
-            status: 401,
-            headers: jsonHeaders,
-          });
+          return unauthenticatedResponse();
         }
 
         if (requestUrl(request).endsWith("/api/v1/auth/csrf/")) {
           return csrfResponse();
         }
 
-        return new Response(
-          JSON.stringify({
-            error: {
-              code: "authentication_failed",
-              message: "Matrícula funcional ou senha inválidas.",
-              details: {},
-              trace_id: null,
-            },
-          }),
-          { status: 401, headers: jsonHeaders },
-        );
+        if (requestUrl(request).endsWith("/api/v1/auth/login/")) {
+          return new Response(
+            JSON.stringify({
+              error: {
+                code: "authentication_failed",
+                message: "Matrícula funcional ou senha inválidas.",
+                details: {},
+                trace_id: null,
+              },
+            }),
+            { status: 401, headers: jsonHeaders },
+          );
+        }
+
+        throw new Error(`Unexpected request: ${requestUrl(request)}`);
       }),
     );
 
@@ -254,22 +255,54 @@ describe("frontend scaffold router", () => {
     expect(container.ownerDocument.location.search).toBe("");
   });
 
+  it("strips nested redirect from safe internal redirect", async () => {
+    let loggedIn = false;
+    const fetchMock = vi.fn((request: Request) => {
+      if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+        return loggedIn ? sessionResponse(authSession("solicitante")) : unauthenticatedResponse();
+      }
+
+      if (requestUrl(request).endsWith("/api/v1/auth/csrf/")) {
+        return csrfResponse();
+      }
+
+      if (requestUrl(request).endsWith("/api/v1/auth/login/")) {
+        loggedIn = true;
+        return sessionResponse(authSession("solicitante"));
+      }
+
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const encodedRedirect = encodeURIComponent("/minhas-requisicoes?redirect=/login#secao");
+    const { container } = renderRoute(`/login?redirect=${encodedRedirect}`);
+
+    fireEvent.change(await screen.findByLabelText("Matrícula funcional"), {
+      target: { value: "91003" },
+    });
+    fireEvent.change(screen.getByLabelText("Senha"), {
+      target: { value: "senha-segura-123" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Entrar" }));
+
+    await waitFor(() => {
+      expect(container.ownerDocument.location.pathname).toBe("/minhas-requisicoes");
+    });
+    expect(container.ownerDocument.location.search).toBe("");
+    expect(container.ownerDocument.location.hash).toBe("#secao");
+  });
+
   it("redirects protected routes without session to login", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(() =>
-        new Response(
-          JSON.stringify({
-            error: {
-              code: "not_authenticated",
-              message: "Autenticação necessária.",
-              details: {},
-              trace_id: null,
-            },
-          }),
-          { status: 401, headers: jsonHeaders },
-        ),
-      ),
+      vi.fn((request: Request) => {
+        if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+          return unauthenticatedResponse();
+        }
+
+        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+      }),
     );
 
     const { container } = renderRoute("/minhas-requisicoes");

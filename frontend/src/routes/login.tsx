@@ -22,6 +22,8 @@ function safeInternalRedirectPath(redirect: string | undefined) {
       return undefined;
     }
 
+    url.searchParams.delete("redirect");
+
     return `${url.pathname}${url.search}${url.hash}`;
   } catch {
     return undefined;
