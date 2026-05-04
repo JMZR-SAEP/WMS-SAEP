@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model
 from django.db.models import Count
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
+from drf_spectacular.helpers import forced_singular_serializer
 from drf_spectacular.openapi import OpenApiParameter
 from drf_spectacular.utils import extend_schema
 from rest_framework import filters, mixins, status
@@ -122,7 +123,7 @@ class RequisicaoViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, Generi
             ),
         ],
         responses={
-            200: RequisicaoListPaginatedSerializer(),
+            200: forced_singular_serializer(RequisicaoListPaginatedSerializer),
             403: ErrorResponseSerializer(),
         },
     )

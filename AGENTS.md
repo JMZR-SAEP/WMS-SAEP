@@ -18,6 +18,8 @@ Repo is single-context. Read root `CONTEXT.md`, root `docs/adr/`, then `docs/des
 
 WMS auxiliar para o **SAEP — Serviço de Água e Esgoto de Pirassununga**, autarquia municipal. O projeto segue **backend/API-first** em **Django 6 + Django REST Framework (DRF)** e agora possui também uma frente ativa de frontend para o piloto, implementada como SPA separada no mesmo repositório.
 
+A fundação dessa SPA já existe em `frontend/`, com Vite, TanStack Router file-based, TanStack Query, client OpenAPI tipado e smoke tests. As próximas fatias devem partir dessa base, não recriá-la.
+
 ## Estratégia de leitura da documentação
 
 Para economizar tokens e manter os agentes focados, a documentação de design do projeto está dividida por frequência de uso:
@@ -46,6 +48,7 @@ Para economizar tokens e manter os agentes focados, a documentação de design d
 - Implementando testes: consultar documentação de Django TestCase/TransactionTestCase, pytest quando usado no projeto, DRF APIClient/APIRequestFactory e ferramentas adequadas para o tipo de comportamento testado.
 - Alterando comandos de management, signals, admin ou settings: consultar a documentação específica da área alterada antes de editar.
 - Implementando a SPA do piloto: consultar `docs/design-acesso-rapido/frontend-arquitetura-piloto.md`, o ADR do frontend e a documentação atual das bibliotecas frontend envolvidas via Context7 antes de fechar a solução.
+- Alterando a fundação já existente da SPA: preservar `frontend/` como fonte de verdade do shell, do client OpenAPI, dos smoke tests e dos comandos `frontend-*` no `Makefile`.
 - Antes de concluir, conferir se a implementação continua alinhada com a documentação consultada, com `docs/design-acesso-rapido/` e com os guardrails deste arquivo.
 
 ### Exemplos negativos do que **não** fazer:
@@ -70,6 +73,9 @@ Durante a fase inicial, o ambiente local é descartável.
 - `rtk make init` deve ser usado no setup inicial do projeto para criar `.venv` e instalar dependências.
 - `rtk make setup` é o comando principal do ciclo efêmero: apaga migrations locais e recria tudo do zero.
 - `rtk make test` executa a suíte com `config.settings.test`;
+- `rtk make frontend-init` instala dependências da SPA e prepara o navegador Chromium do Playwright;
+- `rtk make frontend-gen-api` exporta `frontend/openapi/schema.json` e regenera `frontend/src/shared/api/schema.d.ts`;
+- `rtk make frontend-dev`, `rtk make frontend-build`, `rtk make frontend-lint`, `rtk make frontend-test` e `rtk make frontend-e2e` são os entrypoints operacionais oficiais da SPA;
 - neste momento do projeto, toda edição de `models`/schema deve ser seguida de `rtk make setup`, para não depender de gestão manual de migrations.
 - migrations de apps devem ser tratadas como artefato efêmero: antes de testar ou concluir uma implementação que altere schema, apagar e recriar as migrations locais do zero, simulando uma primeira execução limpa do app.
 - confeccionar novos arquivos de migration não faz parte da entrega normal do trabalho neste contexto efêmero.

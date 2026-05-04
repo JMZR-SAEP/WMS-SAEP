@@ -17,6 +17,7 @@ Use esta pasta como primeira parada antes de consultar a documentação completa
 
 - Não leia todos os documentos por padrão; escolha o arquivo pela dúvida.
 - Ao trabalhar na SPA do piloto, confirme primeiro o bloco 0 e a ordem de implementação em `frontend-arquitetura-piloto.md`.
+- A fundação da SPA já está materializada em `frontend/`; use essa base e os comandos `rtk make frontend-*` em vez de reescrever o scaffold.
 - Use as matrizes como referência operacional, não como substitutas da documentação completa.
 - Se a síntese não resolver a dúvida, consulte `../design-acesso-ocasional/` apenas no ponto necessário.
 - Em caso de conflito com a documentação completa, prevalece `../design-acesso-ocasional/`, salvo decisão posterior registrada.

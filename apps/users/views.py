@@ -135,11 +135,7 @@ class BeneficiaryLookupView(APIView):
         parameters=[BeneficiaryLookupQuerySerializer],
         responses={
             200: OpenApiResponse(
-                response={
-                    "type": "array",
-                    "items": {"$ref": "#/components/schemas/BeneficiaryLookupOutput"},
-                    "maxItems": 10,
-                },
+                response=BeneficiaryLookupOutputSerializer(many=True),
                 description="Lista curta de beneficiários elegíveis, limitada a 10 resultados.",
             ),
             400: ErrorResponseSerializer(),

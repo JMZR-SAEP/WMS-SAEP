@@ -37,11 +37,13 @@ Current top-level structure:
 - `docs/` design docs and backlog.
 - `apps/` Django apps.
 - `config/` Django bootstrap/settings.
-- `Makefile` local development routines.
+- `Makefile` local development routines, including official `frontend-*` entrypoints for the SPA.
 - `AGENTS.md` agent instructions.
+- `frontend/` SPA foundation for the pilot.
 
 Current near-term implementation frontier:
-- bloco 0 for the SPA: session/auth endpoints, beneficiary lookup, canonical requisition reads, and explicit draft update
-- SPA foundation and first-cut operational flows after bloco 0
+- login/bootstrap of the SPA on top of the delivered scaffold
+- initial frontend CI over generated API types, lint, and build
+- first-cut operational flows after the scaffold: `Minhas requisições`, draft editing/submission, authorization queue, and fulfillment queue
 - notifications in the SPA only as second wave, while backend notifications remain post-commit side effects and never domain truth
 - physical stock reversal / return / estorno flows after the frontend enablement path is stabilized

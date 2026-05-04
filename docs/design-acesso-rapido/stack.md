@@ -37,6 +37,7 @@ O frontend do piloto faz parte do escopo ativo do projeto.
 Diretriz atual:
 
 - implementar uma SPA separada em `frontend/`, no mesmo repositório;
+- usar a fundação já materializada em `frontend/` como ponto de partida para as próximas slices;
 - manter o backend Django como fonte de verdade para domínio, autenticação, autorização e OpenAPI;
 - usar sessão Django com CSRF para autenticação da SPA;
 - tratar o frontend como interface operacional do piloto, não como frente paralela de administração genérica;
@@ -54,6 +55,15 @@ Stack prevista para o frontend do piloto:
 - Playwright.
 
 O detalhe operacional da arquitetura do frontend está em `docs/design-acesso-rapido/frontend-arquitetura-piloto.md`, e a decisão macro está registrada em `docs/adr/0001-frontend-piloto-spa-separada.md`.
+
+Base já entregue para o frontend do piloto:
+
+- shell em `frontend/` com React + TypeScript + Vite;
+- roteamento file-based com TanStack Router;
+- provider de TanStack Query;
+- client `openapi-fetch` tipado a partir de `frontend/openapi/schema.json`;
+- smoke tests com Vitest e Playwright;
+- comandos oficiais `rtk make frontend-init`, `frontend-gen-api`, `frontend-dev`, `frontend-build`, `frontend-lint`, `frontend-test` e `frontend-e2e`.
 
 ## 4. Django REST Framework
 

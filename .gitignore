@@ -29,6 +29,15 @@ htmlcov/
 # Ruff
 .ruff_cache/
 
+# Frontend / Node
+frontend/node_modules/
+frontend/dist/
+frontend/playwright-report/
+frontend/test-results/
+frontend/.pnpm-store/
+frontend/*.tsbuildinfo
+frontend/src/routeTree.gen.ts.map
+
 # IDE
 .idea/
 .vscode/

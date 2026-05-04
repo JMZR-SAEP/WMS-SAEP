@@ -138,6 +138,7 @@ class TestOpenAPISchema:
         assert "/api/v1/auth/me/" in paths
         assert "/api/v1/users/beneficiary-lookup/" in paths
         assert "/api/v1/materials/{id}/" in paths
+        assert "/api/v1/materials/" in paths
         assert "/api/v1/requisitions/" in paths
         assert "/api/v1/requisitions/{id}/" in paths
         assert "/api/v1/requisitions/{id}/draft/" in paths
@@ -151,8 +152,15 @@ class TestOpenAPISchema:
         assert "/api/v1/requisitions/pending-approvals/" in paths
         assert "/api/v1/requisitions/pending-fulfillments/" in paths
         assert paths["/api/v1/materials/{id}/"]["get"]["operationId"] == "materials_retrieve"
+        assert (
+            paths["/api/v1/materials/"]["get"]["responses"]["200"]["content"]["application/json"][
+                "schema"
+            ]["$ref"]
+            == "#/components/schemas/MaterialListPaginated"
+        )
 
         components = schema["components"]["schemas"]
+        assert "PaginatedMaterialListPaginatedList" not in components
         assert "RequisicaoItemFulfillInput" in components
         assert "RequisicaoListOutput" in components
         assert "RequisicaoTimelineEventOutput" in components
@@ -172,12 +180,13 @@ class TestOpenAPISchema:
         assert list_operation["operationId"] == "requisitions_list"
         assert (
             list_operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"]
-            == "#/components/schemas/PaginatedRequisicaoListPaginatedList"
+            == "#/components/schemas/RequisicaoListPaginated"
         )
         assert (
             list_operation["responses"]["403"]["content"]["application/json"]["schema"]["$ref"]
             == error_ref
         )
+        assert "PaginatedRequisicaoListPaginatedList" not in schema["components"]["schemas"]
 
         detail_operation = paths["/api/v1/requisitions/{id}/"]["get"]
         assert detail_operation["operationId"] == "requisitions_retrieve"
@@ -220,12 +229,14 @@ class TestOpenAPISchema:
                 "success_codes": {"200"},
                 "success_ref": "#/components/schemas/AuthSessionOutput",
                 "error_codes": {"401"},
+                "security": [{"sessionAuth401": []}],
             },
             ("/api/v1/users/beneficiary-lookup/", "get"): {
                 "request_body": False,
                 "success_codes": {"200"},
                 "success_items_ref": "#/components/schemas/BeneficiaryLookupOutput",
                 "error_codes": {"400", "401"},
+                "security": [{"sessionAuth401": []}],
             },
         }
 
@@ -243,6 +254,9 @@ class TestOpenAPISchema:
                 )
             else:
                 assert "requestBody" not in operation
+
+            if "security" in expectation:
+                assert operation["security"] == expectation["security"]
 
             if path == "/api/v1/users/beneficiary-lookup/":
                 assert operation["parameters"][0]["name"] == "q"
@@ -262,7 +276,6 @@ class TestOpenAPISchema:
                     schema = responses[code]["content"]["application/json"]["schema"]
                     assert schema["type"] == "array"
                     assert schema["items"]["$ref"] == expectation["success_items_ref"]
-                    assert schema["maxItems"] == 10
                 else:
                     assert (
                         responses[code]["content"]["application/json"]["schema"]["$ref"]
