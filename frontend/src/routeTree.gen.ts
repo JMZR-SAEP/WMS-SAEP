@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as UnknownRoleRouteImport } from './routes/unknown-role'
 import { Route as MinhasRequisicoesRouteImport } from './routes/minhas-requisicoes'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AutorizacoesRouteImport } from './routes/autorizacoes'
@@ -17,6 +18,11 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as RequisicoesNovaRouteImport } from './routes/requisicoes/nova'
 import { Route as RequisicoesIdRouteImport } from './routes/requisicoes/$id'
 
+const UnknownRoleRoute = UnknownRoleRouteImport.update({
+  id: '/unknown-role',
+  path: '/unknown-role',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const MinhasRequisicoesRoute = MinhasRequisicoesRouteImport.update({
   id: '/minhas-requisicoes',
   path: '/minhas-requisicoes',
@@ -59,6 +65,7 @@ export interface FileRoutesByFullPath {
   '/autorizacoes': typeof AutorizacoesRoute
   '/login': typeof LoginRoute
   '/minhas-requisicoes': typeof MinhasRequisicoesRoute
+  '/unknown-role': typeof UnknownRoleRoute
   '/requisicoes/$id': typeof RequisicoesIdRoute
   '/requisicoes/nova': typeof RequisicoesNovaRoute
 }
@@ -68,6 +75,7 @@ export interface FileRoutesByTo {
   '/autorizacoes': typeof AutorizacoesRoute
   '/login': typeof LoginRoute
   '/minhas-requisicoes': typeof MinhasRequisicoesRoute
+  '/unknown-role': typeof UnknownRoleRoute
   '/requisicoes/$id': typeof RequisicoesIdRoute
   '/requisicoes/nova': typeof RequisicoesNovaRoute
 }
@@ -78,6 +86,7 @@ export interface FileRoutesById {
   '/autorizacoes': typeof AutorizacoesRoute
   '/login': typeof LoginRoute
   '/minhas-requisicoes': typeof MinhasRequisicoesRoute
+  '/unknown-role': typeof UnknownRoleRoute
   '/requisicoes/$id': typeof RequisicoesIdRoute
   '/requisicoes/nova': typeof RequisicoesNovaRoute
 }
@@ -89,6 +98,7 @@ export interface FileRouteTypes {
     | '/autorizacoes'
     | '/login'
     | '/minhas-requisicoes'
+    | '/unknown-role'
     | '/requisicoes/$id'
     | '/requisicoes/nova'
   fileRoutesByTo: FileRoutesByTo
@@ -98,6 +108,7 @@ export interface FileRouteTypes {
     | '/autorizacoes'
     | '/login'
     | '/minhas-requisicoes'
+    | '/unknown-role'
     | '/requisicoes/$id'
     | '/requisicoes/nova'
   id:
@@ -107,6 +118,7 @@ export interface FileRouteTypes {
     | '/autorizacoes'
     | '/login'
     | '/minhas-requisicoes'
+    | '/unknown-role'
     | '/requisicoes/$id'
     | '/requisicoes/nova'
   fileRoutesById: FileRoutesById
@@ -117,12 +129,20 @@ export interface RootRouteChildren {
   AutorizacoesRoute: typeof AutorizacoesRoute
   LoginRoute: typeof LoginRoute
   MinhasRequisicoesRoute: typeof MinhasRequisicoesRoute
+  UnknownRoleRoute: typeof UnknownRoleRoute
   RequisicoesIdRoute: typeof RequisicoesIdRoute
   RequisicoesNovaRoute: typeof RequisicoesNovaRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/unknown-role': {
+      id: '/unknown-role'
+      path: '/unknown-role'
+      fullPath: '/unknown-role'
+      preLoaderRoute: typeof UnknownRoleRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/minhas-requisicoes': {
       id: '/minhas-requisicoes'
       path: '/minhas-requisicoes'
@@ -181,6 +201,7 @@ const rootRouteChildren: RootRouteChildren = {
   AutorizacoesRoute: AutorizacoesRoute,
   LoginRoute: LoginRoute,
   MinhasRequisicoesRoute: MinhasRequisicoesRoute,
+  UnknownRoleRoute: UnknownRoleRoute,
   RequisicoesIdRoute: RequisicoesIdRoute,
   RequisicoesNovaRoute: RequisicoesNovaRoute,
 }

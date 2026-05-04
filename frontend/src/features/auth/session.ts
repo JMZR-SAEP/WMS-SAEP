@@ -14,6 +14,8 @@ export type PapelOperacional =
   | "auxiliar_almoxarifado"
   | "chefe_almoxarifado";
 
+export const UNKNOWN_ROLE_PATH = "/unknown-role";
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -100,6 +102,6 @@ export function homePathForPapel(papel: string) {
     case "chefe_almoxarifado":
       return "/atendimentos";
     default:
-      return "/login";
+      return UNKNOWN_ROLE_PATH;
   }
 }

@@ -1,8 +1,20 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 
-import { authQueryKeys, logoutSession, meQueryOptions } from "../../features/auth/session";
+import { ApiError, authQueryKeys, logoutSession, meQueryOptions } from "../../features/auth/session";
 import { navigationItems } from "../../shared/config/navigation";
+
+function messageFromLogoutError(error: unknown) {
+  if (error instanceof ApiError) {
+    return error.payload?.error.message || error.message;
+  }
+
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return "Não foi possível sair. Tente novamente.";
+}
 
 export function AppShell() {
   const location = useLocation();
@@ -86,6 +98,11 @@ export function AppShell() {
                 >
                   {logoutMutation.isPending ? "Saindo..." : "Sair"}
                 </button>
+                {logoutMutation.isError ? (
+                  <p className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
+                    {messageFromLogoutError(logoutMutation.error)}
+                  </p>
+                ) : null}
               </div>
             ) : (
               <>

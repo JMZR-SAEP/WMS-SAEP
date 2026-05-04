@@ -22,25 +22,75 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+const jsonHeaders = { "Content-Type": "application/json" };
+
+function requestUrl(request: Request) {
+  return request.url;
+}
+
+function authSession(papel = "solicitante") {
+  return {
+    id: 10,
+    matricula_funcional: "91003",
+    nome_completo: "Usuario Piloto",
+    papel,
+    setor: {
+      id: 1,
+      nome: "Operacao",
+    },
+    is_authenticated: true,
+  };
+}
+
+function chefeSession() {
+  return {
+    id: 20,
+    matricula_funcional: "91003",
+    nome_completo: "Chefe Piloto",
+    papel: "chefe_setor",
+    setor: {
+      id: 2,
+      nome: "Manutencao",
+    },
+    is_authenticated: true,
+  };
+}
+
+function sessionResponse(session = authSession()) {
+  return new Response(JSON.stringify(session), { status: 200, headers: jsonHeaders });
+}
+
+function csrfResponse() {
+  return new Response(JSON.stringify({ csrf_token: "csrf-token" }), {
+    status: 200,
+    headers: jsonHeaders,
+  });
+}
+
+function unauthenticatedResponse() {
+  return new Response(
+    JSON.stringify({
+      error: {
+        code: "not_authenticated",
+        message: "Autenticação necessária.",
+        details: {},
+        trace_id: null,
+      },
+    }),
+    { status: 401, headers: jsonHeaders },
+  );
+}
+
 function mockCurrentSession(papel = "solicitante") {
   vi.stubGlobal(
     "fetch",
-    vi.fn(() =>
-      new Response(
-        JSON.stringify({
-          id: 10,
-          matricula_funcional: "91003",
-          nome_completo: "Usuario Piloto",
-          papel,
-          setor: {
-            id: 1,
-            nome: "Operacao",
-          },
-          is_authenticated: true,
-        }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      ),
-    ),
+    vi.fn((request: Request) => {
+      if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+        return sessionResponse(authSession(papel));
+      }
+
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
+    }),
   );
 }
 
@@ -55,47 +105,37 @@ describe("frontend scaffold router", () => {
     });
   });
 
+  it("resolves unknown operational papel to neutral fallback", async () => {
+    mockCurrentSession("papel_novo");
+
+    const { container } = renderRoute("/");
+
+    await waitFor(() => {
+      expect(container.ownerDocument.location.pathname).toBe("/unknown-role");
+    });
+    expect(
+      await screen.findByRole("heading", { name: "Papel operacional não mapeado" }),
+    ).toBeInTheDocument();
+  });
+
   it("logs in with matricula and sends chefe de setor to authorization queue", async () => {
+    let loggedIn = false;
+    const session = chefeSession();
     const fetchMock = vi.fn((request: Request) => {
-      if (request.url.endsWith("/api/v1/auth/me/")) {
-        return new Response(
-          JSON.stringify({
-            error: {
-              code: "not_authenticated",
-              message: "Autenticação necessária.",
-              details: {},
-              trace_id: null,
-            },
-          }),
-          { status: 401, headers: { "Content-Type": "application/json" } },
-        );
+      if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+        return loggedIn ? sessionResponse(session) : unauthenticatedResponse();
       }
 
-      if (request.url.endsWith("/api/v1/auth/csrf/")) {
-        return new Response(JSON.stringify({ csrf_token: "csrf-token" }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
+      if (requestUrl(request).endsWith("/api/v1/auth/csrf/")) {
+        return csrfResponse();
       }
 
-      if (request.url.endsWith("/api/v1/auth/login/")) {
-        return new Response(
-          JSON.stringify({
-            id: 20,
-            matricula_funcional: "91003",
-            nome_completo: "Chefe Piloto",
-            papel: "chefe_setor",
-            setor: {
-              id: 2,
-              nome: "Manutencao",
-            },
-            is_authenticated: true,
-          }),
-          { status: 200, headers: { "Content-Type": "application/json" } },
-        );
+      if (requestUrl(request).endsWith("/api/v1/auth/login/")) {
+        loggedIn = true;
+        return sessionResponse(session);
       }
 
-      throw new Error(`Unexpected request: ${request.url}`);
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -124,18 +164,15 @@ describe("frontend scaffold router", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn((request: Request) => {
-        if (request.url.endsWith("/api/v1/auth/me/")) {
+        if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
           return new Response(JSON.stringify({ error: { code: "not_authenticated" } }), {
             status: 401,
-            headers: { "Content-Type": "application/json" },
+            headers: jsonHeaders,
           });
         }
 
-        if (request.url.endsWith("/api/v1/auth/csrf/")) {
-          return new Response(JSON.stringify({ csrf_token: "csrf-token" }), {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          });
+        if (requestUrl(request).endsWith("/api/v1/auth/csrf/")) {
+          return csrfResponse();
         }
 
         return new Response(
@@ -147,7 +184,7 @@ describe("frontend scaffold router", () => {
               trace_id: null,
             },
           }),
-          { status: 401, headers: { "Content-Type": "application/json" } },
+          { status: 401, headers: jsonHeaders },
         );
       }),
     );
@@ -167,6 +204,42 @@ describe("frontend scaffold router", () => {
     ).toBeInTheDocument();
   });
 
+  it("ignores external redirect after login", async () => {
+    let loggedIn = false;
+    const fetchMock = vi.fn((request: Request) => {
+      if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+        return loggedIn ? sessionResponse(authSession("solicitante")) : unauthenticatedResponse();
+      }
+
+      if (requestUrl(request).endsWith("/api/v1/auth/csrf/")) {
+        return csrfResponse();
+      }
+
+      if (requestUrl(request).endsWith("/api/v1/auth/login/")) {
+        loggedIn = true;
+        return sessionResponse(authSession("solicitante"));
+      }
+
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { container } = renderRoute("/login?redirect=https%3A%2F%2Fevil.example%2Fsteal");
+
+    fireEvent.change(await screen.findByLabelText("Matrícula funcional"), {
+      target: { value: "91003" },
+    });
+    fireEvent.change(screen.getByLabelText("Senha"), {
+      target: { value: "senha-segura-123" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Entrar" }));
+
+    await waitFor(() => {
+      expect(container.ownerDocument.location.pathname).toBe("/minhas-requisicoes");
+    });
+    expect(container.ownerDocument.location.search).toBe("");
+  });
+
   it("redirects protected routes without session to login", async () => {
     vi.stubGlobal(
       "fetch",
@@ -180,7 +253,7 @@ describe("frontend scaffold router", () => {
               trace_id: null,
             },
           }),
-          { status: 401, headers: { "Content-Type": "application/json" } },
+          { status: 401, headers: jsonHeaders },
         ),
       ),
     );
@@ -203,36 +276,22 @@ describe("frontend scaffold router", () => {
   });
 
   it("logs out from authenticated shell and returns to login", async () => {
+    let loggedIn = true;
     const fetchMock = vi.fn((request: Request) => {
-      if (request.url.endsWith("/api/v1/auth/me/")) {
-        return new Response(
-          JSON.stringify({
-            id: 10,
-            matricula_funcional: "91003",
-            nome_completo: "Usuario Piloto",
-            papel: "solicitante",
-            setor: {
-              id: 1,
-              nome: "Operacao",
-            },
-            is_authenticated: true,
-          }),
-          { status: 200, headers: { "Content-Type": "application/json" } },
-        );
+      if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+        return loggedIn ? sessionResponse(authSession("solicitante")) : unauthenticatedResponse();
       }
 
-      if (request.url.endsWith("/api/v1/auth/csrf/")) {
-        return new Response(JSON.stringify({ csrf_token: "csrf-token" }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
+      if (requestUrl(request).endsWith("/api/v1/auth/csrf/")) {
+        return csrfResponse();
       }
 
-      if (request.url.endsWith("/api/v1/auth/logout/")) {
+      if (requestUrl(request).endsWith("/api/v1/auth/logout/")) {
+        loggedIn = false;
         return new Response(null, { status: 204 });
       }
 
-      throw new Error(`Unexpected request: ${request.url}`);
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
     });
     vi.stubGlobal("fetch", fetchMock);
 
@@ -244,5 +303,42 @@ describe("frontend scaffold router", () => {
     await waitFor(() => {
       expect(container.ownerDocument.location.pathname).toBe("/login");
     });
+  });
+
+  it("shows logout error when the backend rejects logout", async () => {
+    const fetchMock = vi.fn((request: Request) => {
+      if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+        return sessionResponse(authSession("solicitante"));
+      }
+
+      if (requestUrl(request).endsWith("/api/v1/auth/csrf/")) {
+        return csrfResponse();
+      }
+
+      if (requestUrl(request).endsWith("/api/v1/auth/logout/")) {
+        return new Response(
+          JSON.stringify({
+            error: {
+              code: "logout_failed",
+              message: "Não foi possível encerrar a sessão.",
+              details: {},
+              trace_id: null,
+            },
+          }),
+          { status: 500, headers: jsonHeaders },
+        );
+      }
+
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { container } = renderRoute("/minhas-requisicoes");
+
+    expect(await screen.findByText("Usuario Piloto")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Sair" }));
+
+    expect(await screen.findByText("Não foi possível encerrar a sessão.")).toBeInTheDocument();
+    expect(container.ownerDocument.location.pathname).toBe("/minhas-requisicoes");
   });
 });

@@ -10,6 +10,24 @@ import {
 } from "../features/auth/session";
 import { FeaturePlaceholder } from "../shared/ui/feature-placeholder";
 
+function safeInternalRedirectPath(redirect: string | undefined) {
+  if (!redirect || redirect.startsWith("//")) {
+    return undefined;
+  }
+
+  try {
+    const url = new URL(redirect, window.location.origin);
+
+    if (url.origin !== window.location.origin || !url.pathname.startsWith("/")) {
+      return undefined;
+    }
+
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return undefined;
+  }
+}
+
 export const Route = createFileRoute("/login")({
   validateSearch: (search) => ({
     redirect: typeof search.redirect === "string" ? search.redirect : undefined,
@@ -29,12 +47,10 @@ function LoginPage() {
     retry: false,
     onSuccess: async (session) => {
       queryClient.setQueryData(authQueryKeys.me, session);
-      if (redirect) {
-        await navigate({ href: redirect, search: { redirect: undefined } });
-        return;
-      }
-
-      await navigate({ to: homePathForPapel(session.papel), search: {} });
+      await navigate({
+        href: safeInternalRedirectPath(redirect) ?? homePathForPapel(session.papel),
+        search: { redirect: undefined },
+      });
     },
     onError: (error) => {
       if (error instanceof ApiError) {
@@ -83,6 +99,7 @@ function LoginPage() {
             Matrícula funcional
             <input
               className="preview-input"
+              autoComplete="username"
               name="matricula_funcional"
               onChange={(event) => setMatriculaFuncional(event.target.value)}
               required
@@ -93,6 +110,7 @@ function LoginPage() {
             Senha
             <input
               className="preview-input"
+              autoComplete="current-password"
               name="password"
               onChange={(event) => setPassword(event.target.value)}
               required
