@@ -136,6 +136,7 @@ frontend-gen-api: frontend-init ## Exportar OpenAPI do backend e regenerar tipos
 
 frontend-dev: ## Subir SPA do piloto em modo desenvolvimento
 	@test -d $(FRONTEND_DIR) || (echo "Diretório $(FRONTEND_DIR) não encontrado" && exit 1)
+	@test -d $(FRONTEND_DIR)/node_modules || (echo "node_modules não encontrado em $(FRONTEND_DIR). Execute 'rtk make frontend-init' primeiro." && exit 1)
 	cd $(FRONTEND_DIR) && ./node_modules/.bin/vite --host 127.0.0.1 --port 4173
 
 frontend-build: frontend-gen-api ## Gerar build de produção da SPA do piloto
