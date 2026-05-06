@@ -79,9 +79,6 @@ def queryset_requisicoes_pessoais(
 ) -> QuerySet[Requisicao]:
     queryset = _queryset_requisicoes_base(skip_prefetch=skip_prefetch)
 
-    if user.is_superuser:
-        return queryset
-
     if not user.is_authenticated or not user.is_active:
         return queryset.none()
 

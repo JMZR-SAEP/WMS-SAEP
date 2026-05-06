@@ -270,7 +270,7 @@ class TestPodeAutorizarSetor:
     def test_per05_chefe_almoxarifado_pode_autorizar_setor_sob_responsabilidade(self):
         """PER-05 — Chefe de Almoxarifado usa o setor onde é chefe responsável."""
         chefe_alm = _criar_user("600041", PapelChoices.CHEFE_ALMOXARIFADO)
-        setor_alm = _criar_setor("Almoxarifado Central", chefe_alm)
+        setor_alm = _criar_setor("Almoxarifado", chefe_alm)
         chefe_alm.setor = setor_alm
         chefe_alm.save(update_fields=["setor"])
 

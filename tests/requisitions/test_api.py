@@ -388,6 +388,7 @@ class TestRequisicaoAPI:
         response = client.get(reverse("requisicao-list"))
 
         assert response.status_code == 200
+        assert response.data["count"] == 1
         assert any(item["id"] == requisicao.id for item in response.data["results"])
         assert all(item["id"] != rascunho_terceiro.id for item in response.data["results"])
 
@@ -425,6 +426,7 @@ class TestRequisicaoAPI:
 
         assert response.status_code == 200
         resultado_ids = {item["id"] for item in response.data["results"]}
+        assert response.data["count"] == len(resultado_ids) == 1
         assert requisicao_setor_a.id in resultado_ids
         assert rascunho_setor_a.id not in resultado_ids
         assert requisicao_setor_b.id not in resultado_ids
@@ -575,6 +577,42 @@ class TestRequisicaoAPI:
         assert queryset_ids == {criada_pelo_usuario.id, beneficiario_usuario.id}
         assert rascunho_terceiro_como_beneficiario.id not in queryset_ids
         assert fora_escopo.id not in queryset_ids
+
+    def test_mine_queryset_superuser_nao_trata_base_inteira_como_pessoal(self):
+        setor = self._criar_setor("Operacao Super Mine", "9000833")
+        usuario = self._criar_usuario("100097", "Usuario Super Mine", setor=setor)
+        superuser = User.objects.create_superuser(
+            matricula_funcional="99003",
+            password="testpass123",
+            nome_completo="Super Mine",
+        )
+        superuser.setor = setor
+        superuser.save(update_fields=["setor"])
+        material = self._criar_material_com_estoque("001.001.154")
+
+        requisicao_superuser = self._criar_requisicao_com_item(
+            criador=superuser,
+            beneficiario=superuser,
+            material=material,
+            status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
+            numero_publico="REQ-2026-000907",
+        )
+        requisicao_outro = self._criar_requisicao_com_item(
+            criador=usuario,
+            beneficiario=usuario,
+            material=material,
+            status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
+            numero_publico="REQ-2026-000908",
+        )
+
+        queryset_ids = set(
+            queryset_requisicoes_pessoais(superuser, skip_prefetch=True).values_list(
+                "id", flat=True
+            )
+        )
+
+        assert queryset_ids == {requisicao_superuser.id}
+        assert requisicao_outro.id not in queryset_ids
 
     def test_lista_requisicoes_filtra_por_status_e_busca_textual(self):
         setor = self._criar_setor("Compras", "900074")
@@ -964,10 +1002,19 @@ class TestRequisicaoAPI:
             queryset_ids = set(
                 queryset_requisicoes_visiveis(user, skip_prefetch=True).values_list("id", flat=True)
             )
-            assert pode_visualizar_requisicao(user, requisicao_rascunho) is esperado_rascunho
-            assert (requisicao_rascunho.id in queryset_ids) is esperado_rascunho
-            assert pode_visualizar_requisicao(user, requisicao_aguardando) is esperado_aguardando
-            assert (requisicao_aguardando.id in queryset_ids) is esperado_aguardando
+            user_id = getattr(user, "matricula_funcional", "<anon>")
+            assert pode_visualizar_requisicao(user, requisicao_rascunho) is esperado_rascunho, (
+                f"user={user_id} rascunho pode_visualizar esperado={esperado_rascunho}"
+            )
+            assert (requisicao_rascunho.id in queryset_ids) is esperado_rascunho, (
+                f"user={user_id} rascunho queryset esperado={esperado_rascunho}"
+            )
+            assert pode_visualizar_requisicao(user, requisicao_aguardando) is esperado_aguardando, (
+                f"user={user_id} aguardando pode_visualizar esperado={esperado_aguardando}"
+            )
+            assert (requisicao_aguardando.id in queryset_ids) is esperado_aguardando, (
+                f"user={user_id} aguardando queryset esperado={esperado_aguardando}"
+            )
 
         queryset_anonimo = queryset_requisicoes_visiveis(AnonymousUser(), skip_prefetch=True)
         assert pode_visualizar_requisicao(AnonymousUser(), requisicao_rascunho) is False

@@ -75,12 +75,16 @@ Contrato da lista pessoal usada por `Minhas requisições` na SPA do piloto:
 - autenticação: sessão Django padrão;
 - autorização geral: usuário autenticado;
 - autorização contextual: `queryset_requisicoes_pessoais()`;
-- escopo: `criador_id = user.id OR beneficiario_id = user.id`;
+- escopo:
+  - em `rascunho`: apenas `criador_id = user.id`;
+  - fora de `rascunho`: `criador_id = user.id OR beneficiario_id = user.id`;
+  - após `envio`, o beneficiário passa a ver a requisição; se houver retorno para `rascunho`, perde o acesso novamente;
+  - nota: a formulação anterior `criador_id = user.id OR beneficiario_id = user.id` sem exceção para `rascunho` estava incorreta.
 - sem ampliação por papel operacional, setor responsável, Almoxarifado ou suporte/admin;
 - entrada: sem body;
 - query params: `page`, `page_size`, `search` e `status`;
 - saída: `200` com envelope paginado de `RequisicaoListOutputSerializer`;
-- erros esperados: `401 not_authenticated`/`403 permission_denied` conforme autenticação da API.
+- erros esperados: `403 not_authenticated` para sessão ausente ou expirada e `403 permission_denied` quando o usuário autenticado não puder acessar a rota.
 
 ### 3.2. `POST /api/v1/requisitions/{id}/fulfill/`
 
@@ -148,7 +152,8 @@ Campos:
 Mapeamento base:
 
 - `400 validation_error`: payload inválido ou erro de serializer;
-- `401 not_authenticated`: usuário não autenticado;
+- `401 not_authenticated`: apenas endpoints que optam por `SessionAuthentication401` retornam `401` quando a sessão não está autenticada;
+- `403 not_authenticated`: endpoints com `SessionAuthentication` padrão retornam `403` quando a sessão não está autenticada;
 - `403 permission_denied`: usuário autenticado sem permissão para a ação;
 - `404 not_found`: recurso inexistente ou fora do escopo visível;
 - `409 domain_conflict`: estado atual impede a operação, saldo mudou, transição inválida ou regra de domínio conflitou com dados atuais;

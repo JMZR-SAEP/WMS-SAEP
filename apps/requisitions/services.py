@@ -643,9 +643,6 @@ def atualizar_rascunho_requisicao(
 
 
 def enviar_para_autorizacao(*, requisicao: Requisicao, ator: User) -> Requisicao:
-    if not pode_manipular_pre_autorizacao(ator, requisicao):
-        raise PermissionDenied("Apenas criador pode enviar a requisição.")
-
     with transaction.atomic():
         requisicao = (
             Requisicao.objects.select_for_update()
@@ -653,6 +650,9 @@ def enviar_para_autorizacao(*, requisicao: Requisicao, ator: User) -> Requisicao
             .prefetch_related("itens__material__estoque", "eventos__usuario")
             .get(pk=requisicao.pk)
         )
+
+        if not pode_manipular_pre_autorizacao(ator, requisicao):
+            raise PermissionDenied("Apenas criador pode enviar a requisição.")
 
         if requisicao.status != StatusRequisicao.RASCUNHO:
             raise DomainConflict(

@@ -1,6 +1,6 @@
 # Requisitions authorization and fulfillment workflow
 
-Updated on 2026-05-01 after merge of PR #25.
+Updated on 2026-05-06 after merge of PR #54.
 
 ## Scope landed
 - `PIL-BE-REQ-002`: annual public numbering on first submission for authorization

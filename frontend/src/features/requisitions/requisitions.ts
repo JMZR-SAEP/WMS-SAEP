@@ -1,6 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 
-import { ApiError, type ErrorResponse } from "../auth/session";
+import { ApiError, isAuthError, type ErrorResponse } from "../auth/session";
 import { apiClient } from "../../shared/api/client";
 import type { components } from "../../shared/api/schema";
 
@@ -10,6 +10,7 @@ export type RequisicaoDetail = components["schemas"]["RequisicaoDetailOutput"];
 export type RequisicaoStatus = components["schemas"]["StatusEnum"];
 export type RequisicaoTimelineEvent = components["schemas"]["RequisicaoTimelineEventOutput"];
 export type RequisicaoActionItem = components["schemas"]["RequisicaoActionOutput"];
+export type RequisicaoTimelineEventType = components["schemas"]["TipoEventoEnum"];
 
 export const STATUS_OPTIONS: Array<{ value: RequisicaoStatus; label: string }> = [
   { value: "rascunho", label: "Rascunho" },
@@ -20,6 +21,20 @@ export const STATUS_OPTIONS: Array<{ value: RequisicaoStatus; label: string }> =
   { value: "atendida", label: "Atendida" },
   { value: "cancelada", label: "Cancelada" },
   { value: "estornada", label: "Estornada" },
+];
+
+const TIPO_EVENTO_OPTIONS: Array<{ value: RequisicaoTimelineEventType; label: string }> = [
+  { value: "criacao", label: "Criação" },
+  { value: "envio_autorizacao", label: "Envio para autorização" },
+  { value: "retorno_rascunho", label: "Retorno para rascunho" },
+  { value: "reenvio_autorizacao", label: "Reenvio para autorização" },
+  { value: "autorizacao_total", label: "Autorização total" },
+  { value: "autorizacao_parcial", label: "Autorização parcial" },
+  { value: "recusa", label: "Recusa" },
+  { value: "atendimento_parcial", label: "Atendimento parcial" },
+  { value: "atendimento", label: "Atendimento" },
+  { value: "cancelamento", label: "Cancelamento" },
+  { value: "estorno", label: "Estorno" },
 ];
 
 export type RequisicoesListParams = {
@@ -96,7 +111,7 @@ export function myRequisitionsQueryOptions(params: RequisicoesListParams) {
   return queryOptions({
     queryKey: requisitionsQueryKeys.mine(params),
     queryFn: () => fetchMyRequisitions(params),
-    retry: false,
+    retry: retryUnlessClientOrAuthError,
   });
 }
 
@@ -104,7 +119,7 @@ export function requisitionDetailQueryOptions(id: number) {
   return queryOptions({
     queryKey: requisitionsQueryKeys.detail(id),
     queryFn: () => fetchRequisitionDetail(id),
-    retry: false,
+    retry: retryUnlessClientOrAuthError,
   });
 }
 
@@ -126,9 +141,23 @@ export function formatDateTime(value: string | null | undefined) {
   }
 
   return new Intl.DateTimeFormat("pt-BR", {
-    dateStyle: "short",
+    dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
+}
+
+export function tipoEventoLabel(tipoEvento: RequisicaoTimelineEventType) {
+  return TIPO_EVENTO_OPTIONS.find((option) => option.value === tipoEvento)?.label ?? tipoEvento.replaceAll("_", " ");
+}
+
+function retryUnlessClientOrAuthError(failureCount: number, error: unknown) {
+  if (isAuthError(error)) {
+    return false;
+  }
+  if (error instanceof ApiError && error.status >= 400 && error.status < 500) {
+    return false;
+  }
+  return failureCount < 2;
 }
 
 export function contextualDateLabel(requisicao: RequisicaoListItem) {

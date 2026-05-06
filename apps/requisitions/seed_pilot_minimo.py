@@ -465,7 +465,7 @@ def _seed_requisicao_rascunho_manutencao_puro(
 
 
 def _seed_requisicao_aguardando_secundario_terceiro(
-    *, criador: User, material: Material
+    *, criador: User, beneficiario: User, material: Material
 ) -> Requisicao:
     requisicao = Requisicao.objects.filter(observacao=SEED_AGUARDANDO_SECUNDARIO_TERC).first()
     if requisicao is not None:
@@ -473,7 +473,7 @@ def _seed_requisicao_aguardando_secundario_terceiro(
 
     requisicao = criar_rascunho_requisicao(
         criador=criador,
-        beneficiario=criador,
+        beneficiario=beneficiario,
         observacao=SEED_AGUARDANDO_SECUNDARIO_TERC,
         itens=[
             ItemRascunhoData(
@@ -801,6 +801,7 @@ def carregar_seed_pilot_minimo() -> None:
         )
         _seed_requisicao_aguardando_secundario_terceiro(
             criador=solicitante_secundario,
+            beneficiario=auxiliar_setor_secundario,
             material=material_variacao_secundario,
         )
         _seed_requisicao_autorizada_secundario(

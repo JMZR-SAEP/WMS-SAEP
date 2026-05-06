@@ -51,26 +51,37 @@ class Setor(models.Model):
     def __str__(self):
         return f"{self.nome} (Chefe: {self.chefe_responsavel.matricula_funcional})"
 
-    def clean(self):
-        super().clean()
-        if not self.chefe_responsavel_id:
+    def _validar_responsavel_no_setor(self, *, field_name: str, label: str) -> None:
+        if not getattr(self, f"{field_name}_id"):
             return
 
-        setor_do_chefe = getattr(self.chefe_responsavel, "setor", None)
-        if setor_do_chefe is self:
+        responsavel = getattr(self, field_name)
+        setor_do_responsavel = getattr(responsavel, "setor", None)
+        if setor_do_responsavel is self:
             return
-        if self.pk and self.chefe_responsavel.setor_id == self.pk:
+        if self.pk and responsavel.setor_id == self.pk:
             return
 
-        if setor_do_chefe is None:
-            raise ValidationError({"chefe_responsavel": "O usuário não possui setor atribuído."})
+        if setor_do_responsavel is None:
+            raise ValidationError({field_name: "O usuário não possui setor atribuído."})
 
         raise ValidationError(
             {
-                "chefe_responsavel": (
-                    f"O chefe responsável pertence ao setor '{setor_do_chefe.nome}', não a este setor."
+                field_name: (
+                    f"O {label} pertence ao setor '{setor_do_responsavel.nome}', não a este setor."
                 )
             }
+        )
+
+    def clean(self):
+        super().clean()
+        self._validar_responsavel_no_setor(
+            field_name="chefe_responsavel",
+            label="chefe responsável",
+        )
+        self._validar_responsavel_no_setor(
+            field_name="auxiliar_responsavel",
+            label="auxiliar responsável",
         )
 
 

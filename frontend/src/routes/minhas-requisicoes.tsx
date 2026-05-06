@@ -6,7 +6,7 @@ import {
   useReactTable,
   type ColumnDef,
 } from "@tanstack/react-table";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 
 import { requireSession } from "../features/auth/guards";
@@ -24,22 +24,15 @@ import {
 
 const DEFAULT_PAGE_SIZE = 20;
 
+const STATUS_VALUES = STATUS_OPTIONS.map((option) => option.value) as [
+  RequisicaoStatus,
+  ...RequisicaoStatus[],
+];
+
 const requisitionsSearchSchema = z.object({
   page: z.coerce.number().int().min(1).optional().catch(undefined),
   search: z.string().optional().catch(undefined),
-  status: z
-    .enum([
-      "rascunho",
-      "aguardando_autorizacao",
-      "recusada",
-      "autorizada",
-      "atendida_parcialmente",
-      "atendida",
-      "cancelada",
-      "estornada",
-    ])
-    .optional()
-    .catch(undefined),
+  status: z.enum(STATUS_VALUES).optional().catch(undefined),
 });
 
 export const Route = createFileRoute("/minhas-requisicoes")({
@@ -94,6 +87,7 @@ function MinhasRequisicoesPage() {
       status: searchParams.status,
     }),
   );
+  const authError = listQuery.isError && isAuthError(listQuery.error);
 
   const rows = listQuery.data?.results ?? [];
   const columns = useMemo<ColumnDef<RequisicaoListItem>[]>(
@@ -105,7 +99,7 @@ function MinhasRequisicoesPage() {
           <div className="min-w-[11rem]">
             <IdentifierCell requisicao={row.original} />
             <p className="mt-2 text-xs uppercase tracking-[0.18em] text-[var(--ink-muted)]">
-              {row.original.total_itens} item{row.original.total_itens === 1 ? "" : "s"}
+              {row.original.total_itens} {row.original.total_itens === 1 ? "item" : "itens"}
             </p>
           </div>
         ),
@@ -195,7 +189,10 @@ function MinhasRequisicoesPage() {
     });
   }
 
-  if (listQuery.isError && isAuthError(listQuery.error)) {
+  useEffect(() => {
+    if (!authError) {
+      return;
+    }
     queryClient.removeQueries({ queryKey: authQueryKeys.me });
     void navigate({
       to: "/login",
@@ -203,7 +200,7 @@ function MinhasRequisicoesPage() {
         redirect: "/minhas-requisicoes",
       },
     });
-  }
+  }, [authError, navigate, queryClient]);
 
   return (
     <section className="space-y-6">
@@ -265,7 +262,7 @@ function MinhasRequisicoesPage() {
         </button>
       </form>
 
-      {listQuery.isError && !isAuthError(listQuery.error) ? (
+      {listQuery.isError && !authError ? (
         <div className="error-panel">{queryErrorMessage(listQuery.error)}</div>
       ) : null}
 

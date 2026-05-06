@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
@@ -5,14 +6,15 @@ import { z } from "zod";
 import { requireSession } from "../../features/auth/guards";
 import { authQueryKeys, isAuthError } from "../../features/auth/session";
 import {
-  displayRequisitionIdentifier,
-  formatDateTime,
-  isThirdPartyBeneficiary,
-  requisitionDetailQueryOptions,
-  statusLabel,
-  type RequisicaoActionItem,
-  type RequisicaoTimelineEvent,
-} from "../../features/requisitions/requisitions";
+    displayRequisitionIdentifier,
+    formatDateTime,
+    isThirdPartyBeneficiary,
+    requisitionDetailQueryOptions,
+    statusLabel,
+    tipoEventoLabel,
+    type RequisicaoActionItem,
+    type RequisicaoTimelineEvent,
+  } from "../../features/requisitions/requisitions";
 
 const detailSearchSchema = z.object({
   contexto: z.enum(["autorizacao", "atendimento"]).optional().catch(undefined),
@@ -62,7 +64,7 @@ function TimelineEvent({ event }: { event: RequisicaoTimelineEvent }) {
   return (
     <li className="timeline-event">
       <div>
-        <p className="font-semibold">{event.tipo_evento.replaceAll("_", " ")}</p>
+        <p className="font-semibold">{tipoEventoLabel(event.tipo_evento)}</p>
         <p className="text-sm text-[var(--ink-soft)]">
           {event.usuario.nome_completo} - {formatDateTime(event.data_hora)}
         </p>
@@ -82,8 +84,12 @@ function DetalheRequisicaoPage() {
     ...requisitionDetailQueryOptions(requisicaoId),
     enabled: Number.isInteger(requisicaoId) && requisicaoId > 0,
   });
+  const authError = detailQuery.isError && isAuthError(detailQuery.error);
 
-  if (detailQuery.isError && isAuthError(detailQuery.error)) {
+  useEffect(() => {
+    if (!authError) {
+      return;
+    }
     queryClient.removeQueries({ queryKey: authQueryKeys.me });
     void navigate({
       to: "/login",
@@ -91,7 +97,7 @@ function DetalheRequisicaoPage() {
         redirect: `/requisicoes/${id}`,
       },
     });
-  }
+  }, [authError, id, navigate, queryClient]);
 
   if (!Number.isInteger(requisicaoId) || requisicaoId <= 0) {
     return <div className="error-panel">Identificador de requisição inválido.</div>;
@@ -99,6 +105,10 @@ function DetalheRequisicaoPage() {
 
   if (detailQuery.isPending) {
     return <div className="loading-state">Carregando requisição...</div>;
+  }
+
+  if (authError) {
+    return null;
   }
 
   if (detailQuery.isError) {
