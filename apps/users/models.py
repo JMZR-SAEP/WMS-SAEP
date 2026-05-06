@@ -25,8 +25,16 @@ class Setor(models.Model):
     chefe_responsavel = models.OneToOneField(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
-        related_name="setor_responsavel",
+        related_name="setor_como_chefe",
         help_text="Chefe responsável pelo setor.",
+    )
+    auxiliar_responsavel = models.OneToOneField(  # TODO: assumir a modelagem de “auxiliar responsável nomeado” e propagar a regra pelo sistema inteiro. ajustar lógicas, admin, seed e testes para refletir isso.
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="setor_como_auxiliar",
+        help_text="Auxiliar responsável pelo setor",
+        null=True,
+        blank=True,
     )
     is_active = models.BooleanField(
         default=True,
@@ -48,21 +56,19 @@ class Setor(models.Model):
         if not self.chefe_responsavel_id:
             return
 
-        chefe_setor = getattr(self.chefe_responsavel, "setor", None)
-        if chefe_setor is self:
+        setor_do_chefe = getattr(self.chefe_responsavel, "setor", None)
+        if setor_do_chefe is self:
             return
         if self.pk and self.chefe_responsavel.setor_id == self.pk:
             return
 
-        if chefe_setor is None:
-            raise ValidationError(
-                {"chefe_responsavel": "O chefe responsável deve pertencer a este setor."}
-            )
+        if setor_do_chefe is None:
+            raise ValidationError({"chefe_responsavel": "O usuário não possui setor atribuído."})
 
         raise ValidationError(
             {
                 "chefe_responsavel": (
-                    f"O chefe responsável pertence ao setor '{chefe_setor.nome}', não a este setor."
+                    f"O chefe responsável pertence ao setor '{setor_do_chefe.nome}', não a este setor."
                 )
             }
         )

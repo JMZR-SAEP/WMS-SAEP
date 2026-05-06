@@ -12,8 +12,29 @@ from django.db.models import QuerySet
 from .models import PapelChoices, User
 
 
-def _user_ativo_nao_superuser(user) -> bool:
-    return user.is_active and not user.is_superuser
+def usuario_operacional_ativo(user) -> bool:
+    return user.is_authenticated and user.is_active and not user.is_superuser
+
+
+def usuario_almoxarifado(user) -> bool:
+    return usuario_operacional_ativo(user) and user.papel in (
+        PapelChoices.AUXILIAR_ALMOXARIFADO,
+        PapelChoices.CHEFE_ALMOXARIFADO,
+    )
+
+
+def usuario_chefe_almoxarifado(user) -> bool:
+    return usuario_operacional_ativo(user) and user.papel == PapelChoices.CHEFE_ALMOXARIFADO
+
+
+def setor_responsavel_chefia(user):
+    if not usuario_operacional_ativo(user) or user.papel not in (
+        PapelChoices.CHEFE_SETOR,
+        PapelChoices.CHEFE_ALMOXARIFADO,
+    ):
+        return None
+
+    return getattr(user, "setor_como_chefe", None)
 
 
 def pode_criar_requisicao_para(criador, beneficiario) -> bool:
@@ -21,7 +42,7 @@ def pode_criar_requisicao_para(criador, beneficiario) -> bool:
     Verifica se `criador` pode criar uma requisição em nome de `beneficiario`.
 
     Regras (matriz-permissoes.md, seção 4):
-    - Solicitante: apenas para si mesmo.
+    - Solicitante: apenas para si.
     - Auxiliar de setor: apenas para funcionários do próprio setor.
     - Chefe de setor: apenas para funcionários do próprio setor.
     - Auxiliar de Almoxarifado: qualquer funcionário.
@@ -29,13 +50,13 @@ def pode_criar_requisicao_para(criador, beneficiario) -> bool:
     - Superusuário: nunca (suporte/admin, não operador cotidiano).
     - Usuário inativo: nunca (invariante USR-03).
     """
-    if not _user_ativo_nao_superuser(criador):
+    if not usuario_operacional_ativo(criador):
         return False
 
-    papel = criador.papel
-
-    if papel in (PapelChoices.AUXILIAR_ALMOXARIFADO, PapelChoices.CHEFE_ALMOXARIFADO):
+    if usuario_almoxarifado(criador):
         return True
+
+    papel = criador.papel
 
     if papel == PapelChoices.SOLICITANTE:
         return criador.pk == beneficiario.pk
@@ -43,14 +64,15 @@ def pode_criar_requisicao_para(criador, beneficiario) -> bool:
     if papel == PapelChoices.AUXILIAR_SETOR:
         if criador.setor_id is None or beneficiario.setor_id is None:
             return False
-        setor_escopo_id = criador.setor_id
-        return setor_escopo_id == beneficiario.setor_id
+        setor_responsavel = criador.setor_id
+        return setor_responsavel == beneficiario.setor_id
 
     if papel == PapelChoices.CHEFE_SETOR:
-        setor_responsavel = getattr(criador, "setor_responsavel", None)
-        if setor_responsavel is None or beneficiario.setor_id is None:
-            return False
-        return setor_responsavel.pk == beneficiario.setor_id
+        setor_responsavel = setor_responsavel_chefia(criador)
+        return (
+            beneficiario.setor_id is not None
+            and getattr(setor_responsavel, "pk", None) == beneficiario.setor_id
+        )
 
     return False
 
@@ -63,16 +85,16 @@ def queryset_beneficiarios_lookup_para(criador) -> QuerySet[User]:
         setor__is_active=True,
     )
 
-    if not criador.is_active:
+    if not criador.is_authenticated or not criador.is_active:
         return queryset.none()
 
     if criador.is_superuser:
         return queryset
 
-    papel = criador.papel
-
-    if papel in (PapelChoices.AUXILIAR_ALMOXARIFADO, PapelChoices.CHEFE_ALMOXARIFADO):
+    if usuario_almoxarifado(criador):
         return queryset
+
+    papel = criador.papel
 
     if papel == PapelChoices.SOLICITANTE:
         return queryset.filter(pk=criador.pk)
@@ -83,7 +105,7 @@ def queryset_beneficiarios_lookup_para(criador) -> QuerySet[User]:
         return queryset.filter(setor_id=criador.setor_id)
 
     if papel == PapelChoices.CHEFE_SETOR:
-        setor_responsavel = getattr(criador, "setor_responsavel", None)
+        setor_responsavel = setor_responsavel_chefia(criador)
         if setor_responsavel is None:
             return queryset.none()
         return queryset.filter(setor=setor_responsavel)
@@ -102,21 +124,16 @@ def pode_autorizar_setor(autorizador, setor) -> bool:
     - Demais papéis e superusuário: nunca.
     - Usuário inativo: nunca (invariante USR-03).
     """
-    if not _user_ativo_nao_superuser(autorizador):
+    if not usuario_operacional_ativo(autorizador):
         return False
 
     papel = autorizador.papel
 
-    if papel == PapelChoices.CHEFE_SETOR:
-        setor_responsavel = getattr(autorizador, "setor_responsavel", None)
+    if papel in (PapelChoices.CHEFE_SETOR, PapelChoices.CHEFE_ALMOXARIFADO):
+        setor_responsavel = setor_responsavel_chefia(autorizador)
         if setor_responsavel is None:
             return False
         return setor_responsavel.pk == setor.pk
-
-    if papel == PapelChoices.CHEFE_ALMOXARIFADO:
-        if autorizador.setor_id is None:
-            return False
-        return autorizador.setor_id == setor.pk
 
     return False
 
@@ -132,13 +149,7 @@ def pode_ver_fila_atendimento(user) -> bool:
     - Demais papéis: não.
     - Usuário inativo: nunca (invariante USR-03).
     """
-    if not _user_ativo_nao_superuser(user):
-        return False
-
-    return user.papel in (
-        PapelChoices.AUXILIAR_ALMOXARIFADO,
-        PapelChoices.CHEFE_ALMOXARIFADO,
-    )
+    return usuario_almoxarifado(user)
 
 
 def pode_operar_estoque(user) -> bool:
@@ -153,13 +164,7 @@ def pode_operar_estoque(user) -> bool:
     - Demais papéis: não.
     - Usuário inativo: nunca (invariante USR-03).
     """
-    if not _user_ativo_nao_superuser(user):
-        return False
-
-    return user.papel in (
-        PapelChoices.AUXILIAR_ALMOXARIFADO,
-        PapelChoices.CHEFE_ALMOXARIFADO,
-    )
+    return usuario_almoxarifado(user)
 
 
 def pode_operar_estoque_chefia(user) -> bool:
@@ -174,7 +179,4 @@ def pode_operar_estoque_chefia(user) -> bool:
     - Demais papéis: não.
     - Usuário inativo: nunca (invariante USR-03).
     """
-    if not _user_ativo_nao_superuser(user):
-        return False
-
-    return user.papel == PapelChoices.CHEFE_ALMOXARIFADO
+    return usuario_chefe_almoxarifado(user)

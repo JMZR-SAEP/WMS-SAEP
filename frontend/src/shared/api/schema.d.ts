@@ -264,6 +264,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/requisitions/mine/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Lista paginada das requisições pessoais do usuário autenticado. Inclui apenas requisições em que o usuário é criador ou beneficiário. */
+        get: operations["requisitions_mine"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/requisitions/pending-approvals/": {
         parameters: {
             query?: never;
@@ -1489,6 +1506,42 @@ export interface operations {
                 };
             };
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    requisitions_mine: {
+        parameters: {
+            query?: {
+                /** @description Número da página (padrão: 1) */
+                page?: number;
+                /** @description Quantidade de resultados por página (padrão: 20, máximo: 100) */
+                page_size?: number;
+                /** @description Busca textual por número público, nome do beneficiário ou nome do criador. */
+                search?: string;
+                /** @description Filtro exato por status da requisição. */
+                status?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequisicaoListPaginated"];
+                };
+            };
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

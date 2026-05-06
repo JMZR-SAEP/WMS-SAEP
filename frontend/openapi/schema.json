@@ -1179,6 +1179,76 @@
                 }
             }
         },
+        "/api/v1/requisitions/mine/": {
+            "get": {
+                "operationId": "requisitions_mine",
+                "description": "Lista paginada das requisições pessoais do usuário autenticado. Inclui apenas requisições em que o usuário é criador ou beneficiário.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "page",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Número da página (padrão: 1)"
+                    },
+                    {
+                        "in": "query",
+                        "name": "page_size",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Quantidade de resultados por página (padrão: 20, máximo: 100)"
+                    },
+                    {
+                        "in": "query",
+                        "name": "search",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Busca textual por número público, nome do beneficiário ou nome do criador."
+                    },
+                    {
+                        "in": "query",
+                        "name": "status",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Filtro exato por status da requisição."
+                    }
+                ],
+                "tags": [
+                    "requisitions"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RequisicaoListPaginated"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/v1/requisitions/pending-approvals/": {
             "get": {
                 "operationId": "requisitions_pending_approvals",

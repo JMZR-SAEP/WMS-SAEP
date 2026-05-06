@@ -68,7 +68,21 @@ Padrão de status:
 
 Qualquer exceção a esse padrão deve ser documentada no `@extend_schema`, nos testes de contrato e, quando afetar contrato público, no documento de domínio ou backlog correspondente.
 
-### 3.1. `POST /api/v1/requisitions/{id}/fulfill/`
+### 3.1. `GET /api/v1/requisitions/mine/`
+
+Contrato da lista pessoal usada por `Minhas requisições` na SPA do piloto:
+
+- autenticação: sessão Django padrão;
+- autorização geral: usuário autenticado;
+- autorização contextual: `queryset_requisicoes_pessoais()`;
+- escopo: `criador_id = user.id OR beneficiario_id = user.id`;
+- sem ampliação por papel operacional, setor responsável, Almoxarifado ou suporte/admin;
+- entrada: sem body;
+- query params: `page`, `page_size`, `search` e `status`;
+- saída: `200` com envelope paginado de `RequisicaoListOutputSerializer`;
+- erros esperados: `401 not_authenticated`/`403 permission_denied` conforme autenticação da API.
+
+### 3.2. `POST /api/v1/requisitions/{id}/fulfill/`
 
 Contrato do atendimento de requisição autorizada:
 

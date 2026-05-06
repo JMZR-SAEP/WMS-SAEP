@@ -60,6 +60,121 @@ function sessionResponse(session = authSession()) {
   return new Response(JSON.stringify(session), { status: 200, headers: jsonHeaders });
 }
 
+function requisitionListItem(overrides = {}) {
+  return {
+    id: 101,
+    numero_publico: "REQ-2026-000101",
+    status: "aguardando_autorizacao",
+    criador: {
+      id: 10,
+      matricula_funcional: "91003",
+      nome_completo: "Usuario Piloto",
+    },
+    beneficiario: {
+      id: 10,
+      matricula_funcional: "91003",
+      nome_completo: "Usuario Piloto",
+    },
+    setor_beneficiario: {
+      id: 1,
+      nome: "Operacao",
+    },
+    data_criacao: "2026-05-01T10:00:00Z",
+    data_envio_autorizacao: "2026-05-01T11:00:00Z",
+    data_autorizacao_ou_recusa: null,
+    data_finalizacao: null,
+    updated_at: "2026-05-01T11:00:00Z",
+    total_itens: 1,
+    ...overrides,
+  };
+}
+
+function requisitionListResponse(results = [requisitionListItem()]) {
+  return new Response(
+    JSON.stringify({
+      count: results.length,
+      page: 1,
+      page_size: 20,
+      total_pages: 1,
+      next: null,
+      previous: null,
+      results,
+    }),
+    { status: 200, headers: jsonHeaders },
+  );
+}
+
+function requisitionDetailResponse() {
+  return new Response(
+    JSON.stringify({
+      id: 101,
+      numero_publico: "REQ-2026-000101",
+      status: "autorizada",
+      criador: {
+        id: 10,
+        matricula_funcional: "91003",
+        nome_completo: "Usuario Piloto",
+      },
+      beneficiario: {
+        id: 10,
+        matricula_funcional: "91003",
+        nome_completo: "Usuario Piloto",
+      },
+      setor_beneficiario: {
+        id: 1,
+        nome: "Operacao",
+      },
+      chefe_autorizador: {
+        id: 20,
+        matricula_funcional: "91001",
+        nome_completo: "Chefe Piloto",
+      },
+      responsavel_atendimento: null,
+      data_criacao: "2026-05-01T10:00:00Z",
+      data_envio_autorizacao: "2026-05-01T11:00:00Z",
+      data_autorizacao_ou_recusa: "2026-05-01T12:00:00Z",
+      motivo_recusa: "",
+      motivo_cancelamento: "",
+      data_finalizacao: null,
+      retirante_fisico: "",
+      observacao: "Observacao operacional",
+      observacao_atendimento: "",
+      itens: [
+        {
+          id: 501,
+          material: {
+            id: 301,
+            codigo_completo: "010.001.001",
+            nome: "Papel sulfite A4",
+            unidade_medida: "UN",
+          },
+          unidade_medida: "UN",
+          quantidade_solicitada: "2.000",
+          quantidade_autorizada: "1.000",
+          quantidade_entregue: "0.000",
+          justificativa_autorizacao_parcial: "Saldo parcial",
+          justificativa_atendimento_parcial: "",
+          observacao: "Urgente",
+        },
+      ],
+      eventos: [
+        {
+          id: 701,
+          tipo_evento: "autorizacao_parcial",
+          usuario: {
+            id: 20,
+            matricula_funcional: "91001",
+            nome_completo: "Chefe Piloto",
+          },
+          data_hora: "2026-05-01T12:00:00Z",
+          observacao: "Autorizado parcialmente por saldo.",
+        },
+      ],
+    }),
+    { status: 200, headers: jsonHeaders },
+  );
+}
+
 function csrfResponse() {
   return new Response(JSON.stringify({ csrf_token: "csrf-token" }), {
     status: 200,
@@ -331,14 +446,172 @@ describe("frontend scaffold router", () => {
     expect(container.ownerDocument.location.search).toBe("?redirect=%2Fatendimentos");
   });
 
-  it("renders minhas requisicoes placeholder", async () => {
-    mockCurrentSession();
+  it("renders minhas requisicoes worklist", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((request: Request) => {
+        if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+          return sessionResponse();
+        }
+
+        if (requestUrl(request).includes("/api/v1/requisitions/mine/")) {
+          return requisitionListResponse([
+            requisitionListItem(),
+            requisitionListItem({
+              id: 102,
+              numero_publico: null,
+              status: "rascunho",
+              beneficiario: {
+                id: 11,
+                matricula_funcional: "91004",
+                nome_completo: "Beneficiario Terceiro",
+              },
+            }),
+          ]);
+        }
+
+        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+      }),
+    );
     renderRoute("/minhas-requisicoes");
 
     expect(
       await screen.findByRole("heading", { name: "Minhas requisições" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("GET /api/v1/requisitions/?page=&page_size=&search=&status=")).toBeInTheDocument();
+    expect(await screen.findByText("REQ-2026-000101")).toBeInTheDocument();
+    expect(screen.getAllByText("Rascunho").length).toBeGreaterThan(0);
+    expect(screen.getByText("Beneficiário terceiro")).toBeInTheDocument();
+  });
+
+  it("does not show third-party badge when creator and beneficiary are the same", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((request: Request) => {
+        if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+          return sessionResponse(chefeSession());
+        }
+
+        if (requestUrl(request).includes("/api/v1/requisitions/mine/")) {
+          return requisitionListResponse([
+            requisitionListItem({
+              criador: {
+                id: 10,
+                matricula_funcional: "91003",
+                nome_completo: "Solicitante Operacional",
+              },
+              beneficiario: {
+                id: 10,
+                matricula_funcional: "91003",
+                nome_completo: "Solicitante Operacional",
+              },
+            }),
+          ]);
+        }
+
+        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+      }),
+    );
+
+    renderRoute("/minhas-requisicoes");
+
+    expect(await screen.findByText("REQ-2026-000101")).toBeInTheDocument();
+    expect(screen.queryByText("Beneficiário terceiro")).not.toBeInTheDocument();
+  });
+
+  it("sends list filters from the URL to backend", async () => {
+    const requestedUrls: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((request: Request) => {
+        requestedUrls.push(requestUrl(request));
+
+        if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+          return sessionResponse();
+        }
+
+        if (requestUrl(request).includes("/api/v1/requisitions/mine/")) {
+          return requisitionListResponse();
+        }
+
+        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+      }),
+    );
+
+    renderRoute("/minhas-requisicoes?page=2&search=REQ-2026&status=rascunho");
+
+    expect(await screen.findByText("REQ-2026-000101")).toBeInTheDocument();
+
+    const listUrl = new URL(requestedUrls.find((url) => url.includes("/api/v1/requisitions/mine/"))!);
+    expect(listUrl.searchParams.get("page")).toBe("2");
+    expect(listUrl.searchParams.get("page_size")).toBe("20");
+    expect(listUrl.searchParams.get("search")).toBe("REQ-2026");
+    expect(listUrl.searchParams.get("status")).toBe("rascunho");
+  });
+
+  it("updates filters in the URL and resets pagination", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((request: Request) => {
+        if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+          return sessionResponse();
+        }
+
+        if (requestUrl(request).includes("/api/v1/requisitions/mine/")) {
+          return requisitionListResponse();
+        }
+
+        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+      }),
+    );
+
+    const { container } = renderRoute("/minhas-requisicoes?page=3");
+
+    expect(await screen.findByText("REQ-2026-000101")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Busca"), {
+      target: { value: "papel" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Filtrar" }));
+
+    await waitFor(() => {
+      expect(container.ownerDocument.location.pathname).toBe("/minhas-requisicoes");
+      expect(container.ownerDocument.location.search).not.toContain("page=3");
+      expect(container.ownerDocument.location.search).toContain("search=papel");
+    });
+  });
+
+  it("opens canonical requisition detail from the list", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((request: Request) => {
+        if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+          return sessionResponse();
+        }
+
+        if (requestUrl(request).endsWith("/api/v1/requisitions/101/")) {
+          return requisitionDetailResponse();
+        }
+
+        if (requestUrl(request).includes("/api/v1/requisitions/mine/")) {
+          return requisitionListResponse();
+        }
+
+        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+      }),
+    );
+
+    const { container } = renderRoute("/minhas-requisicoes?search=REQ");
+
+    expect(await screen.findByText("REQ-2026-000101")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("link", { name: "Abrir" }));
+
+    await waitFor(() => {
+      expect(container.ownerDocument.location.pathname).toBe("/requisicoes/101");
+    });
+    expect(await screen.findByRole("heading", { name: "REQ-2026-000101" })).toBeInTheDocument();
+    expect(screen.queryByText("Terceiro")).not.toBeInTheDocument();
+    expect(screen.getByText("Papel sulfite A4")).toBeInTheDocument();
+    expect(screen.getByText("Autorização parcial: Saldo parcial")).toBeInTheDocument();
+    expect(screen.getByText("Autorizado parcialmente por saldo.")).toBeInTheDocument();
   });
 
   it("logs out from authenticated shell and returns to login", async () => {

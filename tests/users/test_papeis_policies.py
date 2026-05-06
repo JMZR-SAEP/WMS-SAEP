@@ -11,6 +11,7 @@ Cobre os invariantes:
 """
 
 import pytest
+from django.contrib.auth.models import AnonymousUser
 
 from apps.users.models import PapelChoices, Setor, User
 from apps.users.policies import (
@@ -19,6 +20,10 @@ from apps.users.policies import (
     pode_operar_estoque,
     pode_operar_estoque_chefia,
     pode_ver_fila_atendimento,
+    setor_responsavel_chefia,
+    usuario_almoxarifado,
+    usuario_chefe_almoxarifado,
+    usuario_operacional_ativo,
 )
 
 # ---------------------------------------------------------------------------
@@ -56,6 +61,59 @@ class TestPapelDefault:
             nome_completo="Usuário Padrão",
         )
         assert user.papel == PapelChoices.SOLICITANTE
+
+
+@pytest.mark.django_db
+class TestPredicadosGenericosUsuario:
+    def test_anonymous_nao_e_operacional_nem_almoxarifado(self):
+        user = AnonymousUser()
+
+        assert usuario_operacional_ativo(user) is False
+        assert usuario_almoxarifado(user) is False
+        assert usuario_chefe_almoxarifado(user) is False
+
+    def test_usuario_inativo_nao_e_operacional(self):
+        user = _criar_user("00002", is_active=False)
+
+        assert usuario_operacional_ativo(user) is False
+
+    def test_superuser_nao_e_operacional(self):
+        user = User.objects.create_superuser(
+            matricula_funcional="00003",
+            password="testpass123",
+            nome_completo="Super Admin Predicado",
+        )
+
+        assert usuario_operacional_ativo(user) is False
+        assert usuario_almoxarifado(user) is False
+        assert usuario_chefe_almoxarifado(user) is False
+
+    def test_auxiliar_almoxarifado_cai_no_predicado_correto(self):
+        user = _criar_user("00004", PapelChoices.AUXILIAR_ALMOXARIFADO)
+
+        assert usuario_operacional_ativo(user) is True
+        assert usuario_almoxarifado(user) is True
+        assert usuario_chefe_almoxarifado(user) is False
+
+    def test_chefe_almoxarifado_cai_no_predicado_correto(self):
+        user = _criar_user("00005", PapelChoices.CHEFE_ALMOXARIFADO)
+
+        assert usuario_operacional_ativo(user) is True
+        assert usuario_almoxarifado(user) is True
+        assert usuario_chefe_almoxarifado(user) is True
+
+    def test_setor_responsavel_chefia_retorna_setor_para_chefia(self):
+        chefe = _criar_user("00006", PapelChoices.CHEFE_SETOR)
+        setor = _criar_setor("Planejamento Predicado", chefe)
+        chefe.setor = setor
+        chefe.save(update_fields=["setor"])
+
+        assert setor_responsavel_chefia(chefe) == setor
+
+    def test_setor_responsavel_chefia_retorna_none_para_papel_sem_chefia(self):
+        user = _criar_user("00007", PapelChoices.SOLICITANTE)
+
+        assert setor_responsavel_chefia(user) is None
 
 
 # ---------------------------------------------------------------------------
@@ -208,6 +266,15 @@ class TestPodeAutorizarSetor:
         setor_outro = _criar_setor("Obras", chefe_outro)
 
         assert pode_autorizar_setor(chefe_alm, setor_outro) is False
+
+    def test_per05_chefe_almoxarifado_pode_autorizar_setor_sob_responsabilidade(self):
+        """PER-05 — Chefe de Almoxarifado usa o setor onde é chefe responsável."""
+        chefe_alm = _criar_user("600041", PapelChoices.CHEFE_ALMOXARIFADO)
+        setor_alm = _criar_setor("Almoxarifado Central", chefe_alm)
+        chefe_alm.setor = setor_alm
+        chefe_alm.save(update_fields=["setor"])
+
+        assert pode_autorizar_setor(chefe_alm, setor_alm) is True
 
     def test_per06_superusuario_nao_pode_autorizar_setor(self):
         """PER-06 — Superusuário não autoriza requisições operacionais."""

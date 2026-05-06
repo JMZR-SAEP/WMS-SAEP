@@ -42,6 +42,7 @@ Technical baseline:
 - Requisition public numbers start only on first submission for authorization, never on draft creation
 - Requisition public numbering is annual and concurrency-safe
 - A returned-to-draft requisition keeps its existing `numero_publico`
+- Draft requisitions are creator-owned: while `status=rascunho`, only the creator may list, view, edit, submit, discard, or cancel the request; a third-party beneficiary gains visibility only after the request leaves draft and loses it again on return to draft
 - Pending-approvals listing must contain only `aguardando_autorizacao` requests in the caller scope
 - Authorization/recusal permission checks run in services against the `select_for_update()`-locked requisition, not against a stale caller instance
 - Partial or zero authorization requires non-blank trimmed justification; authorization payload cannot repeat `item_id`; at least one authorized item must remain with quantity greater than zero

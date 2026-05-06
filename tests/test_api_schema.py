@@ -141,6 +141,7 @@ class TestOpenAPISchema:
         assert "/api/v1/materials/" in paths
         assert "/api/v1/requisitions/" in paths
         assert "/api/v1/requisitions/{id}/" in paths
+        assert "/api/v1/requisitions/mine/" in paths
         assert "/api/v1/requisitions/{id}/draft/" in paths
         assert "/api/v1/requisitions/{id}/submit/" in paths
         assert "/api/v1/requisitions/{id}/return-to-draft/" in paths
@@ -187,6 +188,19 @@ class TestOpenAPISchema:
             == error_ref
         )
         assert "PaginatedRequisicaoListPaginatedList" not in schema["components"]["schemas"]
+
+        mine_operation = paths["/api/v1/requisitions/mine/"]["get"]
+        mine_parameters = {param["name"]: param for param in mine_operation["parameters"]}
+        assert set(mine_parameters) >= {"page", "page_size", "search", "status"}
+        assert mine_operation["operationId"] == "requisitions_mine"
+        assert (
+            mine_operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"]
+            == "#/components/schemas/RequisicaoListPaginated"
+        )
+        assert (
+            mine_operation["responses"]["403"]["content"]["application/json"]["schema"]["$ref"]
+            == error_ref
+        )
 
         detail_operation = paths["/api/v1/requisitions/{id}/"]["get"]
         assert detail_operation["operationId"] == "requisitions_retrieve"

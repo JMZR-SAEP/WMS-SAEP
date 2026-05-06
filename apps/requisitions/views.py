@@ -14,7 +14,10 @@ from rest_framework.viewsets import GenericViewSet
 
 from apps.core.api.serializers import ErrorResponseSerializer
 from apps.requisitions.filters import RequisicaoFilter
-from apps.requisitions.policies import queryset_requisicoes_visiveis
+from apps.requisitions.policies import (
+    queryset_requisicoes_pessoais,
+    queryset_requisicoes_visiveis,
+)
 from apps.requisitions.serializers import (
     RequisicaoAuthorizeInputSerializer,
     RequisicaoCancelInputSerializer,
@@ -129,6 +132,63 @@ class RequisicaoViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, Generi
     )
     def list(self, request, *args, **kwargs):
         return super().list(request, *args, **kwargs)
+
+    @extend_schema(
+        operation_id="requisitions_mine",
+        tags=["requisitions"],
+        description=(
+            "Lista paginada das requisições pessoais do usuário autenticado. "
+            "Inclui apenas requisições em que o usuário é criador ou beneficiário."
+        ),
+        parameters=[
+            OpenApiParameter(
+                name="page",
+                description="Número da página (padrão: 1)",
+                required=False,
+                type=int,
+                location=OpenApiParameter.QUERY,
+            ),
+            OpenApiParameter(
+                name="page_size",
+                description="Quantidade de resultados por página (padrão: 20, máximo: 100)",
+                required=False,
+                type=int,
+                location=OpenApiParameter.QUERY,
+            ),
+            OpenApiParameter(
+                name="search",
+                description="Busca textual por número público, nome do beneficiário ou nome do criador.",
+                required=False,
+                type=str,
+                location=OpenApiParameter.QUERY,
+            ),
+            OpenApiParameter(
+                name="status",
+                description="Filtro exato por status da requisição.",
+                required=False,
+                type=str,
+                location=OpenApiParameter.QUERY,
+            ),
+        ],
+        responses={
+            200: forced_singular_serializer(RequisicaoListPaginatedSerializer),
+            403: ErrorResponseSerializer(),
+        },
+    )
+    @action(detail=False, methods=["get"], url_path="mine")
+    def mine(self, request):
+        queryset = (
+            queryset_requisicoes_pessoais(
+                request.user,
+                skip_prefetch=True,
+            )
+            .annotate(total_itens=Count("itens"))
+            .order_by("-updated_at", "-id")
+        )
+        queryset = self.filter_queryset(queryset)
+        page = self.paginate_queryset(queryset)
+        serializer = RequisicaoListOutputSerializer(page, many=True)
+        return self.get_paginated_response(serializer.data)
 
     @extend_schema(
         operation_id="requisitions_retrieve",

@@ -157,6 +157,7 @@ O frontend do piloto fica bloqueado até concluir:
    - `GET /api/v1/users/beneficiary-lookup/?q=...`
 3. Leituras canônicas de requisição:
    - `GET /api/v1/requisitions/`
+   - `GET /api/v1/requisitions/mine/`
    - `GET /api/v1/requisitions/{id}/`
 4. Update de rascunho:
    - ação/endpoint explícito de atualização por substituição completa do rascunho
@@ -167,7 +168,11 @@ Regras complementares:
 - mínimo de 3 caracteres;
 - retorno curto, sem paginação;
 - só usuários ativos e aptos ao fluxo;
-- `GET /api/v1/requisitions/` deve ser paginado e ter busca textual simples + filtro por status;
+- `GET /api/v1/requisitions/` continua representando visibilidade operacional ampla;
+- `GET /api/v1/requisitions/mine/` alimenta `Minhas requisições` e deve retornar:
+  - em `rascunho`: apenas requisições com `criador_id = user.id`;
+  - fora de `rascunho`: requisições com `criador_id = user.id OR beneficiario_id = user.id`;
+- ambas as listas devem ser paginadas e ter busca textual simples + filtro por status quando expostas à SPA;
 - lista de requisições usa serializer próprio e mais leve que o detalhe.
 
 ## 9. Sequência de implementação
@@ -200,8 +205,10 @@ Estado atual após a fatia #37:
 ### Minhas requisições
 
 - lista única;
+- consome `GET /api/v1/requisitions/mine/`, não a lista operacional ampla;
 - mostrar `numero_publico` ou badge `Rascunho`;
 - destacar beneficiário quando for diferente do usuário logado;
+- beneficiário terceiro só enxerga a requisição depois que ela sai de `rascunho`; se ela voltar para `rascunho`, deve sumir da lista e o detalhe passa a responder `404`;
 - ordenar por atualização mais recente;
 - filtros mínimos: busca textual e status;
 - datas exibidas são derivadas contextualmente do status.
