@@ -20,7 +20,7 @@ from apps.stock.models import EstoqueMaterial
 from apps.stock.services import registrar_saldo_inicial
 from apps.users.models import PapelChoices, Setor, User
 
-SEED_PASSWORD = "1234"
+SEED_PASSWORD = "piloto-minimo"
 SEED_OBSERVACAO_PREFIX = "SEED_PILOT_MINIMO"
 SEED_RASCUNHO = f"{SEED_OBSERVACAO_PREFIX}:rascunho"
 SEED_AGUARDANDO = f"{SEED_OBSERVACAO_PREFIX}:aguardando"
@@ -804,8 +804,8 @@ def carregar_seed_pilot_minimo() -> None:
             material=material_saldo_intermediario,
         )
         _seed_requisicao_aguardando_secundario_terceiro(
-            criador=solicitante_secundario,
-            beneficiario=auxiliar_setor_secundario,
+            criador=auxiliar_setor_secundario,
+            beneficiario=solicitante_secundario,
             material=material_variacao_secundario,
         )
         _seed_requisicao_autorizada_secundario(
