@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useFieldArray, useForm, useWatch } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -144,6 +144,7 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
     name: "itens",
   });
   const beneficiaryMode = useWatch({ control: form.control, name: "beneficiaryMode" }) ?? "self";
+  const previousBeneficiaryModeRef = useRef(beneficiaryMode);
   const beneficiaryLabelValue = useWatch({ control: form.control, name: "beneficiaryLabel" });
   const beneficiarySearch =
     useWatch({ control: form.control, name: "beneficiarySearch" })?.trim() ?? "";
@@ -179,7 +180,11 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
       const self = currentUserBeneficiary(session);
       form.setValue("beneficiaryId", String(self.id));
       form.setValue("beneficiaryLabel", beneficiaryLabel(self));
+    } else if (previousBeneficiaryModeRef.current === "self") {
+      form.setValue("beneficiaryId", "");
+      form.setValue("beneficiaryLabel", "");
     }
+    previousBeneficiaryModeRef.current = beneficiaryMode;
   }, [beneficiaryMode, form, session]);
 
   function afterMutationSuccess(requisition: RequisicaoDetail) {

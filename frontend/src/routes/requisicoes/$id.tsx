@@ -127,8 +127,18 @@ function DetalheRequisicaoPage() {
 
   const requisicao = detailQuery.data;
   if (requisicao.status === "rascunho") {
-    if (!sessionQuery.data) {
+    if (sessionQuery.isLoading) {
       return <div className="loading-state">Carregando sessão...</div>;
+    }
+    if (sessionQuery.isError) {
+      return (
+        <div className="error-panel">
+          {queryErrorMessage(sessionQuery.error, "Não foi possível carregar a sessão.")}
+        </div>
+      );
+    }
+    if (!sessionQuery.data) {
+      return <div className="error-panel">Sessão indisponível.</div>;
     }
     return <DraftRequisitionEditor initialRequisition={requisicao} session={sessionQuery.data} />;
   }

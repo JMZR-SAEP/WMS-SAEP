@@ -940,6 +940,42 @@ describe("frontend scaffold router", () => {
     });
   });
 
+  it("requires selecting a beneficiary after switching from self to third-party", async () => {
+    let createdPayload: unknown;
+    const fetchMock = vi.fn(async (request: Request) => {
+      if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+        return sessionResponse(authSession("auxiliar_setor"));
+      }
+
+      if (requestUrl(request).includes("/api/v1/materials/")) {
+        return materialListResponse();
+      }
+
+      if (requestUrl(request).endsWith("/api/v1/requisitions/") && request.method === "POST") {
+        createdPayload = await request.json();
+        return requisitionDetailResponse();
+      }
+
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderRoute("/requisicoes/nova");
+
+    expect(await screen.findByRole("heading", { name: "Nova requisição" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Buscar material"), {
+      target: { value: "papel" },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Adicionar Papel sulfite A4" }));
+    fireEvent.click(screen.getByLabelText("Para terceiro"));
+    fireEvent.click(screen.getByRole("button", { name: "Salvar rascunho" }));
+
+    expect(
+      await screen.findByText("Informe beneficiário e ao menos um item com quantidade maior que zero."),
+    ).toBeInTheDocument();
+    expect(createdPayload).toBeUndefined();
+  });
+
   it("updates an existing draft with full replacement payload", async () => {
     let updatedPayload: unknown;
     const fetchMock = vi.fn(async (request: Request) => {
