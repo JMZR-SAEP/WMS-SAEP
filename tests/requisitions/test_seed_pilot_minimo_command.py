@@ -6,7 +6,7 @@ from django.core.management.base import CommandError
 from django.test import override_settings
 
 from apps.materials.models import Material
-from apps.requisitions.models import Requisicao, StatusRequisicao
+from apps.requisitions.models import Requisicao, StatusRequisicao, TipoEvento
 from apps.requisitions.seed_pilot_minimo import carregar_seed_pilot_minimo
 from apps.stock.models import EstoqueMaterial
 from apps.users.models import PapelChoices, User
@@ -194,3 +194,8 @@ class TestSeedPilotMinimoCommand:
         )
         assert requisicao_corrigida.status == StatusRequisicao.AGUARDANDO_AUTORIZACAO
         assert requisicao_corrigida.beneficiario.matricula_funcional == "solicitante3"
+        assert requisicao_corrigida.setor_beneficiario == requisicao_corrigida.beneficiario.setor
+        assert requisicao_corrigida.eventos.filter(tipo_evento=TipoEvento.RETORNO_RASCUNHO).exists()
+        assert requisicao_corrigida.eventos.filter(
+            tipo_evento=TipoEvento.REENVIO_AUTORIZACAO
+        ).exists()

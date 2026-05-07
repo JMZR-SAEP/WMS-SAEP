@@ -507,6 +507,13 @@ class TestAuthAPI:
             password="senha-segura-123",
             nome_completo="Super Admin Lookup",
         )
+        superuser_com_setor = User.objects.create_superuser(
+            matricula_funcional="99902",
+            password="senha-segura-123",
+            nome_completo="Super Admin Lookup Setor",
+        )
+        superuser_com_setor.setor = setor_ti
+        superuser_com_setor.save(update_fields=["setor"])
 
         self._criar_usuario(
             matricula="22503",
@@ -527,6 +534,13 @@ class TestAuthAPI:
 
         client = APIClient()
         client.force_authenticate(user=superuser)
+
+        response = client.get(reverse("user-beneficiary-lookup"), {"q": "Carla"})
+
+        assert response.status_code == 200
+        assert response.data == []
+
+        client.force_authenticate(user=superuser_com_setor)
 
         response = client.get(reverse("user-beneficiary-lookup"), {"q": "Carla"})
 

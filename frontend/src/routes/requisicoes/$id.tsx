@@ -71,6 +71,12 @@ function DetalheRequisicaoPage() {
   const { id } = Route.useParams();
   const { contexto } = Route.useSearch();
   const requisicaoId = Number(id);
+  const backTo =
+    contexto === "autorizacao"
+      ? "/autorizacoes"
+      : contexto === "atendimento"
+        ? "/atendimentos"
+        : "/minhas-requisicoes";
   const queryClient = useQueryClient();
   const navigate = useNavigate({ from: "/requisicoes/$id" });
   const detailQuery = useQuery({
@@ -127,7 +133,7 @@ function DetalheRequisicaoPage() {
         </div>
         <div className="detail-actions">
           {contexto ? <span className="context-chip">Contexto: {contexto}</span> : null}
-          <Link className="action-link compact-action" to="/minhas-requisicoes">
+          <Link className="action-link compact-action" to={backTo}>
             Voltar
           </Link>
         </div>

@@ -1,4 +1,4 @@
-import { queryOptions } from "@tanstack/react-query";
+import { keepPreviousData, queryOptions } from "@tanstack/react-query";
 
 import { ApiError, isAuthError, type ErrorResponse } from "../auth/session";
 import { apiClient } from "../../shared/api/client";
@@ -111,6 +111,7 @@ export function myRequisitionsQueryOptions(params: RequisicoesListParams) {
   return queryOptions({
     queryKey: requisitionsQueryKeys.mine(params),
     queryFn: () => fetchMyRequisitions(params),
+    placeholderData: keepPreviousData,
     retry: retryUnlessClientOrAuthError,
   });
 }

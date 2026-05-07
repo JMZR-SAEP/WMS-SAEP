@@ -12,9 +12,11 @@ from apps.requisitions.services import (
     ItemAutorizacaoData,
     ItemRascunhoData,
     atender_requisicao,
+    atualizar_rascunho_requisicao,
     autorizar_requisicao,
     criar_rascunho_requisicao,
     enviar_para_autorizacao,
+    retornar_para_rascunho,
 )
 from apps.stock.models import EstoqueMaterial
 from apps.stock.services import registrar_saldo_inicial
@@ -471,12 +473,22 @@ def _seed_requisicao_aguardando_secundario_terceiro(
     if requisicao is not None:
         if requisicao.beneficiario_id == beneficiario.id:
             return requisicao
-        Requisicao.objects.filter(pk=requisicao.pk).update(
-            beneficiario=beneficiario,
-            setor_beneficiario=beneficiario.setor,
+
+        requisicao = retornar_para_rascunho(requisicao=requisicao, ator=criador)
+        requisicao = atualizar_rascunho_requisicao(
+            requisicao_id=requisicao.id,
+            ator=criador,
+            beneficiario_id=beneficiario.id,
+            observacao=SEED_AGUARDANDO_SECUNDARIO_TERC,
+            itens=[
+                ItemRascunhoData(
+                    material_id=material.id,
+                    quantidade_solicitada=Decimal("2"),
+                    observacao="Aguardando autorizacao com terceiro beneficiario",
+                )
+            ],
         )
-        requisicao.refresh_from_db()
-        return requisicao
+        return enviar_para_autorizacao(requisicao=requisicao, ator=criador)
 
     requisicao = criar_rascunho_requisicao(
         criador=criador,

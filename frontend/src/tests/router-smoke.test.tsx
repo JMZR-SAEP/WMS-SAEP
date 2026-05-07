@@ -667,6 +667,38 @@ describe("frontend scaffold router", () => {
     expect(screen.getByText("Papel sulfite A4")).toBeInTheDocument();
     expect(screen.getByText("Autorização parcial: Saldo parcial")).toBeInTheDocument();
     expect(screen.getByText("Autorizado parcialmente por saldo.")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("link", { name: "Voltar" }));
+
+    await waitFor(() => {
+      expect(container.ownerDocument.location.pathname).toBe("/minhas-requisicoes");
+    });
+  });
+
+  it("returns from requisition detail to authorization queue when opened with authorization context", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((request: Request) => {
+        if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+          return sessionResponse(chefeSession());
+        }
+
+        if (requestUrl(request).endsWith("/api/v1/requisitions/101/")) {
+          return requisitionDetailResponse();
+        }
+
+        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+      }),
+    );
+
+    const { container } = renderRoute("/requisicoes/101?contexto=autorizacao");
+
+    expect(await screen.findByRole("heading", { name: "REQ-2026-000101" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("link", { name: "Voltar" }));
+
+    await waitFor(() => {
+      expect(container.ownerDocument.location.pathname).toBe("/autorizacoes");
+    });
   });
 
   it("logs out from authenticated shell and returns to login", async () => {
