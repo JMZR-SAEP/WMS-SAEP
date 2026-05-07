@@ -34,7 +34,13 @@ def setor_responsavel_chefia(user):
     ):
         return None
 
-    return getattr(user, "setor_como_chefe", None)
+    setor = getattr(user, "setor_como_chefe", None)
+    if (
+        user.papel == PapelChoices.CHEFE_ALMOXARIFADO
+        and getattr(setor, "nome", None) != "Almoxarifado"
+    ):
+        return None
+    return setor
 
 
 def pode_criar_requisicao_para(criador, beneficiario) -> bool:

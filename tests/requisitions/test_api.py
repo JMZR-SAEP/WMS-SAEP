@@ -1861,7 +1861,7 @@ class TestRequisicaoAPI:
 
     def test_fila_autorizacao_chefe_almoxarifado_retorna_apenas_setor_sob_responsabilidade(self):
         setor_almox = self._criar_setor(
-            "Almoxarifado Aprova",
+            "Almoxarifado",
             "900141",
             papel=PapelChoices.CHEFE_ALMOXARIFADO,
         )

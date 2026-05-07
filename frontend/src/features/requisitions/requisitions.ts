@@ -132,7 +132,7 @@ export function isThirdPartyBeneficiary(item: RequisicaoListItem | RequisicaoDet
 }
 
 export function displayRequisitionIdentifier(requisicao: Pick<RequisicaoListItem, "numero_publico">) {
-  return requisicao.numero_publico ?? "Rascunho";
+  return requisicao.numero_publico ?? null;
 }
 
 export function formatDateTime(value: string | null | undefined) {
@@ -140,10 +140,15 @@ export function formatDateTime(value: string | null | undefined) {
     return "Não informado";
   }
 
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "Não informado";
+  }
+
   return new Intl.DateTimeFormat("pt-BR", {
     dateStyle: "medium",
     timeStyle: "short",
-  }).format(new Date(value));
+  }).format(date);
 }
 
 export function tipoEventoLabel(tipoEvento: RequisicaoTimelineEventType) {

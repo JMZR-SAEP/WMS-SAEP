@@ -269,12 +269,21 @@ class TestPodeAutorizarSetor:
 
     def test_per05_chefe_almoxarifado_pode_autorizar_setor_sob_responsabilidade(self):
         """PER-05 — Chefe de Almoxarifado usa o setor onde é chefe responsável."""
-        chefe_alm = _criar_user("600041", PapelChoices.CHEFE_ALMOXARIFADO)
+        chefe_alm = _criar_user("60041", PapelChoices.CHEFE_ALMOXARIFADO)
         setor_alm = _criar_setor("Almoxarifado", chefe_alm)
         chefe_alm.setor = setor_alm
         chefe_alm.save(update_fields=["setor"])
 
         assert pode_autorizar_setor(chefe_alm, setor_alm) is True
+
+    def test_per05_chefe_almoxarifado_nao_pode_autorizar_setor_nao_canonico_mesmo_sob_chefia(self):
+        chefe_alm = _criar_user("60042", PapelChoices.CHEFE_ALMOXARIFADO)
+        setor_alm = _criar_setor("Almoxarifado Central", chefe_alm)
+        chefe_alm.setor = setor_alm
+        chefe_alm.save(update_fields=["setor"])
+
+        assert setor_responsavel_chefia(chefe_alm) is None
+        assert pode_autorizar_setor(chefe_alm, setor_alm) is False
 
     def test_per06_superusuario_nao_pode_autorizar_setor(self):
         """PER-06 — Superusuário não autoriza requisições operacionais."""

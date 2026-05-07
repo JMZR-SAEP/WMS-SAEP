@@ -123,7 +123,7 @@ function DetalheRequisicaoPage() {
       <div className="detail-hero">
         <div>
           <p className="eyebrow">Detalhe canônico</p>
-          <h1>{displayRequisitionIdentifier(requisicao)}</h1>
+          <h1>{displayRequisitionIdentifier(requisicao) ?? statusLabel(requisicao.status)}</h1>
           <p>
             {statusLabel(requisicao.status)} - {requisicao.setor_beneficiario.nome}
           </p>

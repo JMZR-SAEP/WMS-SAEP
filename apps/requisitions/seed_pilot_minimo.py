@@ -585,6 +585,10 @@ def carregar_seed_pilot_minimo() -> None:
             nome="Manutenção de Redes de Água",
             chefe_responsavel=chefe_setor,
         )
+        # This seed intentionally provisions the secondary sector in two steps:
+        # the chief is created first without setor, then the setor is created,
+        # and finally the chief is upserted again with the setor assigned.
+        # The sequence currently relies on _upsert_setor not calling Setor.clean().
         chefe_setor_secundario = _upsert_usuario(
             matricula="chefe-setor-2",
             nome_completo="Rafael Siqueira",

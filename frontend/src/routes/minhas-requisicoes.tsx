@@ -89,6 +89,10 @@ function MinhasRequisicoesPage() {
   );
   const authError = listQuery.isError && isAuthError(listQuery.error);
 
+  useEffect(() => {
+    setSearchDraft(currentSearch);
+  }, [currentSearch]);
+
   const rows = listQuery.data?.results ?? [];
   const columns = useMemo<ColumnDef<RequisicaoListItem>[]>(
     () => [
@@ -245,7 +249,7 @@ function MinhasRequisicoesPage() {
               const status = event.target.value
                 ? (event.target.value as RequisicaoStatus)
                 : undefined;
-              void updateSearch(searchDraft, status);
+              void updateSearch(currentSearch, status);
             }}
             value={searchParams.status ?? ""}
           >

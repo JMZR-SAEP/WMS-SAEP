@@ -28,7 +28,9 @@ class Setor(models.Model):
         related_name="setor_como_chefe",
         help_text="Chefe responsável pelo setor.",
     )
-    auxiliar_responsavel = models.OneToOneField(  # TODO: assumir a modelagem de “auxiliar responsável nomeado” e propagar a regra pelo sistema inteiro. ajustar lógicas, admin, seed e testes para refletir isso.
+    # Auxiliary ownership is provisional and may later expand to admin, seed,
+    # policies, and tests once the full workflow is closed.
+    auxiliar_responsavel = models.OneToOneField(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
         related_name="setor_como_auxiliar",
@@ -57,9 +59,7 @@ class Setor(models.Model):
 
         responsavel = getattr(self, field_name)
         setor_do_responsavel = getattr(responsavel, "setor", None)
-        if setor_do_responsavel is self:
-            return
-        if self.pk and responsavel.setor_id == self.pk:
+        if setor_do_responsavel is not None and setor_do_responsavel.pk == self.pk:
             return
 
         if setor_do_responsavel is None:

@@ -712,9 +712,6 @@ def enviar_para_autorizacao(*, requisicao: Requisicao, ator: User) -> Requisicao
 
 
 def retornar_para_rascunho(*, requisicao: Requisicao, ator: User) -> Requisicao:
-    if not pode_manipular_pre_autorizacao(ator, requisicao):
-        raise PermissionDenied("Apenas criador ou beneficiário podem retornar a requisição.")
-
     with transaction.atomic():
         requisicao = (
             Requisicao.objects.select_for_update()
@@ -722,6 +719,9 @@ def retornar_para_rascunho(*, requisicao: Requisicao, ator: User) -> Requisicao:
             .prefetch_related("itens__material", "eventos__usuario")
             .get(pk=requisicao.pk)
         )
+
+        if not pode_manipular_pre_autorizacao(ator, requisicao):
+            raise PermissionDenied("Apenas criador ou beneficiário podem retornar a requisição.")
 
         if requisicao.status != StatusRequisicao.AGUARDANDO_AUTORIZACAO:
             raise DomainConflict(
@@ -749,13 +749,13 @@ def retornar_para_rascunho(*, requisicao: Requisicao, ator: User) -> Requisicao:
 
 
 def descartar_rascunho_nunca_enviado(*, requisicao: Requisicao, ator: User) -> None:
-    if not pode_manipular_pre_autorizacao(ator, requisicao):
-        raise PermissionDenied("Apenas criador pode descartar a requisição.")
-
     with transaction.atomic():
         requisicao = (
             Requisicao.objects.select_for_update().prefetch_related("itens").get(pk=requisicao.pk)
         )
+
+        if not pode_manipular_pre_autorizacao(ator, requisicao):
+            raise PermissionDenied("Apenas criador pode descartar a requisição.")
 
         if requisicao.status != StatusRequisicao.RASCUNHO:
             raise DomainConflict(
