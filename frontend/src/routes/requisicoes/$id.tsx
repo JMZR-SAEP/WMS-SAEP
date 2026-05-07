@@ -54,6 +54,10 @@ function QuantityBlock({ item }: { item: RequisicaoActionItem }) {
   );
 }
 
+function hasText(value: string | null | undefined) {
+  return Boolean(value?.trim());
+}
+
 function TimelineEvent({ event }: { event: RequisicaoTimelineEvent }) {
   return (
     <li className="timeline-event">
@@ -197,39 +201,39 @@ function DetalheRequisicaoPage() {
         </section>
       </div>
 
-      {requisicao.observacao ||
-      requisicao.observacao_atendimento ||
-      requisicao.motivo_recusa ||
-      requisicao.motivo_cancelamento ||
-      requisicao.retirante_fisico ? (
+      {hasText(requisicao.observacao) ||
+      hasText(requisicao.observacao_atendimento) ||
+      hasText(requisicao.motivo_recusa) ||
+      hasText(requisicao.motivo_cancelamento) ||
+      hasText(requisicao.retirante_fisico) ? (
         <section className="detail-panel">
           <p className="eyebrow">Observações</p>
           <dl className="info-list notes-list">
-            {requisicao.observacao ? (
+            {hasText(requisicao.observacao) ? (
               <div>
                 <dt>Geral</dt>
                 <dd>{requisicao.observacao}</dd>
               </div>
             ) : null}
-            {requisicao.observacao_atendimento ? (
+            {hasText(requisicao.observacao_atendimento) ? (
               <div>
                 <dt>Atendimento</dt>
                 <dd>{requisicao.observacao_atendimento}</dd>
               </div>
             ) : null}
-            {requisicao.motivo_recusa ? (
+            {hasText(requisicao.motivo_recusa) ? (
               <div>
                 <dt>Recusa</dt>
                 <dd>{requisicao.motivo_recusa}</dd>
               </div>
             ) : null}
-            {requisicao.motivo_cancelamento ? (
+            {hasText(requisicao.motivo_cancelamento) ? (
               <div>
                 <dt>Cancelamento</dt>
                 <dd>{requisicao.motivo_cancelamento}</dd>
               </div>
             ) : null}
-            {requisicao.retirante_fisico ? (
+            {hasText(requisicao.retirante_fisico) ? (
               <div>
                 <dt>Retirante físico</dt>
                 <dd>{requisicao.retirante_fisico}</dd>

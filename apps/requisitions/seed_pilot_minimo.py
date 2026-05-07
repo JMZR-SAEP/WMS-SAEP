@@ -485,9 +485,20 @@ def _seed_requisicao_rascunho_manutencao_puro(
 def _seed_requisicao_aguardando_secundario_terceiro(
     *, criador: User, beneficiario: User, material: Material
 ) -> Requisicao:
+    item_data = ItemRascunhoData(
+        material_id=material.id,
+        quantidade_solicitada=Decimal("2"),
+        observacao="Aguardando autorizacao com terceiro beneficiario",
+    )
     requisicao = Requisicao.objects.filter(observacao=SEED_AGUARDANDO_SECUNDARIO_TERC).first()
     if requisicao is not None:
-        if requisicao.beneficiario_id == beneficiario.id:
+        item_atual = requisicao.itens.first()
+        item_diverge = item_atual is None or (
+            item_atual.material_id != item_data.material_id
+            or item_atual.quantidade_solicitada != item_data.quantidade_solicitada
+            or item_atual.observacao != item_data.observacao
+        )
+        if requisicao.beneficiario_id == beneficiario.id and not item_diverge:
             return requisicao
 
         requisicao = retornar_para_rascunho(requisicao=requisicao, ator=criador)
@@ -496,13 +507,7 @@ def _seed_requisicao_aguardando_secundario_terceiro(
             ator=criador,
             beneficiario_id=beneficiario.id,
             observacao=SEED_AGUARDANDO_SECUNDARIO_TERC,
-            itens=[
-                ItemRascunhoData(
-                    material_id=material.id,
-                    quantidade_solicitada=Decimal("2"),
-                    observacao="Aguardando autorizacao com terceiro beneficiario",
-                )
-            ],
+            itens=[item_data],
         )
         return enviar_para_autorizacao(requisicao=requisicao, ator=criador)
 
@@ -510,13 +515,7 @@ def _seed_requisicao_aguardando_secundario_terceiro(
         criador=criador,
         beneficiario=beneficiario,
         observacao=SEED_AGUARDANDO_SECUNDARIO_TERC,
-        itens=[
-            ItemRascunhoData(
-                material_id=material.id,
-                quantidade_solicitada=Decimal("2"),
-                observacao="Aguardando autorizacao com terceiro beneficiario",
-            )
-        ],
+        itens=[item_data],
     )
     return enviar_para_autorizacao(requisicao=requisicao, ator=criador)
 

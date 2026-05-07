@@ -556,10 +556,20 @@ describe("frontend scaffold router", () => {
         }
 
         if (requestUrl(request).includes("/api/v1/requisitions/mine/")) {
-          return new Response(JSON.stringify({ detail: "Falha no backend" }), {
-            status: 422,
-            headers: jsonHeaders,
-          });
+          return new Response(
+            JSON.stringify({
+              error: {
+                code: "validation_error",
+                message: "Falha no backend",
+                details: null,
+                trace_id: "trace-router-smoke",
+              },
+            }),
+            {
+              status: 422,
+              headers: jsonHeaders,
+            },
+          );
         }
 
         throw new Error(`Unexpected request: ${requestUrl(request)}`);
@@ -569,7 +579,7 @@ describe("frontend scaffold router", () => {
     renderRoute("/minhas-requisicoes");
 
     expect(await screen.findByText("Erro ao carregar")).toBeInTheDocument();
-    expect(screen.getByText("Não foi possível carregar requisições.")).toBeInTheDocument();
+    expect(screen.getByText("Falha no backend")).toBeInTheDocument();
     expect(screen.queryByText("Nenhuma requisição encontrada")).not.toBeInTheDocument();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });

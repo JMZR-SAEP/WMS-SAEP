@@ -201,6 +201,36 @@ class TestSeedPilotMinimoCommand:
             tipo_evento=TipoEvento.REENVIO_AUTORIZACAO
         ).exists()
 
+    def test_seed_reconcilia_aguardando_secundario_terceiro_quando_item_diverge(self):
+        call_command("seed_pilot_minimo")
+
+        requisicao = Requisicao.objects.get(
+            observacao="SEED_PILOT_MINIMO:aguardando_secundario_terceiro"
+        )
+        material_errado = Material.objects.get(codigo_completo="010.001.001")
+        requisicao.itens.update(
+            material=material_errado,
+            unidade_medida=material_errado.unidade_medida,
+            quantidade_solicitada=Decimal("9"),
+            observacao="Item divergente do seed",
+        )
+
+        call_command("seed_pilot_minimo")
+
+        requisicao_corrigida = Requisicao.objects.get(
+            observacao="SEED_PILOT_MINIMO:aguardando_secundario_terceiro"
+        )
+        item_corrigido = requisicao_corrigida.itens.get()
+
+        assert requisicao_corrigida.status == StatusRequisicao.AGUARDANDO_AUTORIZACAO
+        assert item_corrigido.material.codigo_completo == "010.001.007"
+        assert item_corrigido.quantidade_solicitada == Decimal("2")
+        assert item_corrigido.observacao == "Aguardando autorizacao com terceiro beneficiario"
+        assert requisicao_corrigida.eventos.filter(tipo_evento=TipoEvento.RETORNO_RASCUNHO).exists()
+        assert requisicao_corrigida.eventos.filter(
+            tipo_evento=TipoEvento.REENVIO_AUTORIZACAO
+        ).exists()
+
     def test_seed_reconcilia_rascunho_manutencao_terceiro_quando_item_diverge(self):
         call_command("seed_pilot_minimo")
 
