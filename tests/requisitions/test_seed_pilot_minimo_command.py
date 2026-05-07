@@ -54,6 +54,8 @@ class TestSeedPilotMinimoCommand:
         assert usuarios["auxiliar-almox"].papel == PapelChoices.AUXILIAR_ALMOXARIFADO
         assert usuarios["super"].is_superuser is True
         assert usuarios["super"].is_staff is True
+        assert usuarios["super"].setor_id is None
+        assert usuarios["super"].papel == PapelChoices.SOLICITANTE
         assert usuarios["inativo"].is_active is False
 
         materiais = {
@@ -175,3 +177,20 @@ class TestSeedPilotMinimoCommand:
             StatusRequisicao.AUTORIZADA,
             StatusRequisicao.ATENDIDA,
         ]
+
+    def test_seed_reconcilia_beneficiario_do_cenario_secundario_terceiro(self):
+        call_command("seed_pilot_minimo")
+
+        requisicao = Requisicao.objects.get(
+            observacao="SEED_PILOT_MINIMO:aguardando_secundario_terceiro"
+        )
+        beneficiario_errado = User.objects.get(matricula_funcional="solicitante2")
+        Requisicao.objects.filter(pk=requisicao.pk).update(beneficiario=beneficiario_errado)
+
+        call_command("seed_pilot_minimo")
+
+        requisicao_corrigida = Requisicao.objects.get(
+            observacao="SEED_PILOT_MINIMO:aguardando_secundario_terceiro"
+        )
+        assert requisicao_corrigida.status == StatusRequisicao.AGUARDANDO_AUTORIZACAO
+        assert requisicao_corrigida.beneficiario.matricula_funcional == "solicitante3"

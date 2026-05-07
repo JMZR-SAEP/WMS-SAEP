@@ -518,6 +518,61 @@ describe("frontend scaffold router", () => {
     expect(screen.queryByText("Beneficiário terceiro")).not.toBeInTheDocument();
   });
 
+  it("shows pluralized record count in the status chip", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((request: Request) => {
+        if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+          return sessionResponse();
+        }
+
+        if (requestUrl(request).includes("/api/v1/requisitions/mine/")) {
+          return requisitionListResponse([
+            requisitionListItem(),
+            requisitionListItem({
+              id: 102,
+              numero_publico: "REQ-2026-000102",
+            }),
+          ]);
+        }
+
+        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+      }),
+    );
+
+    renderRoute("/minhas-requisicoes");
+
+    expect(await screen.findByText("REQ-2026-000101")).toBeInTheDocument();
+    expect(screen.getByText("2 registros")).toBeInTheDocument();
+  });
+
+  it("shows only the error panel when requisitions loading fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((request: Request) => {
+        if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+          return sessionResponse();
+        }
+
+        if (requestUrl(request).includes("/api/v1/requisitions/mine/")) {
+          return new Response(JSON.stringify({ detail: "Falha no backend" }), {
+            status: 422,
+            headers: jsonHeaders,
+          });
+        }
+
+        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+      }),
+    );
+
+    renderRoute("/minhas-requisicoes");
+
+    expect(await screen.findByText("Erro ao carregar")).toBeInTheDocument();
+    expect(screen.getByText("Não foi possível carregar requisições.")).toBeInTheDocument();
+    expect(screen.queryByText("Nenhuma requisição encontrada")).not.toBeInTheDocument();
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+  });
+
   it("sends list filters from the URL to backend", async () => {
     const requestedUrls: string[] = [];
     vi.stubGlobal(

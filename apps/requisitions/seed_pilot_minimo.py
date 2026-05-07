@@ -257,7 +257,7 @@ def _seed_requisicao_atendida_parcial(
             ItemAutorizacaoData(
                 item_id=item.id,
                 quantidade_autorizada=Decimal("2"),
-                justificativa_autorizacao_parcial="Reserva parcial para o cenario da manutencao.",
+                justificativa_autorizacao_parcial="Reserva parcial para o cenario de atendimento.",
             )
         ],
     )
@@ -469,6 +469,13 @@ def _seed_requisicao_aguardando_secundario_terceiro(
 ) -> Requisicao:
     requisicao = Requisicao.objects.filter(observacao=SEED_AGUARDANDO_SECUNDARIO_TERC).first()
     if requisicao is not None:
+        if requisicao.beneficiario_id == beneficiario.id:
+            return requisicao
+        Requisicao.objects.filter(pk=requisicao.pk).update(
+            beneficiario=beneficiario,
+            setor_beneficiario=beneficiario.setor,
+        )
+        requisicao.refresh_from_db()
         return requisicao
 
     requisicao = criar_rascunho_requisicao(
@@ -660,8 +667,8 @@ def carregar_seed_pilot_minimo() -> None:
         _upsert_usuario(
             matricula="super",
             nome_completo="Superusuario",
-            papel=PapelChoices.CHEFE_ALMOXARIFADO,
-            setor=setor_almox,
+            papel=PapelChoices.SOLICITANTE,
+            setor=None,
             is_active=True,
             is_superuser=True,
             is_staff=True,

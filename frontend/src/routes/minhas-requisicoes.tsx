@@ -88,6 +88,13 @@ function MinhasRequisicoesPage() {
     }),
   );
   const authError = listQuery.isError && isAuthError(listQuery.error);
+  const recordsLabel = listQuery.isLoading
+    ? "Carregando..."
+    : listQuery.isError && !listQuery.data
+      ? "Erro ao carregar"
+      : listQuery.data
+        ? `${listQuery.data.count} ${listQuery.data.count === 1 ? "registro" : "registros"}`
+        : "0 registros";
 
   useEffect(() => {
     setSearchDraft(currentSearch);
@@ -219,7 +226,7 @@ function MinhasRequisicoesPage() {
         </div>
         <div className="status-chip">
           <span className="status-dot" />
-          {listQuery.data ? `${listQuery.data.count} registro(s)` : "Carregando"}
+          {recordsLabel}
         </div>
       </div>
 
@@ -270,38 +277,40 @@ function MinhasRequisicoesPage() {
         <div className="error-panel">{queryErrorMessage(listQuery.error)}</div>
       ) : null}
 
-      <div className="table-frame">
-        {listQuery.isPending ? (
-          <div className="loading-state">Carregando requisições...</div>
-        ) : rows.length === 0 ? (
-          <EmptyState />
-        ) : (
-          <table className="operational-table">
-            <thead>
-              {table.getHeaderGroups().map((headerGroup) => (
-                <tr key={headerGroup.id}>
-                  {headerGroup.headers.map((header) => (
-                    <th key={header.id}>
-                      {flexRender(header.column.columnDef.header, header.getContext())}
-                    </th>
-                  ))}
-                </tr>
-              ))}
-            </thead>
-            <tbody>
-              {table.getRowModel().rows.map((row) => (
-                <tr key={row.id}>
-                  {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+      {!listQuery.isError || authError ? (
+        <div className="table-frame">
+          {listQuery.isPending ? (
+            <div className="loading-state">Carregando requisições...</div>
+          ) : rows.length === 0 ? (
+            <EmptyState />
+          ) : (
+            <table className="operational-table">
+              <thead>
+                {table.getHeaderGroups().map((headerGroup) => (
+                  <tr key={headerGroup.id}>
+                    {headerGroup.headers.map((header) => (
+                      <th key={header.id}>
+                        {flexRender(header.column.columnDef.header, header.getContext())}
+                      </th>
+                    ))}
+                  </tr>
+                ))}
+              </thead>
+              <tbody>
+                {table.getRowModel().rows.map((row) => (
+                  <tr key={row.id}>
+                    {row.getVisibleCells().map((cell) => (
+                      <td key={cell.id}>
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      ) : null}
 
       <div className="pagination-bar">
         <button
