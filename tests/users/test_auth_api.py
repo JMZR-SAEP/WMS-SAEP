@@ -483,7 +483,7 @@ class TestAuthAPI:
         assert response.status_code == 200
         assert response.data == []
 
-    def test_beneficiary_lookup_para_superusuario_retorna_visibilidade_ampla_elegivel(self):
+    def test_beneficiary_lookup_para_superusuario_retorna_lista_vazia(self):
         chefe_ti = self._criar_usuario(
             matricula="22501",
             nome_completo="Chefe TI Super",
@@ -531,10 +531,7 @@ class TestAuthAPI:
         response = client.get(reverse("user-beneficiary-lookup"), {"q": "Carla"})
 
         assert response.status_code == 200
-        assert [item["nome_completo"] for item in response.data] == [
-            "Carla RH",
-            "Carla TI",
-        ]
+        assert response.data == []
 
     def test_beneficiary_lookup_sem_autenticacao_retorna_401(self):
         client = APIClient()
