@@ -1,11 +1,17 @@
 from decimal import Decimal
 
 import pytest
+from django.contrib.auth.models import AnonymousUser
 from django.urls import reverse
 from rest_framework.test import APIClient
 
 from apps.materials.models import GrupoMaterial, Material, SubgrupoMaterial
 from apps.requisitions.models import EventoTimeline, Requisicao, StatusRequisicao, TipoEvento
+from apps.requisitions.policies import (
+    pode_visualizar_requisicao,
+    queryset_requisicoes_pessoais,
+    queryset_requisicoes_visiveis,
+)
 from apps.stock.models import EstoqueMaterial, MovimentacaoEstoque, TipoMovimentacao
 from apps.users.models import PapelChoices, Setor, User
 
@@ -277,6 +283,12 @@ class TestRequisicaoAPI:
             numero_publico="REQ-2026-000111",
             observacao="Requisicao enviada",
         )
+        rascunho_terceiro_como_beneficiario = self._criar_requisicao_com_item(
+            criador=outro_usuario,
+            beneficiario=usuario,
+            material=material,
+            status=StatusRequisicao.RASCUNHO,
+        )
         self._criar_requisicao_com_item(
             criador=outro_usuario,
             beneficiario=outro_usuario,
@@ -295,6 +307,7 @@ class TestRequisicaoAPI:
         assert response.data["page_size"] == 20
         resultado_ids = [item["id"] for item in response.data["results"]]
         assert resultado_ids == [submetida.id, rascunho.id]
+        assert rascunho_terceiro_como_beneficiario.id not in resultado_ids
         assert response.data["results"][1]["numero_publico"] is None
         assert response.data["results"][0]["total_itens"] == 1
         assert "itens" not in response.data["results"][0]
@@ -326,6 +339,12 @@ class TestRequisicaoAPI:
             status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
             numero_publico="REQ-2026-000777",
         )
+        rascunho_terceiro = self._criar_requisicao_com_item(
+            criador=usuario_b,
+            beneficiario=usuario_b,
+            material=material,
+            status=StatusRequisicao.RASCUNHO,
+        )
 
         client = APIClient()
         client.force_authenticate(user=almoxarife)
@@ -334,6 +353,266 @@ class TestRequisicaoAPI:
         assert response.status_code == 200
         assert response.data["count"] >= 1
         assert any(item["id"] == requisicao.id for item in response.data["results"])
+        assert all(item["id"] != rascunho_terceiro.id for item in response.data["results"])
+
+    def test_lista_requisicoes_chefe_almoxarifado_ve_todos_os_setores(self):
+        setor_almoxarifado = self._criar_setor(
+            "Almoxarifado Chefia",
+            "9000801",
+            papel=PapelChoices.CHEFE_ALMOXARIFADO,
+        )
+        chefe_almoxarifado = setor_almoxarifado.chefe_responsavel
+        setor_outro = self._criar_setor("Patrimonio Chefia", "9000802")
+        usuario_outro = self._criar_usuario(
+            "100091",
+            "Solicitante Patrimonio Chefia",
+            setor=setor_outro,
+        )
+        material = self._criar_material_com_estoque("001.001.151")
+        requisicao = self._criar_requisicao_com_item(
+            criador=usuario_outro,
+            beneficiario=usuario_outro,
+            material=material,
+            status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
+            numero_publico="REQ-2026-000778",
+        )
+        rascunho_terceiro = self._criar_requisicao_com_item(
+            criador=usuario_outro,
+            beneficiario=usuario_outro,
+            material=material,
+            status=StatusRequisicao.RASCUNHO,
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=chefe_almoxarifado)
+        response = client.get(reverse("requisicao-list"))
+
+        assert response.status_code == 200
+        assert response.data["count"] == 1
+        assert any(item["id"] == requisicao.id for item in response.data["results"])
+        assert all(item["id"] != rascunho_terceiro.id for item in response.data["results"])
+
+    def test_lista_requisicoes_chefe_setor_ve_apenas_proprio_setor_e_pessoais(self):
+        setor_a = self._criar_setor("Planejamento Lista", "9000803")
+        setor_b = self._criar_setor("Frota Lista", "9000804")
+        chefe_setor = setor_a.chefe_responsavel
+        usuario_setor_a = self._criar_usuario("100092", "Usuario Setor A", setor=setor_a)
+        usuario_setor_b = self._criar_usuario("100093", "Usuario Setor B", setor=setor_b)
+        material = self._criar_material_com_estoque("001.001.152")
+        requisicao_setor_a = self._criar_requisicao_com_item(
+            criador=usuario_setor_a,
+            beneficiario=usuario_setor_a,
+            material=material,
+            status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
+            numero_publico="REQ-2026-000779",
+        )
+        rascunho_setor_a = self._criar_requisicao_com_item(
+            criador=usuario_setor_a,
+            beneficiario=usuario_setor_a,
+            material=material,
+            status=StatusRequisicao.RASCUNHO,
+        )
+        requisicao_setor_b = self._criar_requisicao_com_item(
+            criador=usuario_setor_b,
+            beneficiario=usuario_setor_b,
+            material=material,
+            status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
+            numero_publico="REQ-2026-000780",
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=chefe_setor)
+        response = client.get(reverse("requisicao-list"))
+
+        assert response.status_code == 200
+        resultado_ids = {item["id"] for item in response.data["results"]}
+        assert response.data["count"] == len(resultado_ids) == 1
+        assert requisicao_setor_a.id in resultado_ids
+        assert rascunho_setor_a.id not in resultado_ids
+        assert requisicao_setor_b.id not in resultado_ids
+
+    def test_mine_lista_apenas_requisicoes_criadas_ou_como_beneficiario(self):
+        setor_a = self._criar_setor("Operacao Mine", "900081")
+        setor_b = self._criar_setor("Suporte Mine", "900082")
+        setor_almoxarifado = self._criar_setor("Almoxarifado Mine", "900083")
+        chefe_setor = setor_a.chefe_responsavel
+        almoxarife = self._criar_usuario(
+            "100092",
+            "Auxiliar Almoxarifado Mine",
+            papel=PapelChoices.AUXILIAR_ALMOXARIFADO,
+            setor=setor_almoxarifado,
+        )
+        usuario = self._criar_usuario("100093", "Usuario Mine", setor=setor_a)
+        outro_usuario_setor_a = self._criar_usuario(
+            "100094",
+            "Outro Usuario Setor A",
+            setor=setor_a,
+        )
+        outro_usuario_setor_b = self._criar_usuario(
+            "100095",
+            "Outro Usuario Setor B",
+            setor=setor_b,
+        )
+        material = self._criar_material_com_estoque("001.001.058")
+
+        criada_pelo_usuario = self._criar_requisicao_com_item(
+            criador=usuario,
+            beneficiario=usuario,
+            material=material,
+            status=StatusRequisicao.RASCUNHO,
+        )
+        rascunho_terceiro_como_beneficiario = self._criar_requisicao_com_item(
+            criador=outro_usuario_setor_a,
+            beneficiario=usuario,
+            material=material,
+            status=StatusRequisicao.RASCUNHO,
+        )
+        beneficiario_usuario = self._criar_requisicao_com_item(
+            criador=outro_usuario_setor_a,
+            beneficiario=usuario,
+            material=material,
+            status=StatusRequisicao.AUTORIZADA,
+            numero_publico="REQ-2026-000901",
+        )
+        terceiro_beneficiario = self._criar_requisicao_com_item(
+            criador=usuario,
+            beneficiario=outro_usuario_setor_b,
+            material=material,
+            status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
+            numero_publico="REQ-2026-000902",
+        )
+        apenas_setor_do_chefe = self._criar_requisicao_com_item(
+            criador=outro_usuario_setor_a,
+            beneficiario=outro_usuario_setor_a,
+            material=material,
+            status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
+            numero_publico="REQ-2026-000903",
+        )
+        apenas_visivel_almoxarifado = self._criar_requisicao_com_item(
+            criador=outro_usuario_setor_b,
+            beneficiario=outro_usuario_setor_b,
+            material=material,
+            status=StatusRequisicao.AUTORIZADA,
+            numero_publico="REQ-2026-000904",
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=usuario)
+        response = client.get(reverse("requisicao-mine"))
+
+        assert response.status_code == 200
+        assert response.data["count"] == 3
+        resultado_ids = {item["id"] for item in response.data["results"]}
+        assert resultado_ids == {
+            criada_pelo_usuario.id,
+            beneficiario_usuario.id,
+            terceiro_beneficiario.id,
+        }
+        assert rascunho_terceiro_como_beneficiario.id not in resultado_ids
+        assert apenas_setor_do_chefe.id not in resultado_ids
+        assert apenas_visivel_almoxarifado.id not in resultado_ids
+
+        response_search = client.get(reverse("requisicao-mine"), {"search": "000902"})
+        assert response_search.status_code == 200
+        assert response_search.data["count"] == 1
+        assert response_search.data["results"][0]["id"] == terceiro_beneficiario.id
+
+        response_status = client.get(
+            reverse("requisicao-mine"),
+            {"status": StatusRequisicao.AUTORIZADA},
+        )
+        assert response_status.status_code == 200
+        assert response_status.data["count"] == 1
+        assert response_status.data["results"][0]["id"] == beneficiario_usuario.id
+
+        client.force_authenticate(user=chefe_setor)
+        response_chefe = client.get(reverse("requisicao-mine"))
+        assert response_chefe.status_code == 200
+        assert response_chefe.data["count"] == 0
+
+        client.force_authenticate(user=almoxarife)
+        response_almoxarife = client.get(reverse("requisicao-mine"))
+        assert response_almoxarife.status_code == 200
+        assert response_almoxarife.data["count"] == 0
+
+    def test_mine_queryset_pessoais_retorna_apenas_criador_ou_beneficiario(self):
+        setor_a = self._criar_setor("Operacao Mine Queryset", "9000831")
+        setor_b = self._criar_setor("Suporte Mine Queryset", "9000832")
+        usuario = self._criar_usuario("100094", "Usuario Mine Queryset", setor=setor_a)
+        outro_setor_a = self._criar_usuario("100095", "Outro Setor A", setor=setor_a)
+        outro_setor_b = self._criar_usuario("100096", "Outro Setor B", setor=setor_b)
+        material = self._criar_material_com_estoque("001.001.153")
+
+        criada_pelo_usuario = self._criar_requisicao_com_item(
+            criador=usuario,
+            beneficiario=outro_setor_b,
+            material=material,
+            status=StatusRequisicao.RASCUNHO,
+        )
+        rascunho_terceiro_como_beneficiario = self._criar_requisicao_com_item(
+            criador=outro_setor_a,
+            beneficiario=usuario,
+            material=material,
+            status=StatusRequisicao.RASCUNHO,
+        )
+        beneficiario_usuario = self._criar_requisicao_com_item(
+            criador=outro_setor_a,
+            beneficiario=usuario,
+            material=material,
+            status=StatusRequisicao.AUTORIZADA,
+            numero_publico="REQ-2026-000905",
+        )
+        fora_escopo = self._criar_requisicao_com_item(
+            criador=outro_setor_a,
+            beneficiario=outro_setor_b,
+            material=material,
+            status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
+            numero_publico="REQ-2026-000906",
+        )
+
+        queryset_ids = set(
+            queryset_requisicoes_pessoais(usuario, skip_prefetch=True).values_list("id", flat=True)
+        )
+
+        assert queryset_ids == {criada_pelo_usuario.id, beneficiario_usuario.id}
+        assert rascunho_terceiro_como_beneficiario.id not in queryset_ids
+        assert fora_escopo.id not in queryset_ids
+
+    def test_mine_queryset_superuser_nao_trata_base_inteira_como_pessoal(self):
+        setor = self._criar_setor("Operacao Super Mine", "9000833")
+        usuario = self._criar_usuario("100097", "Usuario Super Mine", setor=setor)
+        superuser = User.objects.create_superuser(
+            matricula_funcional="99003",
+            password="testpass123",
+            nome_completo="Super Mine",
+        )
+        superuser.setor = setor
+        superuser.save(update_fields=["setor"])
+        material = self._criar_material_com_estoque("001.001.154")
+
+        requisicao_superuser = self._criar_requisicao_com_item(
+            criador=superuser,
+            beneficiario=superuser,
+            material=material,
+            status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
+            numero_publico="REQ-2026-000907",
+        )
+        requisicao_outro = self._criar_requisicao_com_item(
+            criador=usuario,
+            beneficiario=usuario,
+            material=material,
+            status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
+            numero_publico="REQ-2026-000908",
+        )
+
+        queryset_ids = set(
+            queryset_requisicoes_pessoais(superuser, skip_prefetch=True).values_list(
+                "id", flat=True
+            )
+        )
+
+        assert queryset_ids == {requisicao_superuser.id}
+        assert requisicao_outro.id not in queryset_ids
 
     def test_lista_requisicoes_filtra_por_status_e_busca_textual(self):
         setor = self._criar_setor("Compras", "900074")
@@ -410,6 +689,60 @@ class TestRequisicaoAPI:
         assert response.data["eventos"][0]["usuario"]["id"] == autorizador.id
         assert response.data["eventos"][0]["observacao"] == "Autorizado parcialmente por saldo."
 
+    def test_detail_beneficiario_nao_visualiza_rascunho_de_terceiro_e_visualiza_apos_envio(self):
+        setor = self._criar_setor("Patrimonio Beneficiario", "9000751")
+        criador = self._criar_usuario(
+            "1000861",
+            "Auxiliar Patrimonio Beneficiario",
+            papel=PapelChoices.AUXILIAR_SETOR,
+            setor=setor,
+        )
+        beneficiario = self._criar_usuario("1000862", "Beneficiario Patrimonio", setor=setor)
+        material = self._criar_material_com_estoque("001.001.154")
+        rascunho = self._criar_requisicao_com_item(
+            criador=criador,
+            beneficiario=beneficiario,
+            material=material,
+            status=StatusRequisicao.RASCUNHO,
+        )
+        requisicao_enviada = self._criar_requisicao_com_item(
+            criador=criador,
+            beneficiario=beneficiario,
+            material=material,
+            status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
+            numero_publico="REQ-2026-000445",
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=beneficiario)
+        response_rascunho = client.get(reverse("requisicao-detail", args=[rascunho.id]))
+        response_enviada = client.get(reverse("requisicao-detail", args=[requisicao_enviada.id]))
+
+        assert response_rascunho.status_code == 404
+        assert response_rascunho.data["error"]["code"] == "not_found"
+        assert response_enviada.status_code == 200
+        assert response_enviada.data["id"] == requisicao_enviada.id
+
+    def test_detail_chefe_setor_visualiza_requisicao_do_proprio_setor(self):
+        setor = self._criar_setor("Patrimonio Chefia Detail", "9000752")
+        chefe_setor = setor.chefe_responsavel
+        usuario = self._criar_usuario("1000863", "Solicitante Chefia Detail", setor=setor)
+        material = self._criar_material_com_estoque("001.001.155")
+        requisicao = self._criar_requisicao_com_item(
+            criador=usuario,
+            beneficiario=usuario,
+            material=material,
+            status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
+            numero_publico="REQ-2026-000446",
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=chefe_setor)
+        response = client.get(reverse("requisicao-detail", args=[requisicao.id]))
+
+        assert response.status_code == 200
+        assert response.data["id"] == requisicao.id
+
     def test_detail_requisicao_fora_do_escopo_retorna_404(self):
         setor_a = self._criar_setor("TI", "900076")
         setor_b = self._criar_setor("Frota", "900077")
@@ -430,6 +763,147 @@ class TestRequisicaoAPI:
 
         assert response.status_code == 404
         assert response.data["error"]["code"] == "not_found"
+
+    def test_detail_chefe_setor_nao_visualiza_requisicao_de_outro_setor(self):
+        setor_a = self._criar_setor("TI Chefia", "9000761")
+        setor_b = self._criar_setor("Frota Chefia", "9000762")
+        chefe_setor = setor_a.chefe_responsavel
+        usuario_b = self._criar_usuario("1000881", "Solicitante Frota Chefia", setor=setor_b)
+        material = self._criar_material_com_estoque("001.001.156")
+        requisicao = self._criar_requisicao_com_item(
+            criador=usuario_b,
+            beneficiario=usuario_b,
+            material=material,
+            status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
+            numero_publico="REQ-2026-000556",
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=chefe_setor)
+        response = client.get(reverse("requisicao-detail", args=[requisicao.id]))
+
+        assert response.status_code == 404
+        assert response.data["error"]["code"] == "not_found"
+
+    def test_detail_auxiliar_almoxarifado_visualiza_requisicao_de_qualquer_setor(self):
+        setor_almoxarifado = self._criar_setor("Almoxarifado Detail", "9000763")
+        setor_outro = self._criar_setor("Frota Detail", "9000764")
+        almoxarife = self._criar_usuario(
+            "1000882",
+            "Auxiliar Almoxarifado Detail",
+            papel=PapelChoices.AUXILIAR_ALMOXARIFADO,
+            setor=setor_almoxarifado,
+        )
+        usuario_outro = self._criar_usuario(
+            "1000883", "Solicitante Frota Detail", setor=setor_outro
+        )
+        material = self._criar_material_com_estoque("001.001.157")
+        requisicao = self._criar_requisicao_com_item(
+            criador=usuario_outro,
+            beneficiario=usuario_outro,
+            material=material,
+            status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
+            numero_publico="REQ-2026-000557",
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=almoxarife)
+        response = client.get(reverse("requisicao-detail", args=[requisicao.id]))
+
+        assert response.status_code == 200
+        assert response.data["id"] == requisicao.id
+
+    def test_detail_chefe_almoxarifado_visualiza_requisicao_de_qualquer_setor(self):
+        setor_almoxarifado = self._criar_setor(
+            "Almoxarifado Detail Chefia",
+            "9000765",
+            papel=PapelChoices.CHEFE_ALMOXARIFADO,
+        )
+        chefe_almoxarifado = setor_almoxarifado.chefe_responsavel
+        setor_outro = self._criar_setor("Frota Detail Chefia", "9000766")
+        usuario_outro = self._criar_usuario(
+            "1000884", "Solicitante Frota Detail Chefia", setor=setor_outro
+        )
+        material = self._criar_material_com_estoque("001.001.158")
+        requisicao = self._criar_requisicao_com_item(
+            criador=usuario_outro,
+            beneficiario=usuario_outro,
+            material=material,
+            status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
+            numero_publico="REQ-2026-000558",
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=chefe_almoxarifado)
+        response = client.get(reverse("requisicao-detail", args=[requisicao.id]))
+
+        assert response.status_code == 200
+        assert response.data["id"] == requisicao.id
+
+    def test_detail_usuario_inativo_nao_visualiza_requisicao(self):
+        setor = self._criar_setor("Patrimonio Inativo", "9000767")
+        usuario_inativo = self._criar_usuario(
+            "1000885",
+            "Solicitante Inativo Detail",
+            setor=setor,
+            is_active=False,
+        )
+        material = self._criar_material_com_estoque("001.001.159")
+        requisicao = self._criar_requisicao_com_item(
+            criador=usuario_inativo,
+            beneficiario=usuario_inativo,
+            material=material,
+            status=StatusRequisicao.RASCUNHO,
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=usuario_inativo)
+        response = client.get(reverse("requisicao-detail", args=[requisicao.id]))
+
+        assert response.status_code == 404
+        assert response.data["error"]["code"] == "not_found"
+
+    def test_detail_superuser_visualiza_requisicao(self):
+        setor = self._criar_setor("Patrimonio Superuser", "9000768")
+        usuario = self._criar_usuario("1000886", "Solicitante Superuser Detail", setor=setor)
+        superuser = User.objects.create_superuser(
+            matricula_funcional="99004",
+            password="testpass123",
+            nome_completo="Super Admin Detail",
+        )
+        material = self._criar_material_com_estoque("001.001.160")
+        requisicao = self._criar_requisicao_com_item(
+            criador=usuario,
+            beneficiario=usuario,
+            material=material,
+            status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
+            numero_publico="REQ-2026-000559",
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=superuser)
+        response = client.get(reverse("requisicao-detail", args=[requisicao.id]))
+
+        assert response.status_code == 200
+        assert response.data["id"] == requisicao.id
+
+    def test_detail_anonimo_nao_visualiza_requisicao(self):
+        setor = self._criar_setor("Patrimonio Anonimo", "9000769")
+        usuario = self._criar_usuario("1000887", "Solicitante Anonimo Detail", setor=setor)
+        material = self._criar_material_com_estoque("001.001.161")
+        requisicao = self._criar_requisicao_com_item(
+            criador=usuario,
+            beneficiario=usuario,
+            material=material,
+            status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
+            numero_publico="REQ-2026-000560",
+        )
+
+        client = APIClient()
+        response = client.get(reverse("requisicao-detail", args=[requisicao.id]))
+
+        assert response.status_code == 403
+        assert response.data["error"]["code"] == "not_authenticated"
 
     def test_detail_ignora_filtros_de_listagem_na_url(self):
         setor = self._criar_setor("Obras", "900078")
@@ -452,6 +926,100 @@ class TestRequisicaoAPI:
 
         assert response.status_code == 200
         assert response.data["id"] == requisicao.id
+
+    def test_lista_requisicoes_coerente_com_pode_visualizar_detail_nos_cenarios_principais(self):
+        setor_a = self._criar_setor("Coerencia Setor A", "9000771")
+        setor_b = self._criar_setor("Coerencia Setor B", "9000772")
+        setor_almoxarifado = self._criar_setor(
+            "Coerencia Almoxarifado",
+            "9000773",
+            papel=PapelChoices.CHEFE_ALMOXARIFADO,
+        )
+        criador = self._criar_usuario(
+            "1000888",
+            "Criador Coerencia",
+            papel=PapelChoices.AUXILIAR_SETOR,
+            setor=setor_a,
+        )
+        beneficiario = self._criar_usuario("1000889", "Beneficiario Coerencia", setor=setor_a)
+        auxiliar_setor = self._criar_usuario(
+            "1000890",
+            "Auxiliar Setor Coerencia",
+            papel=PapelChoices.AUXILIAR_SETOR,
+            setor=setor_a,
+        )
+        chefe_setor = setor_a.chefe_responsavel
+        solicitante_outro_setor = self._criar_usuario(
+            "1000891",
+            "Solicitante Outro Setor Coerencia",
+            setor=setor_b,
+        )
+        auxiliar_almoxarifado = self._criar_usuario(
+            "1000892",
+            "Auxiliar Almoxarifado Coerencia",
+            papel=PapelChoices.AUXILIAR_ALMOXARIFADO,
+            setor=setor_almoxarifado,
+        )
+        chefe_almoxarifado = setor_almoxarifado.chefe_responsavel
+        usuario_inativo = self._criar_usuario(
+            "1000893",
+            "Usuario Inativo Coerencia",
+            setor=setor_a,
+            is_active=False,
+        )
+        superuser = User.objects.create_superuser(
+            matricula_funcional="99005",
+            password="testpass123",
+            nome_completo="Super Admin Coerencia",
+        )
+        material = self._criar_material_com_estoque("001.001.162")
+        requisicao_rascunho = self._criar_requisicao_com_item(
+            criador=criador,
+            beneficiario=beneficiario,
+            material=material,
+            status=StatusRequisicao.RASCUNHO,
+        )
+        requisicao_aguardando = self._criar_requisicao_com_item(
+            criador=criador,
+            beneficiario=beneficiario,
+            material=material,
+            status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
+            numero_publico="REQ-2026-000561",
+        )
+
+        cenarios = [
+            (criador, True, True),
+            (beneficiario, False, True),
+            (chefe_setor, False, True),
+            (auxiliar_setor, False, False),
+            (solicitante_outro_setor, False, False),
+            (auxiliar_almoxarifado, False, True),
+            (chefe_almoxarifado, False, True),
+            (usuario_inativo, False, False),
+            (superuser, True, True),
+        ]
+        for user, esperado_rascunho, esperado_aguardando in cenarios:
+            queryset_ids = set(
+                queryset_requisicoes_visiveis(user, skip_prefetch=True).values_list("id", flat=True)
+            )
+            user_id = getattr(user, "matricula_funcional", "<anon>")
+            assert pode_visualizar_requisicao(user, requisicao_rascunho) is esperado_rascunho, (
+                f"user={user_id} rascunho pode_visualizar esperado={esperado_rascunho}"
+            )
+            assert (requisicao_rascunho.id in queryset_ids) is esperado_rascunho, (
+                f"user={user_id} rascunho queryset esperado={esperado_rascunho}"
+            )
+            assert pode_visualizar_requisicao(user, requisicao_aguardando) is esperado_aguardando, (
+                f"user={user_id} aguardando pode_visualizar esperado={esperado_aguardando}"
+            )
+            assert (requisicao_aguardando.id in queryset_ids) is esperado_aguardando, (
+                f"user={user_id} aguardando queryset esperado={esperado_aguardando}"
+            )
+
+        queryset_anonimo = queryset_requisicoes_visiveis(AnonymousUser(), skip_prefetch=True)
+        assert pode_visualizar_requisicao(AnonymousUser(), requisicao_rascunho) is False
+        assert pode_visualizar_requisicao(AnonymousUser(), requisicao_aguardando) is False
+        assert queryset_anonimo.count() == 0
 
     def test_submit_gera_numero_publico_e_entrada_na_fila(self):
         setor = self._criar_setor("Planejamento", "90008")
@@ -504,6 +1072,41 @@ class TestRequisicaoAPI:
             requisicao=requisicao,
             tipo_evento=TipoEvento.RETORNO_RASCUNHO,
         ).exists()
+
+    def test_return_to_draft_beneficiario_pode_retornar_mas_perde_acesso_ao_rascunho(self):
+        setor = self._criar_setor("Patrimonio Retorno Beneficiario", "90009A")
+        criador = self._criar_usuario("10010A", "Criador Retorno", setor=setor)
+        beneficiario = self._criar_usuario("10010B", "Beneficiario Retorno", setor=setor)
+        material = self._criar_material_com_estoque("001.001.177")
+        requisicao = Requisicao.objects.create(
+            criador=criador,
+            beneficiario=beneficiario,
+            setor_beneficiario=setor,
+            numero_publico="REQ-2026-000011",
+            status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
+            data_envio_autorizacao="2026-04-30T10:00:00Z",
+        )
+        requisicao.itens.create(
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal("1"),
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=beneficiario)
+        response = client.post(reverse("requisicao-return-to-draft", args=[requisicao.id]))
+
+        assert response.status_code == 200
+        assert response.data["status"] == StatusRequisicao.RASCUNHO
+        assert response.data["numero_publico"] == "REQ-2026-000011"
+
+        detail_response = client.get(reverse("requisicao-detail", args=[requisicao.id]))
+        mine_response = client.get(reverse("requisicao-mine"))
+
+        assert detail_response.status_code == 404
+        assert detail_response.data["error"]["code"] == "not_found"
+        assert mine_response.status_code == 200
+        assert mine_response.data["count"] == 0
 
     def test_update_draft_substitui_beneficiario_observacao_e_itens(self):
         setor = self._criar_setor("Patio", "900091")
@@ -648,6 +1251,28 @@ class TestRequisicaoAPI:
 
         assert response.status_code == 404
 
+    def test_update_draft_bloqueia_beneficiario_terceiro_em_rascunho(self):
+        setor = self._criar_setor("Patio Beneficiario Rascunho", "900093A")
+        criador = self._criar_usuario("100123A", "Criador Rascunho", setor=setor)
+        beneficiario = self._criar_usuario("100123B", "Beneficiario Rascunho", setor=setor)
+        material = self._criar_material_com_estoque("001.001.178")
+        requisicao = self._criar_requisicao_com_item(
+            criador=criador,
+            beneficiario=beneficiario,
+            material=material,
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=beneficiario)
+        response = client.put(
+            reverse("requisicao-update-draft", args=[requisicao.id]),
+            self._payload_requisicao(beneficiario_id=beneficiario.id, material_id=material.id),
+            format="json",
+        )
+
+        assert response.status_code == 404
+        assert response.data["error"]["code"] == "not_found"
+
     def test_update_draft_bloqueia_chefe_almox_visivel_sem_permissao_contextual(self):
         setor = self._criar_setor("Patio Permissao Contextual", "900096")
         setor_almox = self._criar_setor(
@@ -663,6 +1288,8 @@ class TestRequisicaoAPI:
             criador=criador,
             beneficiario=beneficiario,
             material=material,
+            status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
+            numero_publico="REQ-2026-000322",
         )
 
         client = APIClient()
@@ -743,6 +1370,25 @@ class TestRequisicaoAPI:
             tipo_evento=TipoEvento.REENVIO_AUTORIZACAO,
         ).exists()
 
+    def test_submit_beneficiario_terceiro_nao_pode_enviar_rascunho_de_outro(self):
+        setor = self._criar_setor("Frota Submit Terceiro", "90010A")
+        criador = self._criar_usuario("10011A", "Criador Submit", setor=setor)
+        beneficiario = self._criar_usuario("10011B", "Beneficiario Submit", setor=setor)
+        material = self._criar_material_com_estoque("001.001.179")
+        requisicao = Requisicao.objects.create(criador=criador, beneficiario=beneficiario)
+        requisicao.itens.create(
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal("1"),
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=beneficiario)
+        response = client.post(reverse("requisicao-submit", args=[requisicao.id]))
+
+        assert response.status_code == 404
+        assert response.data["error"]["code"] == "not_found"
+
     def test_discard_remove_rascunho_nunca_enviado(self):
         setor = self._criar_setor("Fiscal", "90011")
         usuario = self._criar_usuario("10012", "Solicitante Fiscal", setor=setor)
@@ -760,6 +1406,26 @@ class TestRequisicaoAPI:
 
         assert response.status_code == 204
         assert not Requisicao.objects.filter(pk=requisicao.pk).exists()
+
+    def test_discard_beneficiario_terceiro_nao_pode_descartar_rascunho_de_outro(self):
+        setor = self._criar_setor("Fiscal Terceiro", "90011A")
+        criador = self._criar_usuario("10012A", "Criador Fiscal", setor=setor)
+        beneficiario = self._criar_usuario("10012B", "Beneficiario Fiscal", setor=setor)
+        material = self._criar_material_com_estoque("001.001.180")
+        requisicao = Requisicao.objects.create(criador=criador, beneficiario=beneficiario)
+        requisicao.itens.create(
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal("1"),
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=beneficiario)
+        response = client.delete(reverse("requisicao-discard", args=[requisicao.id]))
+
+        assert response.status_code == 404
+        assert response.data["error"]["code"] == "not_found"
+        assert Requisicao.objects.filter(pk=requisicao.pk).exists()
 
     def test_discard_rascunho_formalizado_retorna_domain_conflict(self):
         setor = self._criar_setor("Fiscal Formalizado", "900111")
@@ -810,6 +1476,33 @@ class TestRequisicaoAPI:
         assert response.status_code == 200
         assert response.data["status"] == StatusRequisicao.CANCELADA
         assert response.data["numero_publico"] == "REQ-2026-000200"
+
+    def test_cancel_beneficiario_terceiro_nao_pode_cancelar_rascunho_numerado_de_outro(self):
+        setor = self._criar_setor("Almox Interno Terceiro", "90012A")
+        criador = self._criar_usuario("10013A", "Criador Almox", setor=setor)
+        beneficiario = self._criar_usuario("10013B", "Beneficiario Almox", setor=setor)
+        material = self._criar_material_com_estoque("001.001.181")
+        requisicao = Requisicao.objects.create(
+            criador=criador,
+            beneficiario=beneficiario,
+            numero_publico="REQ-2026-000201",
+            status=StatusRequisicao.RASCUNHO,
+            data_envio_autorizacao="2026-04-30T10:00:00Z",
+        )
+        requisicao.itens.create(
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal("1"),
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=beneficiario)
+        response = client.post(reverse("requisicao-cancel", args=[requisicao.id]))
+
+        assert response.status_code == 404
+        assert response.data["error"]["code"] == "not_found"
+        requisicao.refresh_from_db()
+        assert requisicao.status == StatusRequisicao.RASCUNHO
 
     def test_authorize_total_reserva_estoque_e_define_autorizador(self):
         setor = self._criar_setor("Producao", "90016")
@@ -1074,6 +1767,8 @@ class TestRequisicaoAPI:
             criador=requisitante,
             beneficiario=requisitante,
             setor_beneficiario=setor,
+            status=StatusRequisicao.CANCELADA,
+            numero_publico="REQ-2026-000404",
         )
         item = requisicao.itens.create(
             material=material,
@@ -1163,6 +1858,52 @@ class TestRequisicaoAPI:
         assert response.data["results"][0]["numero_publico"] == "REQ-2026-000300"
         assert response.data["results"][0]["total_itens"] == 1
         assert req_b.id not in [item["id"] for item in response.data["results"]]
+
+    def test_fila_autorizacao_chefe_almoxarifado_retorna_apenas_setor_sob_responsabilidade(self):
+        setor_almox = self._criar_setor(
+            "Almoxarifado",
+            "900141",
+            papel=PapelChoices.CHEFE_ALMOXARIFADO,
+        )
+        setor_outro = self._criar_setor("Obras Aprova", "900142")
+        chefe_almox = setor_almox.chefe_responsavel
+        solicitante_almox = self._criar_usuario("100141", "Solicitante Almox", setor=setor_almox)
+        solicitante_outro = self._criar_usuario("100142", "Solicitante Obras", setor=setor_outro)
+        material = self._criar_material_com_estoque("001.001.112")
+
+        req_almox = Requisicao.objects.create(
+            criador=solicitante_almox,
+            beneficiario=solicitante_almox,
+            numero_publico="REQ-2026-000302",
+            status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
+            data_envio_autorizacao="2026-04-30T12:00:00Z",
+        )
+        req_almox.itens.create(
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal("1"),
+        )
+        req_outro = Requisicao.objects.create(
+            criador=solicitante_outro,
+            beneficiario=solicitante_outro,
+            numero_publico="REQ-2026-000303",
+            status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
+            data_envio_autorizacao="2026-04-30T13:00:00Z",
+        )
+        req_outro.itens.create(
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal("1"),
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=chefe_almox)
+        response = client.get(reverse("requisicao-pending-approvals"))
+
+        assert response.status_code == 200
+        assert response.data["count"] == 1
+        assert response.data["results"][0]["id"] == req_almox.id
+        assert req_outro.id not in [item["id"] for item in response.data["results"]]
 
     def test_fila_autorizacao_bloqueia_papel_sem_permissao(self):
         setor = self._criar_setor("Gabinete", "90015")

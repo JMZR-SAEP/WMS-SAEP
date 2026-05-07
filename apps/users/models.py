@@ -25,8 +25,18 @@ class Setor(models.Model):
     chefe_responsavel = models.OneToOneField(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
-        related_name="setor_responsavel",
+        related_name="setor_como_chefe",
         help_text="Chefe responsável pelo setor.",
+    )
+    # Auxiliary ownership is provisional and may later expand to admin, seed,
+    # policies, and tests once the full workflow is closed.
+    auxiliar_responsavel = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="setor_como_auxiliar",
+        help_text="Auxiliar responsável pelo setor",
+        null=True,
+        blank=True,
     )
     is_active = models.BooleanField(
         default=True,
@@ -43,28 +53,35 @@ class Setor(models.Model):
     def __str__(self):
         return f"{self.nome} (Chefe: {self.chefe_responsavel.matricula_funcional})"
 
-    def clean(self):
-        super().clean()
-        if not self.chefe_responsavel_id:
+    def _validar_responsavel_no_setor(self, *, field_name: str, label: str) -> None:
+        if not getattr(self, f"{field_name}_id"):
             return
 
-        chefe_setor = getattr(self.chefe_responsavel, "setor", None)
-        if chefe_setor is self:
-            return
-        if self.pk and self.chefe_responsavel.setor_id == self.pk:
+        responsavel = getattr(self, field_name)
+        setor_do_responsavel = getattr(responsavel, "setor", None)
+        if setor_do_responsavel is not None and setor_do_responsavel.pk == self.pk:
             return
 
-        if chefe_setor is None:
-            raise ValidationError(
-                {"chefe_responsavel": "O chefe responsável deve pertencer a este setor."}
-            )
+        if setor_do_responsavel is None:
+            raise ValidationError({field_name: "O usuário não possui setor atribuído."})
 
         raise ValidationError(
             {
-                "chefe_responsavel": (
-                    f"O chefe responsável pertence ao setor '{chefe_setor.nome}', não a este setor."
+                field_name: (
+                    f"O {label} pertence ao setor '{setor_do_responsavel.nome}', não a este setor."
                 )
             }
+        )
+
+    def clean(self):
+        super().clean()
+        self._validar_responsavel_no_setor(
+            field_name="chefe_responsavel",
+            label="chefe responsável",
+        )
+        self._validar_responsavel_no_setor(
+            field_name="auxiliar_responsavel",
+            label="auxiliar responsável",
         )
 
 

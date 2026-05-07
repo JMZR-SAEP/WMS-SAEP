@@ -1,6 +1,6 @@
 # Requisitions authorization and fulfillment workflow
 
-Updated on 2026-05-01 after merge of PR #25.
+Updated on 2026-05-06 after merge of PR #54.
 
 ## Scope landed
 - `PIL-BE-REQ-002`: annual public numbering on first submission for authorization
@@ -38,6 +38,8 @@ View layer is a thin `RequisicaoViewSet`; domain rules live in `apps/requisition
 - Public number format is `REQ-AAAA-NNNNNN` and generation is concurrency-safe via `transaction.atomic()` + `select_for_update()` on the annual sequence row.
 - Re-submit after return to draft preserves the existing public number.
 - Drafts may temporarily exist with `status=rascunho` and `numero_publico` filled only when they were already formally submitted once and later returned to draft.
+- Draft ownership is creator-only: while `status=rascunho`, only the creator may list, view, edit, submit, discard, or cancel the requisition, even if it was created for a third-party beneficiary.
+- A third-party beneficiary gains visibility only after the requisition leaves `rascunho` for a non-draft state such as `aguardando_autorizacao`, and loses that visibility again if the request returns to `rascunho`.
 - If `data_envio_autorizacao` is filled, `numero_publico` is mandatory at DB level.
 - Draft discard is physical delete only for a request never formalized (`numero_publico` absent and `data_envio_autorizacao` null).
 - Cancel is logical and allowed for formalized draft or pending-authorization request; discard and cancel are different operations.

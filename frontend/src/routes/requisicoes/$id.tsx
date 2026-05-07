@@ -1,48 +1,290 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { z } from "zod";
 
 import { requireSession } from "../../features/auth/guards";
-import { FeaturePlaceholder } from "../../shared/ui/feature-placeholder";
+import { authQueryKeys, isAuthError } from "../../features/auth/session";
+import {
+    displayRequisitionIdentifier,
+    formatDateTime,
+    formatQuantity,
+    isThirdPartyBeneficiary,
+    queryErrorMessage,
+    requisitionDetailQueryOptions,
+    statusLabel,
+    tipoEventoLabel,
+    type RequisicaoActionItem,
+    type RequisicaoTimelineEvent,
+  } from "../../features/requisitions/requisitions";
 
-export const Route = createFileRoute("/requisicoes/$id")({
-  beforeLoad: ({ context, location }) =>
-    requireSession({ queryClient: context.queryClient, locationHref: location.href }),
-  component: DetalhePlaceholderPage,
+const detailSearchSchema = z.object({
+  contexto: z.enum(["autorizacao", "atendimento"]).optional().catch(undefined),
 });
 
-function DetalhePlaceholderPage() {
+export const Route = createFileRoute("/requisicoes/$id")({
+  validateSearch: detailSearchSchema,
+  beforeLoad: ({ context, location }) =>
+    requireSession({ queryClient: context.queryClient, locationHref: location.href }),
+  component: DetalheRequisicaoPage,
+});
+
+function QuantityBlock({ item }: { item: RequisicaoActionItem }) {
+  return (
+    <div className="quantity-grid">
+      <span>
+        Solicitado
+        <strong>
+          {formatQuantity(item.quantidade_solicitada)} {item.unidade_medida}
+        </strong>
+      </span>
+      <span>
+        Autorizado
+        <strong>
+          {formatQuantity(item.quantidade_autorizada)} {item.unidade_medida}
+        </strong>
+      </span>
+      <span>
+        Entregue
+        <strong>
+          {formatQuantity(item.quantidade_entregue)} {item.unidade_medida}
+        </strong>
+      </span>
+    </div>
+  );
+}
+
+function hasText(value: string | null | undefined) {
+  return Boolean(value?.trim());
+}
+
+function TimelineEvent({ event }: { event: RequisicaoTimelineEvent }) {
+  return (
+    <li className="timeline-event">
+      <div>
+        <p className="font-semibold">{tipoEventoLabel(event.tipo_evento)}</p>
+        <p className="text-sm text-[var(--ink-soft)]">
+          {event.usuario.nome_completo} - {formatDateTime(event.data_hora)}
+        </p>
+      </div>
+      {event.observacao ? <p className="mt-2 text-sm text-[var(--ink-soft)]">{event.observacao}</p> : null}
+    </li>
+  );
+}
+
+function DetalheRequisicaoPage() {
   const { id } = Route.useParams();
+  const { contexto } = Route.useSearch();
+  const requisicaoId = Number(id);
+  const backTo =
+    contexto === "autorizacao"
+      ? "/autorizacoes"
+      : contexto === "atendimento"
+        ? "/atendimentos"
+        : "/minhas-requisicoes";
+  const queryClient = useQueryClient();
+  const navigate = useNavigate({ from: "/requisicoes/$id" });
+  const detailQuery = useQuery({
+    ...requisitionDetailQueryOptions(requisicaoId),
+    enabled: Number.isInteger(requisicaoId) && requisicaoId > 0,
+  });
+  const authError = detailQuery.isError && isAuthError(detailQuery.error);
+
+  useEffect(() => {
+    if (!authError) {
+      return;
+    }
+    queryClient.removeQueries({ queryKey: authQueryKeys.me });
+    void navigate({
+      to: "/login",
+      search: {
+        redirect: `/requisicoes/${id}`,
+      },
+    });
+  }, [authError, id, navigate, queryClient]);
+
+  if (!Number.isInteger(requisicaoId) || requisicaoId <= 0) {
+    return <div className="error-panel">Identificador de requisição inválido.</div>;
+  }
+
+  if (detailQuery.isPending) {
+    return <div className="loading-state">Carregando requisição...</div>;
+  }
+
+  if (authError) {
+    return null;
+  }
+
+  if (detailQuery.isError) {
+    return (
+      <div className="error-panel">
+        {queryErrorMessage(detailQuery.error, "Não foi possível carregar a requisição.")}
+      </div>
+    );
+  }
+
+  const requisicao = detailQuery.data;
+  const thirdParty = isThirdPartyBeneficiary(requisicao);
 
   return (
-    <FeaturePlaceholder
-      kicker="Canonical detail"
-      title={`Requisição ${id}`}
-      summary="Superfície canônica do piloto. Cabeçalho, itens, status e resumo de eventos já têm lugar definido, mas as ações contextuais reais entram nas próximas slices."
-      nextSlice="#38 + #40 + #41"
-      contracts={[
-        "GET /api/v1/requisitions/{id}/",
-        "query param contexto=autorizacao|atendimento",
-      ]}
-      bullets={[
-        "Corpo comum para qualquer entrada.",
-        "Ações mudam por contexto, não por rota duplicada.",
-        "Timeline e divergências visuais chegam nas fatias funcionais.",
-      ]}
-      preview={
-        <div className="preview-panel space-y-3">
-          <div className="preview-row">
-            <span>Status</span>
-            <span className="preview-meta">aguardando autorização</span>
-          </div>
-          <div className="preview-row">
-            <span>Itens</span>
-            <span className="preview-meta">solicitado / autorizado / entregue</span>
-          </div>
-          <div className="preview-row">
-            <span>Eventos</span>
-            <span className="preview-meta">timeline resumida</span>
-          </div>
+    <section className="space-y-6">
+      <div className="detail-hero">
+        <div>
+          <p className="eyebrow">Detalhe canônico</p>
+          <h1>{displayRequisitionIdentifier(requisicao) ?? statusLabel(requisicao.status)}</h1>
+          <p>
+            {statusLabel(requisicao.status)} - {requisicao.setor_beneficiario.nome}
+          </p>
         </div>
-      }
-    />
+        <div className="detail-actions">
+          {contexto ? <span className="context-chip">Contexto: {contexto}</span> : null}
+          <Link className="action-link compact-action" to={backTo}>
+            Voltar
+          </Link>
+        </div>
+      </div>
+
+      <div className="detail-grid">
+        <section className="detail-panel">
+          <p className="eyebrow">Pessoas</p>
+          <dl className="info-list">
+            <div>
+              <dt>Criador</dt>
+              <dd>{requisicao.criador.nome_completo}</dd>
+            </div>
+            <div>
+              <dt>Beneficiário</dt>
+              <dd>
+                {requisicao.beneficiario.nome_completo}
+                {thirdParty ? <span className="third-party-badge inline-badge">Terceiro</span> : null}
+              </dd>
+            </div>
+            <div>
+              <dt>Setor</dt>
+              <dd>{requisicao.setor_beneficiario.nome}</dd>
+            </div>
+            {requisicao.chefe_autorizador ? (
+              <div>
+                <dt>Autorizador</dt>
+                <dd>{requisicao.chefe_autorizador.nome_completo}</dd>
+              </div>
+            ) : null}
+            {requisicao.responsavel_atendimento ? (
+              <div>
+                <dt>Atendimento</dt>
+                <dd>{requisicao.responsavel_atendimento.nome_completo}</dd>
+              </div>
+            ) : null}
+          </dl>
+        </section>
+
+        <section className="detail-panel">
+          <p className="eyebrow">Datas</p>
+          <dl className="info-list">
+            <div>
+              <dt>Criação</dt>
+              <dd>{formatDateTime(requisicao.data_criacao)}</dd>
+            </div>
+            <div>
+              <dt>Envio para autorização</dt>
+              <dd>{formatDateTime(requisicao.data_envio_autorizacao)}</dd>
+            </div>
+            <div>
+              <dt>Decisão</dt>
+              <dd>{formatDateTime(requisicao.data_autorizacao_ou_recusa)}</dd>
+            </div>
+            <div>
+              <dt>Finalização</dt>
+              <dd>{formatDateTime(requisicao.data_finalizacao)}</dd>
+            </div>
+          </dl>
+        </section>
+      </div>
+
+      {hasText(requisicao.observacao) ||
+      hasText(requisicao.observacao_atendimento) ||
+      hasText(requisicao.motivo_recusa) ||
+      hasText(requisicao.motivo_cancelamento) ||
+      hasText(requisicao.retirante_fisico) ? (
+        <section className="detail-panel">
+          <p className="eyebrow">Observações</p>
+          <dl className="info-list notes-list">
+            {hasText(requisicao.observacao) ? (
+              <div>
+                <dt>Geral</dt>
+                <dd>{requisicao.observacao}</dd>
+              </div>
+            ) : null}
+            {hasText(requisicao.observacao_atendimento) ? (
+              <div>
+                <dt>Atendimento</dt>
+                <dd>{requisicao.observacao_atendimento}</dd>
+              </div>
+            ) : null}
+            {hasText(requisicao.motivo_recusa) ? (
+              <div>
+                <dt>Recusa</dt>
+                <dd>{requisicao.motivo_recusa}</dd>
+              </div>
+            ) : null}
+            {hasText(requisicao.motivo_cancelamento) ? (
+              <div>
+                <dt>Cancelamento</dt>
+                <dd>{requisicao.motivo_cancelamento}</dd>
+              </div>
+            ) : null}
+            {hasText(requisicao.retirante_fisico) ? (
+              <div>
+                <dt>Retirante físico</dt>
+                <dd>{requisicao.retirante_fisico}</dd>
+              </div>
+            ) : null}
+          </dl>
+        </section>
+      ) : null}
+
+      <section className="detail-panel">
+        <p className="eyebrow">Itens</p>
+        <div className="item-list">
+          {requisicao.itens.map((item) => (
+            <article className="item-card" key={item.id}>
+              <div>
+                <h2>{item.material.nome}</h2>
+                <p>
+                  {item.material.codigo_completo} - {item.material.unidade_medida}
+                </p>
+              </div>
+              <QuantityBlock item={item} />
+              {item.observacao ||
+              item.justificativa_autorizacao_parcial ||
+              item.justificativa_atendimento_parcial ? (
+                <div className="item-notes">
+                  {item.observacao ? <p>Obs.: {item.observacao}</p> : null}
+                  {item.justificativa_autorizacao_parcial ? (
+                    <p>Autorização parcial: {item.justificativa_autorizacao_parcial}</p>
+                  ) : null}
+                  {item.justificativa_atendimento_parcial ? (
+                    <p>Atendimento parcial: {item.justificativa_atendimento_parcial}</p>
+                  ) : null}
+                </div>
+              ) : null}
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="detail-panel">
+        <p className="eyebrow">Timeline</p>
+        {requisicao.eventos.length > 0 ? (
+          <ol className="timeline-list">
+            {requisicao.eventos.map((event) => (
+              <TimelineEvent event={event} key={event.id} />
+            ))}
+          </ol>
+        ) : (
+          <p className="text-sm text-[var(--ink-soft)]">Nenhum evento registrado.</p>
+        )}
+      </section>
+    </section>
   );
 }

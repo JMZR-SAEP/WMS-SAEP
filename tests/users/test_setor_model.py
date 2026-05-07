@@ -202,6 +202,66 @@ class TestSetorModel:
         with pytest.raises(ValidationError):
             setor_a.full_clean()
 
+    def test_clean_aceita_quando_auxiliar_pertence_ao_proprio_setor(self):
+        chefe = User.objects.create_user(
+            matricula_funcional="12346",
+            password="testpass123",
+            nome_completo="Chefe Setor",
+        )
+        auxiliar = User.objects.create_user(
+            matricula_funcional="54322",
+            password="testpass123",
+            nome_completo="Auxiliar Setor",
+        )
+        setor = Setor.objects.create(
+            nome="Expedicao",
+            chefe_responsavel=chefe,
+            auxiliar_responsavel=auxiliar,
+        )
+        chefe.setor = setor
+        chefe.save(update_fields=["setor"])
+        auxiliar.setor = setor
+        auxiliar.save(update_fields=["setor"])
+
+        setor.full_clean()
+
+    def test_clean_rejeita_quando_auxiliar_pertence_a_outro_setor(self):
+        chefe_a = User.objects.create_user(
+            matricula_funcional="12347",
+            password="testpass123",
+            nome_completo="Chefe A",
+        )
+        chefe_b = User.objects.create_user(
+            matricula_funcional="54323",
+            password="testpass123",
+            nome_completo="Chefe B",
+        )
+        auxiliar = User.objects.create_user(
+            matricula_funcional="54324",
+            password="testpass123",
+            nome_completo="Auxiliar B",
+        )
+        setor_a = Setor.objects.create(
+            nome="Expedicao A",
+            chefe_responsavel=chefe_a,
+            auxiliar_responsavel=auxiliar,
+        )
+        setor_b = Setor.objects.create(
+            nome="Expedicao B",
+            chefe_responsavel=chefe_b,
+        )
+        chefe_a.setor = setor_a
+        chefe_a.save(update_fields=["setor"])
+        chefe_b.setor = setor_b
+        chefe_b.save(update_fields=["setor"])
+        auxiliar.setor = setor_b
+        auxiliar.save(update_fields=["setor"])
+
+        with pytest.raises(ValidationError):
+            setor_a.clean()
+        with pytest.raises(ValidationError):
+            setor_a.full_clean()
+
     def test_full_clean_rejeita_setor_sem_chefe_responsavel(self):
         setor = Setor(nome="Almoxarifado", chefe_responsavel=None)
 

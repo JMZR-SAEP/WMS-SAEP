@@ -20,7 +20,7 @@ Fontes completas: `docs/design-acesso-ocasional/processos-almoxarifado.md`, `mod
 
 | Estado | Técnico | Papel no fluxo | Itens editáveis? | Estoque/reserva | Final? |
 |---|---|---|---|---|---|
-| Rascunho | `rascunho` | Criação/correção antes da autorização. | Sim, criador ou beneficiário. | Sem reserva/baixa. | Não |
+| Rascunho | `rascunho` | Criação/correção antes da autorização. | Sim, só criador. | Sem reserva/baixa. | Não |
 | Aguardando autorização | `aguardando_autorizacao` | Fila do chefe do setor do beneficiário. | Não; deve retornar para rascunho. | Sem reserva/baixa. | Não |
 | Recusada | `recusada` | Recusa da requisição inteira com motivo. | Só no fluxo de correção pelo criador/beneficiário. | Sem reserva/baixa. | Não |
 | Autorizada | `autorizada` | Disponível para atendimento pelo Almoxarifado. | Não | Reserva criada na autorização. | Não |
@@ -34,9 +34,9 @@ Fontes completas: `docs/design-acesso-ocasional/processos-almoxarifado.md`, `mod
 | Evento | Técnico | Quando | Responsável | Justificativa |
 |---|---|---|---|---|
 | Criação | `criacao` | Criação do rascunho ou formalização no primeiro envio. | Criador | Não |
-| Envio | `envio_autorizacao` | Rascunho vai para autorização. | Criador ou beneficiário | Não |
+| Envio | `envio_autorizacao` | Rascunho vai para autorização. | Criador | Não |
 | Retorno para rascunho | `retorno_rascunho` | `aguardando_autorizacao` volta para correção. | Criador ou beneficiário | Não |
-| Reenvio | `reenvio_autorizacao` | Recusada ou retornada é reenviada. | Criador ou beneficiário | Não |
+| Reenvio | `reenvio_autorizacao` | Rascunho retornado é reenviado para autorização. | Criador | Não |
 | Recusa | `recusa` | Chefe recusa a requisição inteira. | Chefe do setor do beneficiário | Sim |
 | Autorização total | `autorizacao_total` | Todos os itens autorizados integralmente. | Chefe do setor do beneficiário | Não |
 | Autorização parcial | `autorizacao_parcial` | Algum item autorizado abaixo do solicitado ou zerado. | Chefe do setor do beneficiário | Sim, por item |
@@ -53,12 +53,12 @@ Fontes completas: `docs/design-acesso-ocasional/processos-almoxarifado.md`, `mod
 | ID | De -> Para | Ação | Atores | Regras críticas | Efeitos | Ref. |
 |---|---|---|---|---|---|---|
 | TR-001 | N/A -> Rascunho | Criar requisição | Solicitante para si; chefe/auxiliar de setor no próprio setor; Almoxarifado qualquer setor | Usuário ativo; beneficiário permitido; setor ativo; ao menos um item; material ativo, sem divergência, saldo positivo; quantidade <= saldo disponível inicial | Cria cabeçalho, itens, criador, beneficiário e setor do beneficiário; sem número público | 1.1, 11 |
-| TR-002 | Rascunho -> Rascunho | Editar rascunho | Criador ou beneficiário | Itens continuam válidos | Atualiza itens/observações editáveis; sem estoque | 1.8, 1.9 |
-| TR-003 | Rascunho -> descartado | Descartar rascunho nunca enviado | Criador ou beneficiário | Nunca enviado; sem número público | Pode excluir/descartar sem timeline formal, reserva ou movimentação | 1.9 |
-| TR-004 | Rascunho -> Cancelada | Cancelar rascunho já numerado | Criador ou beneficiário | Já enviado e retornado; preserva número público | Encerra logicamente; bloqueia edição/reenvio/atendimento | 1.9, 9.5 |
-| TR-005 | Rascunho -> Aguardando autorização | Enviar | Criador ou beneficiário | Ao menos um item; gera `REQ-AAAA-NNNNNN` no primeiro envio | Registra envio; entra na fila do chefe do setor do beneficiário; bloqueia edição | 1.6, 9.1 |
-| TR-006 | Aguardando autorização -> Rascunho | Retornar para rascunho | Criador ou beneficiário | Ainda não autorizada/recusada | Remove da fila; preserva número; resolve notificação pendente | 1.7, 1.8, 9.6 |
-| TR-007 | Recusada/Rascunho -> Aguardando autorização | Reenviar | Criador ou beneficiário | Correções permitidas; ao menos um item; preserva número se existir | Retorna à fila; registra reenvio | 2.6, 9.1 |
+| TR-002 | Rascunho -> Rascunho | Editar rascunho | Criador | Itens continuam válidos | Atualiza itens/observações editáveis; sem estoque | 1.8, 1.9 |
+| TR-003 | Rascunho -> descartado | Descartar rascunho nunca enviado | Criador | Nunca enviado; sem número público | Pode excluir/descartar sem timeline formal, reserva ou movimentação | 1.9 |
+| TR-004 | Rascunho -> Cancelada | Cancelar rascunho já numerado | Criador | Já enviado e retornado; preserva número público | Encerra logicamente; bloqueia edição/reenvio/atendimento | 1.9, 9.5 |
+| TR-005 | Rascunho -> Aguardando autorização | Enviar | Criador | Ao menos um item; gera `REQ-AAAA-NNNNNN` no primeiro envio | Registra envio; entra na fila do chefe do setor do beneficiário; a partir daqui beneficiário passa a poder visualizar a requisição | 1.6, 9.1 |
+| TR-006 | Aguardando autorização -> Rascunho | Retornar para rascunho | Criador ou beneficiário | Ainda não autorizada/recusada | Remove da fila; preserva número; resolve notificação pendente; após concluir, rascunho volta a ser creator-only | 1.7, 1.8, 9.6 |
+| TR-007 | Recusada/Rascunho -> Aguardando autorização | Reenviar | Criador | Correções permitidas; ao menos um item; preserva número se existir | Retorna à fila; registra reenvio | 2.6, 9.1 |
 | TR-008 | Aguardando autorização -> Autorizada | Autorizar total | Chefe do setor do beneficiário; chefe Almoxarifado só para setor Almoxarifado | Itens ativos, sem divergência, saldo disponível atual suficiente; lock de estoque | Persiste autorização; cria reserva; não baixa físico; notifica criador, beneficiário e Almoxarifado | 2.1, 2.2, 2.7-2.10, 9.2 |
 | TR-009 | Aguardando autorização -> Autorizada | Autorizar parcial | Chefe do setor do beneficiário; chefe Almoxarifado só para setor Almoxarifado | Ao menos um item > 0; justificativa para parcial/zero; autorizado <= disponível atual; lock | Reserva apenas autorizado > 0; não baixa físico; notifica envolvidos | 2.3, 2.4, 2.7-2.10, 9.2 |
 | TR-010 | Aguardando autorização -> Aguardando autorização | Bloquear autorização inválida | Chefe do setor do beneficiário | Todos itens zerados, divergência crítica ou autorização acima do saldo atual | Não transiciona; orientar recusa, reduzir autorização ou resolver divergência | 2.5, 2.8-2.11, 7.3, 8.8 |

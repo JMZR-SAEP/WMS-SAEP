@@ -48,12 +48,12 @@ Valores: **Sim**, **Não**, **Apenas próprio setor**, **Qualquer setor**, **Ape
 | Criar para funcionário do próprio setor | Não | Apenas próprio setor | Apenas próprio setor | Qualquer setor | Qualquer setor | Não | Setor da requisição = setor do beneficiário. |
 | Criar para funcionário de outro setor | Não | Não | Não | Qualquer setor | Qualquer setor | Não | Almoxarifado pode criar para qualquer funcionário. |
 | Ver próprias requisições como criador | Sim | Sim | Sim | Sim | Sim | Apenas suporte/admin |  |
-| Ver próprias requisições como beneficiário | Sim | Sim | Sim | Sim | Sim | Apenas suporte/admin |  |
-| Ver requisições do setor | Não | Não | Apenas próprio setor | Qualquer setor | Qualquer setor | Apenas suporte/admin | Chefe vê setor sob responsabilidade. |
-| Ver todos os setores | Não | Não | Não | Sim | Sim | Apenas suporte/admin | Operação de Almoxarifado/suporte. |
-| Editar rascunho | Sim | Sim | Sim | Sim | Sim | Não | Só criador ou beneficiário. |
-| Enviar para autorização | Sim | Sim | Sim | Sim | Sim | Não | Só criador ou beneficiário. |
-| Retornar para rascunho | Sim | Sim | Sim | Sim | Sim | Não | Só criador ou beneficiário. |
+| Ver próprias requisições como beneficiário | Sim | Sim | Sim | Sim | Sim | Apenas suporte/admin | Exceto rascunho criado por terceiro. |
+| Ver requisições do setor | Não | Não | Apenas próprio setor | Qualquer setor | Qualquer setor | Apenas suporte/admin | Chefe vê setor sob responsabilidade; rascunho de terceiro segue creator-only. |
+| Ver todos os setores | Não | Não | Não | Sim | Sim | Apenas suporte/admin | Operação de Almoxarifado/suporte; rascunho de terceiro segue creator-only. |
+| Editar rascunho | Sim | Sim | Sim | Sim | Sim | Não | Só criador. |
+| Enviar para autorização | Sim | Sim | Sim | Sim | Sim | Não | Só criador. |
+| Retornar para rascunho | Sim | Sim | Sim | Sim | Sim | Não | Criador ou beneficiário enquanto ainda estiver em `aguardando_autorizacao`; depois do retorno, rascunho volta a ser creator-only. |
 | Cancelar aguardando autorização | Sim | Sim | Sim | Sim | Sim | Não | Só criador ou beneficiário. |
 | Cancelar autorizada | Sim | Sim | Sim | Sim | Sim | Não | Criador/beneficiário/Almoxarifado; justificativa. |
 | Copiar atendida/parcial | Sim | Sim | Sim | Sim | Sim | Não | Precisa ver origem e poder criar para beneficiário resultante. |
@@ -96,9 +96,10 @@ Valores: **Sim**, **Não**, **Apenas próprio setor**, **Qualquer setor**, **Ape
 
 ## 5. Visibilidade
 
-- Criador e beneficiário veem a própria requisição e timeline completa.
-- Chefe de setor vê requisições do setor sob sua responsabilidade.
-- Almoxarifado vê requisições de todos os setores e fila de atendimento.
+- Rascunho é visível e manipulável apenas pelo criador; ao sair de `rascunho`, o beneficiário passa a poder ver a requisição e perde esse acesso se ela voltar para `rascunho`.
+- Fora de `rascunho`, criador e beneficiário veem a própria requisição e timeline completa.
+- Chefe de setor vê requisições do setor sob sua responsabilidade, exceto rascunhos de terceiros.
+- Almoxarifado vê requisições de todos os setores fora de rascunhos de terceiros e vê a fila de atendimento.
 - Chefe de setor vê fila de autorização do próprio setor; chefe de Almoxarifado vê apenas setor Almoxarifado.
 - Superusuário vê para suporte/administração, sem ações operacionais de estoque.
 - Relatórios gerais: Almoxarifado e suporte/admin. Chefe de setor: apenas relatórios do próprio setor.

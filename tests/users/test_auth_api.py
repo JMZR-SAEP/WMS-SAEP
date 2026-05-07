@@ -483,7 +483,7 @@ class TestAuthAPI:
         assert response.status_code == 200
         assert response.data == []
 
-    def test_beneficiary_lookup_para_superusuario_retorna_visibilidade_ampla_elegivel(self):
+    def test_beneficiary_lookup_para_superusuario_retorna_lista_vazia(self):
         chefe_ti = self._criar_usuario(
             matricula="22501",
             nome_completo="Chefe TI Super",
@@ -507,6 +507,13 @@ class TestAuthAPI:
             password="senha-segura-123",
             nome_completo="Super Admin Lookup",
         )
+        superuser_com_setor = User.objects.create_superuser(
+            matricula_funcional="99902",
+            password="senha-segura-123",
+            nome_completo="Super Admin Lookup Setor",
+        )
+        superuser_com_setor.setor = setor_ti
+        superuser_com_setor.save(update_fields=["setor"])
 
         self._criar_usuario(
             matricula="22503",
@@ -531,10 +538,14 @@ class TestAuthAPI:
         response = client.get(reverse("user-beneficiary-lookup"), {"q": "Carla"})
 
         assert response.status_code == 200
-        assert [item["nome_completo"] for item in response.data] == [
-            "Carla RH",
-            "Carla TI",
-        ]
+        assert response.data == []
+
+        client.force_authenticate(user=superuser_com_setor)
+
+        response = client.get(reverse("user-beneficiary-lookup"), {"q": "Carla"})
+
+        assert response.status_code == 200
+        assert response.data == []
 
     def test_beneficiary_lookup_sem_autenticacao_retorna_401(self):
         client = APIClient()

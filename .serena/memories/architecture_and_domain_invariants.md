@@ -36,6 +36,7 @@ Technical debt to revisit before adding new stock writers:
 
 Request/requisition invariants:
 - `Requisicao.setor_beneficiario` is a historical snapshot and must not be recalculated from `beneficiario.setor` after creation.
+- Draft requisitions are creator-owned: while `status=rascunho`, only the creator may view or manipulate the request; beneficiary visibility starts only after the request leaves draft and is revoked again if it returns to draft.
 - Request status transitions must follow the declarative state machine documented in domain/process docs and existing services when present.
 - Do not scatter status transitions through ad hoc `if/elif` logic.
 - Preserve consistency between requisition, requisition items, stock reservation, stock decrement, delivery, and audit trail.
