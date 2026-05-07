@@ -12,6 +12,7 @@
   --ink-muted: #73809b;
   --accent: #b9522c;
   --accent-soft: rgba(185, 82, 44, 0.14);
+  --danger: #8a2727;
 
   font-family: "Avenir Next", "Segoe UI", sans-serif;
   line-height: 1.5;
@@ -604,7 +605,36 @@ a {
 
 .danger-action {
   border-color: rgba(150, 44, 44, 0.22);
-  color: #8a2727;
+  color: var(--danger);
+}
+
+.draft-confirmation-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(22, 35, 61, 0.42);
+}
+
+.draft-confirmation-panel {
+  width: min(100%, 32rem);
+  padding: 1.5rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 1.25rem;
+  background: var(--panel-strong);
+  box-shadow: 0 1.5rem 4rem rgba(22, 35, 61, 0.22);
+}
+
+.draft-confirmation-panel h2 {
+  margin: 0 0 0.5rem;
+  color: var(--ink-strong);
+  font-size: 1.35rem;
+}
+
+.draft-confirmation-panel p {
+  color: var(--ink-soft);
 }
 
 @media (max-width: 860px) {

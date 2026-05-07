@@ -28,6 +28,10 @@ function requestUrl(request: Request) {
   return request.url;
 }
 
+function requestSearchParam(request: Request, name: string) {
+  return new URL(requestUrl(request)).searchParams.get(name);
+}
+
 function authSession(papel = "solicitante") {
   return {
     id: 10,
@@ -844,7 +848,10 @@ describe("frontend scaffold router", () => {
         return sessionResponse();
       }
 
-      if (requestUrl(request).includes("/api/v1/materials/")) {
+      if (
+        requestUrl(request).includes("/api/v1/materials/") &&
+        requestSearchParam(request, "search") === "papel"
+      ) {
         return materialListResponse();
       }
 
@@ -887,6 +894,47 @@ describe("frontend scaffold router", () => {
     });
   });
 
+  it("rejects malformed decimal quantities before saving a draft", async () => {
+    let createdPayload: unknown;
+    const fetchMock = vi.fn(async (request: Request) => {
+      if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+        return sessionResponse();
+      }
+
+      if (
+        requestUrl(request).includes("/api/v1/materials/") &&
+        requestSearchParam(request, "search") === "papel"
+      ) {
+        return materialListResponse();
+      }
+
+      if (requestUrl(request).endsWith("/api/v1/requisitions/") && request.method === "POST") {
+        createdPayload = await request.json();
+        return requisitionDetailResponse();
+      }
+
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderRoute("/requisicoes/nova");
+
+    expect(await screen.findByRole("heading", { name: "Nova requisição" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Buscar material"), {
+      target: { value: "papel" },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Adicionar Papel sulfite A4" }));
+    fireEvent.change(screen.getByLabelText("Quantidade solicitada"), {
+      target: { value: "1,0,0" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Salvar rascunho" }));
+
+    expect(
+      await screen.findByText("Informe beneficiário e ao menos um item com quantidade maior que zero."),
+    ).toBeInTheDocument();
+    expect(createdPayload).toBeUndefined();
+  });
+
   it("creates draft requisition for a third-party beneficiary when allowed", async () => {
     let createdPayload: unknown;
     const fetchMock = vi.fn(async (request: Request) => {
@@ -898,7 +946,10 @@ describe("frontend scaffold router", () => {
         return beneficiaryLookupResponse();
       }
 
-      if (requestUrl(request).includes("/api/v1/materials/")) {
+      if (
+        requestUrl(request).includes("/api/v1/materials/") &&
+        requestSearchParam(request, "search") === "papel"
+      ) {
         return materialListResponse();
       }
 
@@ -947,7 +998,10 @@ describe("frontend scaffold router", () => {
         return sessionResponse(authSession("auxiliar_setor"));
       }
 
-      if (requestUrl(request).includes("/api/v1/materials/")) {
+      if (
+        requestUrl(request).includes("/api/v1/materials/") &&
+        requestSearchParam(request, "search") === "papel"
+      ) {
         return materialListResponse();
       }
 
@@ -1026,8 +1080,6 @@ describe("frontend scaffold router", () => {
   it("confirms and submits a draft to authorization", async () => {
     let updatedPayload: unknown;
     let submitCalled = false;
-    const confirmMock = vi.fn(() => true);
-    vi.stubGlobal("confirm", confirmMock);
     const fetchMock = vi.fn(async (request: Request) => {
       if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
         return sessionResponse();
@@ -1055,9 +1107,10 @@ describe("frontend scaffold router", () => {
 
     expect(await screen.findByRole("heading", { name: "Editar rascunho" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Enviar para autorização" }));
+    expect(await screen.findByRole("dialog")).toHaveTextContent("Enviar rascunho para autorização?");
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar envio" }));
 
     await waitFor(() => {
-      expect(confirmMock).toHaveBeenCalledWith("Enviar rascunho para autorização?");
       expect(updatedPayload).toEqual({
         beneficiario_id: 10,
         observacao: "Observacao antiga",
@@ -1152,7 +1205,10 @@ describe("frontend scaffold router", () => {
           return sessionResponse();
         }
 
-        if (requestUrl(request).includes("/api/v1/materials/")) {
+        if (
+          requestUrl(request).includes("/api/v1/materials/") &&
+          requestSearchParam(request, "search") === "caneta"
+        ) {
           return materialListResponse([
             {
               id: 302,

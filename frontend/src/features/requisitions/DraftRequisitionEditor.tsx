@@ -109,7 +109,12 @@ function hasPositiveStock(material: MaterialListItem) {
 }
 
 function normalizeQuantity(value: string) {
-  return value.trim().replace(",", ".");
+  return value.trim().replace(/,/g, ".");
+}
+
+function isPositiveQuantity(value: string) {
+  const quantity = Number(normalizeQuantity(value));
+  return Number.isFinite(quantity) && quantity > 0;
 }
 
 function selectedBeneficiary(values: DraftFormValues) {
@@ -136,8 +141,36 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [formError, setFormError] = useState<string | null>(null);
+  const [submitConfirmationValues, setSubmitConfirmationValues] = useState<DraftFormValues | null>(null);
+  const sessionSetorId = session.setor?.id ?? null;
+  const sessionSetorNome = session.setor?.nome ?? null;
+  const stableSession = useMemo(
+    () =>
+      ({
+        id: session.id,
+        matricula_funcional: session.matricula_funcional,
+        nome_completo: session.nome_completo,
+        papel: session.papel,
+        setor: sessionSetorId !== null && sessionSetorNome !== null
+          ? {
+              id: sessionSetorId,
+              nome: sessionSetorNome,
+            }
+          : null,
+        is_authenticated: session.is_authenticated,
+      }) satisfies AuthSession,
+    [
+      session.id,
+      session.is_authenticated,
+      session.matricula_funcional,
+      session.nome_completo,
+      session.papel,
+      sessionSetorId,
+      sessionSetorNome,
+    ],
+  );
   const form = useForm<DraftFormValues>({
-    defaultValues: formValuesFromRequisition(initialRequisition, session),
+    defaultValues: formValuesFromRequisition(initialRequisition, stableSession),
   });
   const { fields, append, remove } = useFieldArray({
     control: form.control,
@@ -145,6 +178,7 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
   });
   const beneficiaryMode = useWatch({ control: form.control, name: "beneficiaryMode" }) ?? "self";
   const previousBeneficiaryModeRef = useRef(beneficiaryMode);
+  const beneficiaryIdValue = useWatch({ control: form.control, name: "beneficiaryId" }) ?? "";
   const beneficiaryLabelValue = useWatch({ control: form.control, name: "beneficiaryLabel" });
   const beneficiarySearch =
     useWatch({ control: form.control, name: "beneficiarySearch" })?.trim() ?? "";
@@ -159,7 +193,7 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
     ...draftBeneficiariesQueryOptions(beneficiarySearch),
     enabled:
       beneficiaryMode === "third_party" &&
-      canRequestForThirdParty(session) &&
+      canRequestForThirdParty(stableSession) &&
       beneficiarySearch.length >= 3,
   });
   const materialsQuery = useQuery({
@@ -167,17 +201,17 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
     enabled: materialSearch.length >= 2,
   });
   const canSubmitForm =
-    selectedBeneficiary(form.getValues()) > 0 &&
+    Number.parseInt(beneficiaryIdValue, 10) > 0 &&
     selectedItems.length > 0 &&
-    selectedItems.every((item) => Number.parseFloat(normalizeQuantity(item.quantidadeSolicitada)) > 0);
+    selectedItems.every((item) => isPositiveQuantity(item.quantidadeSolicitada));
 
   useEffect(() => {
-    form.reset(formValuesFromRequisition(initialRequisition, session));
-  }, [form, initialRequisition, session]);
+    form.reset(formValuesFromRequisition(initialRequisition, stableSession));
+  }, [form, initialRequisition, stableSession]);
 
   useEffect(() => {
     if (beneficiaryMode === "self") {
-      const self = currentUserBeneficiary(session);
+      const self = currentUserBeneficiary(stableSession);
       form.setValue("beneficiaryId", String(self.id));
       form.setValue("beneficiaryLabel", beneficiaryLabel(self));
     } else if (previousBeneficiaryModeRef.current === "self") {
@@ -185,10 +219,11 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
       form.setValue("beneficiaryLabel", "");
     }
     previousBeneficiaryModeRef.current = beneficiaryMode;
-  }, [beneficiaryMode, form, session]);
+  }, [beneficiaryMode, form, stableSession]);
 
   function afterMutationSuccess(requisition: RequisicaoDetail) {
     queryClient.setQueryData(requisitionsQueryKeys.detail(requisition.id), requisition);
+    // Editor routes do not keep worklists mounted; inactive refetch avoids overwriting this detail cache.
     void queryClient.invalidateQueries({
       queryKey: requisitionsQueryKeys.all,
       refetchType: "inactive",
@@ -196,6 +231,7 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
   }
 
   function handleMutationError(error: unknown) {
+    setSubmitConfirmationValues(null);
     if (isAuthError(error)) {
       queryClient.removeQueries({ queryKey: authQueryKeys.me });
       void navigate({
@@ -225,6 +261,7 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
   });
   const submitMutation = useMutation({
     mutationFn: async (input: RequisicaoDraftInput) => {
+      // Submit requires the latest draft persisted first; if submit fails, the saved draft remains retryable.
       const draft = initialRequisition
         ? await updateDraftRequisition(initialRequisition.id, input)
         : await createDraftRequisition(input);
@@ -232,6 +269,7 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
     },
     onSuccess: async (requisition) => {
       setFormError(null);
+      setSubmitConfirmationValues(null);
       afterMutationSuccess(requisition);
       await navigate({ to: "/requisicoes/$id", params: { id: String(requisition.id) } });
     },
@@ -302,15 +340,19 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
     saveMutation.mutate(payloadFromValues(valuesToSave));
   }
 
-  function submitDraft(valuesToSubmit: DraftFormValues) {
+  function requestSubmitDraft(valuesToSubmit: DraftFormValues) {
     if (!canSubmitForm) {
       setFormError("Informe beneficiário e ao menos um item com quantidade maior que zero.");
       return;
     }
-    if (!globalThis.confirm("Enviar rascunho para autorização?")) {
+    setSubmitConfirmationValues(valuesToSubmit);
+  }
+
+  function confirmSubmitDraft() {
+    if (!submitConfirmationValues) {
       return;
     }
-    submitMutation.mutate(payloadFromValues(valuesToSubmit));
+    submitMutation.mutate(payloadFromValues(submitConfirmationValues));
   }
 
   return (
@@ -341,7 +383,7 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
               <input type="radio" value="self" {...form.register("beneficiaryMode")} />
               Para mim
             </label>
-            {canRequestForThirdParty(session) ? (
+            {canRequestForThirdParty(stableSession) ? (
               <label className="draft-choice">
                 <input type="radio" value="third_party" {...form.register("beneficiaryMode")} />
                 Para terceiro
@@ -349,7 +391,7 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
             ) : null}
           </div>
           <p className="selected-summary">Selecionado: {beneficiaryLabelValue}</p>
-          {beneficiaryMode === "third_party" && canRequestForThirdParty(session) ? (
+          {beneficiaryMode === "third_party" && canRequestForThirdParty(stableSession) ? (
             <div className="draft-lookup">
               <label className="preview-label">
                 Buscar beneficiário
@@ -426,7 +468,6 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
                       : formatQuantity(String(material.saldo_disponivel))}{" "}
                     {material.unidade_medida}
                   </span>
-                  <span className="sr-only">Adicionar {material.nome}</span>
                 </button>
               );
             })}
@@ -442,13 +483,13 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
               {fields.map((field, index) => (
                 <article className="draft-item-card" key={field.id}>
                   <div>
-                    <h2>{form.getValues(`itens.${index}.materialLabel`)}</h2>
+                    <h2>{field.materialLabel}</h2>
                     <p>
                       Saldo{" "}
-                      {form.getValues(`itens.${index}.saldoDisponivel`) === null
+                      {field.saldoDisponivel === null
                         ? "não exibido"
-                        : formatQuantity(String(form.getValues(`itens.${index}.saldoDisponivel`)))}{" "}
-                      {form.getValues(`itens.${index}.unidadeMedida`)}
+                        : formatQuantity(String(field.saldoDisponivel))}{" "}
+                      {field.unidadeMedida}
                     </p>
                   </div>
                   <div className="draft-item-fields">
@@ -465,6 +506,7 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
                       <input className="preview-input" {...form.register(`itens.${index}.observacao`)} />
                     </label>
                     <button
+                      aria-label={`Remover ${field.materialLabel}`}
                       className="action-link compact-action"
                       onClick={() => remove(index)}
                       type="button"
@@ -496,7 +538,7 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
             className="preview-button draft-primary"
             disabled={pending}
             onClick={(event) => {
-              void form.handleSubmit(submitDraft)(event);
+              void form.handleSubmit(requestSubmitDraft)(event);
             }}
             type="button"
           >
@@ -504,6 +546,39 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
           </button>
         </div>
       </form>
+
+      {submitConfirmationValues ? (
+        <div
+          aria-labelledby="draft-submit-confirmation-title"
+          aria-modal="true"
+          className="draft-confirmation-backdrop"
+          role="dialog"
+        >
+          <section className="draft-confirmation-panel">
+            <p className="eyebrow">Confirmação</p>
+            <h2 id="draft-submit-confirmation-title">Enviar rascunho para autorização?</h2>
+            <p>Após o envio, a requisição sai do modo rascunho e segue para avaliação do autorizador.</p>
+            <div className="draft-actions">
+              <button
+                className="action-link compact-action"
+                disabled={pending}
+                onClick={() => setSubmitConfirmationValues(null)}
+                type="button"
+              >
+                Voltar ao rascunho
+              </button>
+              <button
+                className="preview-button draft-primary"
+                disabled={pending}
+                onClick={confirmSubmitDraft}
+                type="button"
+              >
+                Confirmar envio
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </section>
   );
 }
