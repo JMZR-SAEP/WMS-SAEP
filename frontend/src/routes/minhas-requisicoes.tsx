@@ -16,6 +16,7 @@ import {
   formatDateTime,
   isThirdPartyBeneficiary,
   myRequisitionsQueryOptions,
+  queryErrorMessage,
   statusLabel,
   STATUS_OPTIONS,
   type RequisicaoListItem,
@@ -41,14 +42,6 @@ export const Route = createFileRoute("/minhas-requisicoes")({
     requireSession({ queryClient: context.queryClient, locationHref: location.href }),
   component: MinhasRequisicoesPage,
 });
-
-function queryErrorMessage(error: unknown) {
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-
-  return "Não foi possível carregar os dados.";
-}
 
 function StatusBadge({ status }: { status: RequisicaoStatus }) {
   return <span className={`req-status req-status-${status}`}>{statusLabel(status)}</span>;
@@ -274,7 +267,9 @@ function MinhasRequisicoesPage() {
       </form>
 
       {listQuery.isError && !authError ? (
-        <div className="error-panel">{queryErrorMessage(listQuery.error)}</div>
+        <div className="error-panel">
+          {queryErrorMessage(listQuery.error, "Não foi possível carregar os dados.")}
+        </div>
       ) : null}
 
       {!listQuery.isError || authError ? (

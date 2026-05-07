@@ -9,6 +9,7 @@ import {
     displayRequisitionIdentifier,
     formatDateTime,
     isThirdPartyBeneficiary,
+    queryErrorMessage,
     requisitionDetailQueryOptions,
     statusLabel,
     tipoEventoLabel,
@@ -26,14 +27,6 @@ export const Route = createFileRoute("/requisicoes/$id")({
     requireSession({ queryClient: context.queryClient, locationHref: location.href }),
   component: DetalheRequisicaoPage,
 });
-
-function queryErrorMessage(error: unknown) {
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-
-  return "Não foi possível carregar a requisição.";
-}
 
 function QuantityBlock({ item }: { item: RequisicaoActionItem }) {
   return (
@@ -112,7 +105,11 @@ function DetalheRequisicaoPage() {
   }
 
   if (detailQuery.isError) {
-    return <div className="error-panel">{queryErrorMessage(detailQuery.error)}</div>;
+    return (
+      <div className="error-panel">
+        {queryErrorMessage(detailQuery.error, "Não foi possível carregar a requisição.")}
+      </div>
+    );
   }
 
   const requisicao = detailQuery.data;
