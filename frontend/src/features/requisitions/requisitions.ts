@@ -11,6 +11,10 @@ export type RequisicaoStatus = components["schemas"]["StatusEnum"];
 export type RequisicaoTimelineEvent = components["schemas"]["RequisicaoTimelineEventOutput"];
 export type RequisicaoActionItem = components["schemas"]["RequisicaoActionOutput"];
 export type RequisicaoTimelineEventType = components["schemas"]["TipoEventoEnum"];
+export type RequisicaoDraftInput = components["schemas"]["RequisicaoCreateInput"];
+export type MaterialListItem = components["schemas"]["MaterialListOutput"];
+export type MaterialListResponse = components["schemas"]["MaterialListPaginated"];
+export type BeneficiaryLookupItem = components["schemas"]["BeneficiaryLookupOutput"];
 
 export const STATUS_OPTIONS: Array<{ value: RequisicaoStatus; label: string }> = [
   { value: "rascunho", label: "Rascunho" },
@@ -58,6 +62,9 @@ export const requisitionsQueryKeys = {
       },
     ] as const,
   detail: (id: number) => [...requisitionsQueryKeys.all, "detail", id] as const,
+  materials: (search: string) => [...requisitionsQueryKeys.all, "materials", search] as const,
+  beneficiaries: (search: string) =>
+    [...requisitionsQueryKeys.all, "beneficiaries", search] as const,
 };
 
 function messageFromError(error: ErrorResponse | undefined, fallback: string) {
@@ -107,6 +114,145 @@ export async function fetchRequisitionDetail(id: number) {
   return data;
 }
 
+export async function fetchMaterialsForDraft(search: string) {
+  const { data, error, response } = await apiClient.GET("/api/v1/materials/", {
+    params: {
+      query: {
+        search,
+        page_size: 10,
+      },
+    },
+  });
+
+  if (error || !data) {
+    throw new ApiError(
+      messageFromError(error, "Não foi possível buscar materiais."),
+      response.status,
+      error,
+    );
+  }
+
+  return data;
+}
+
+export async function fetchBeneficiariesForDraft(search: string) {
+  const { data, error, response } = await apiClient.GET("/api/v1/users/beneficiary-lookup/", {
+    params: {
+      query: {
+        q: search,
+      },
+    },
+  });
+
+  if (error || !data) {
+    throw new ApiError(
+      messageFromError(error, "Não foi possível buscar beneficiários."),
+      response.status,
+      error,
+    );
+  }
+
+  return data;
+}
+
+export async function createDraftRequisition(input: RequisicaoDraftInput) {
+  const { data, error, response } = await apiClient.POST("/api/v1/requisitions/", {
+    body: input,
+  });
+
+  if (error || !data) {
+    throw new ApiError(
+      messageFromError(error, "Não foi possível salvar o rascunho."),
+      response.status,
+      error,
+    );
+  }
+
+  return data;
+}
+
+export async function updateDraftRequisition(id: number, input: RequisicaoDraftInput) {
+  const { data, error, response } = await apiClient.PUT("/api/v1/requisitions/{id}/draft/", {
+    params: {
+      path: {
+        id,
+      },
+    },
+    body: input,
+  });
+
+  if (error || !data) {
+    throw new ApiError(
+      messageFromError(error, "Não foi possível atualizar o rascunho."),
+      response.status,
+      error,
+    );
+  }
+
+  return data;
+}
+
+export async function submitDraftRequisition(id: number) {
+  const { data, error, response } = await apiClient.POST("/api/v1/requisitions/{id}/submit/", {
+    params: {
+      path: {
+        id,
+      },
+    },
+  });
+
+  if (error || !data) {
+    throw new ApiError(
+      messageFromError(error, "Não foi possível enviar para autorização."),
+      response.status,
+      error,
+    );
+  }
+
+  return data;
+}
+
+export async function discardDraftRequisition(id: number) {
+  const { error, response } = await apiClient.DELETE("/api/v1/requisitions/{id}/discard/", {
+    params: {
+      path: {
+        id,
+      },
+    },
+  });
+
+  if (error) {
+    throw new ApiError(
+      messageFromError(error, "Não foi possível descartar o rascunho."),
+      response.status,
+      error,
+    );
+  }
+}
+
+export async function cancelDraftRequisition(id: number) {
+  const { data, error, response } = await apiClient.POST("/api/v1/requisitions/{id}/cancel/", {
+    params: {
+      path: {
+        id,
+      },
+    },
+    body: {
+      motivo_cancelamento: "",
+    },
+  });
+
+  if (error || !data) {
+    throw new ApiError(
+      messageFromError(error, "Não foi possível cancelar a requisição."),
+      response.status,
+      error,
+    );
+  }
+
+  return data;
+}
+
 export function myRequisitionsQueryOptions(params: RequisicoesListParams) {
   return queryOptions({
     queryKey: requisitionsQueryKeys.mine(params),
@@ -120,6 +266,22 @@ export function requisitionDetailQueryOptions(id: number) {
   return queryOptions({
     queryKey: requisitionsQueryKeys.detail(id),
     queryFn: () => fetchRequisitionDetail(id),
+    retry: retryUnlessClientOrAuthError,
+  });
+}
+
+export function draftMaterialsQueryOptions(search: string) {
+  return queryOptions({
+    queryKey: requisitionsQueryKeys.materials(search),
+    queryFn: () => fetchMaterialsForDraft(search),
+    retry: retryUnlessClientOrAuthError,
+  });
+}
+
+export function draftBeneficiariesQueryOptions(search: string) {
+  return queryOptions({
+    queryKey: requisitionsQueryKeys.beneficiaries(search),
+    queryFn: () => fetchBeneficiariesForDraft(search),
     retry: retryUnlessClientOrAuthError,
   });
 }

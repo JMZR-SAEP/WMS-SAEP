@@ -4,7 +4,8 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 
 import { requireSession } from "../../features/auth/guards";
-import { authQueryKeys, isAuthError } from "../../features/auth/session";
+import { authQueryKeys, isAuthError, meQueryOptions } from "../../features/auth/session";
+import { DraftRequisitionEditor } from "../../features/requisitions/DraftRequisitionEditor";
 import {
     displayRequisitionIdentifier,
     formatDateTime,
@@ -88,6 +89,7 @@ function DetalheRequisicaoPage() {
     ...requisitionDetailQueryOptions(requisicaoId),
     enabled: Number.isInteger(requisicaoId) && requisicaoId > 0,
   });
+  const sessionQuery = useQuery(meQueryOptions);
   const authError = detailQuery.isError && isAuthError(detailQuery.error);
 
   useEffect(() => {
@@ -124,6 +126,13 @@ function DetalheRequisicaoPage() {
   }
 
   const requisicao = detailQuery.data;
+  if (requisicao.status === "rascunho") {
+    if (!sessionQuery.data) {
+      return <div className="loading-state">Carregando sessão...</div>;
+    }
+    return <DraftRequisitionEditor initialRequisition={requisicao} session={sessionQuery.data} />;
+  }
+
   const thirdParty = isThirdPartyBeneficiary(requisicao);
 
   return (
