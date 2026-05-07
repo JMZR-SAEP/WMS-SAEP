@@ -335,7 +335,7 @@ def _seed_requisicao_rascunho_manutencao_terceiro(
             ItemRascunhoData(
                 material_id=material.id,
                 quantidade_solicitada=Decimal("1"),
-                observacao="Rascunho com beneficiario de terceiro",
+                observacao="Rascunho de manutencao com beneficiario de terceiro",
             )
         ],
     )
@@ -781,7 +781,7 @@ def carregar_seed_pilot_minimo() -> None:
         _seed_requisicao_rascunho_manutencao_terceiro(
             criador=auxiliar_setor,
             beneficiario=beneficiario_terceiro,
-            material=material_saldo_confortavel,
+            material=material_variacao_manutencao,
         )
         _seed_requisicao_aguardando_manutencao(
             criador=auxiliar_setor,

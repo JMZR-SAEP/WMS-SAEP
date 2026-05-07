@@ -20,6 +20,7 @@ from apps.users.policies import (
     pode_operar_estoque,
     pode_operar_estoque_chefia,
     pode_ver_fila_atendimento,
+    queryset_beneficiarios_lookup_para,
     setor_responsavel_chefia,
     usuario_almoxarifado,
     usuario_chefe_almoxarifado,
@@ -221,6 +222,19 @@ class TestPodeCriarRequisicaoPara:
             nome_completo="Super Admin",
         )
         assert pode_criar_requisicao_para(superuser, superuser) is False
+
+    def test_per06_superusuario_nao_recebe_lookup_de_beneficiarios(self):
+        """PER-06 — Superusuário não recebe lookup operacional de beneficiários."""
+        superuser = User.objects.create_superuser(
+            matricula_funcional="99002",
+            password="testpass123",
+            nome_completo="Super Admin Lookup",
+        )
+        chefe = _criar_user("20016", PapelChoices.CHEFE_SETOR)
+        setor = _criar_setor("Almoxarifado Aux", chefe)
+        _criar_user("20017", PapelChoices.SOLICITANTE, setor=setor)
+
+        assert queryset_beneficiarios_lookup_para(superuser).count() == 0
 
     def test_usuario_inativo_nao_pode_criar_requisicao(self):
         """USR-03 — Usuário inativo não opera."""

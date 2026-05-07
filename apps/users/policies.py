@@ -94,9 +94,6 @@ def queryset_beneficiarios_lookup_para(criador) -> QuerySet[User]:
     if not criador.is_authenticated or not criador.is_active:
         return queryset.none()
 
-    if criador.is_superuser:
-        return queryset
-
     if usuario_almoxarifado(criador):
         return queryset
 

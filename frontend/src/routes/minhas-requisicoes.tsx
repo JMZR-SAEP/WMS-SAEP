@@ -66,7 +66,7 @@ function EmptyState() {
   return (
     <div className="empty-state">
       <p className="eyebrow">Sem resultados</p>
-      <h3>Nenhuma requisição encontrada</h3>
+      <h2>Nenhuma requisição encontrada</h2>
       <p>Ajuste busca ou status para voltar à lista operacional.</p>
     </div>
   );
