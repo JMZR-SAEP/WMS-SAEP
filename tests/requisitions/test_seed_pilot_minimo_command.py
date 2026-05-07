@@ -1,3 +1,4 @@
+from decimal import Decimal
 from io import StringIO
 
 import pytest
@@ -199,3 +200,33 @@ class TestSeedPilotMinimoCommand:
         assert requisicao_corrigida.eventos.filter(
             tipo_evento=TipoEvento.REENVIO_AUTORIZACAO
         ).exists()
+
+    def test_seed_reconcilia_rascunho_manutencao_terceiro_quando_item_diverge(self):
+        call_command("seed_pilot_minimo")
+
+        requisicao = Requisicao.objects.get(
+            observacao="SEED_PILOT_MINIMO:rascunho_manutencao_terceiro"
+        )
+        beneficiario_errado = User.objects.get(matricula_funcional="solicitante1")
+        material_errado = Material.objects.get(codigo_completo="010.001.001")
+        requisicao.beneficiario = beneficiario_errado
+        requisicao.setor_beneficiario = beneficiario_errado.setor
+        requisicao.save(update_fields=["beneficiario", "setor_beneficiario", "updated_at"])
+        requisicao.itens.update(
+            material=material_errado,
+            unidade_medida=material_errado.unidade_medida,
+            quantidade_solicitada=Decimal("2"),
+            observacao="Item desatualizado do seed",
+        )
+
+        call_command("seed_pilot_minimo")
+
+        requisicao_corrigida = Requisicao.objects.get(
+            observacao="SEED_PILOT_MINIMO:rascunho_manutencao_terceiro"
+        )
+        item_corrigido = requisicao_corrigida.itens.get()
+
+        assert requisicao_corrigida.beneficiario.matricula_funcional == "solicitante2"
+        assert item_corrigido.material.codigo_completo == "010.001.006"
+        assert item_corrigido.quantidade_solicitada == Decimal("1")
+        assert item_corrigido.observacao == "Rascunho de manutencao com beneficiario de terceiro"

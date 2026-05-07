@@ -104,7 +104,7 @@ function requisitionListResponse(results = [requisitionListItem()]) {
   );
 }
 
-function requisitionDetailResponse() {
+function requisitionDetailResponse(itemOverrides = {}) {
   return new Response(
     JSON.stringify({
       id: 101,
@@ -155,6 +155,7 @@ function requisitionDetailResponse() {
           justificativa_autorizacao_parcial: "Saldo parcial",
           justificativa_atendimento_parcial: "",
           observacao: "Urgente",
+          ...itemOverrides,
         },
       ],
       eventos: [
@@ -699,6 +700,34 @@ describe("frontend scaffold router", () => {
     await waitFor(() => {
       expect(container.ownerDocument.location.pathname).toBe("/autorizacoes");
     });
+  });
+
+  it("formats requisition quantities with pt-BR decimal rendering", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((request: Request) => {
+        if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+          return sessionResponse();
+        }
+
+        if (requestUrl(request).endsWith("/api/v1/requisitions/101/")) {
+          return requisitionDetailResponse({
+            quantidade_solicitada: "2.500",
+            quantidade_autorizada: "1.250",
+            quantidade_entregue: "0.125",
+          });
+        }
+
+        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+      }),
+    );
+
+    renderRoute("/requisicoes/101");
+
+    expect(await screen.findByRole("heading", { name: "REQ-2026-000101" })).toBeInTheDocument();
+    expect(screen.getByText("2,5 UN")).toBeInTheDocument();
+    expect(screen.getByText("1,25 UN")).toBeInTheDocument();
+    expect(screen.getByText("0,125 UN")).toBeInTheDocument();
   });
 
   it("logs out from authenticated shell and returns to login", async () => {

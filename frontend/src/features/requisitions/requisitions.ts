@@ -152,6 +152,19 @@ export function formatDateTime(value: string | null | undefined) {
   }).format(date);
 }
 
+export function formatQuantity(value: string) {
+  const fractionDigits = value.includes(".") ? value.split(".")[1].length : 0;
+  const numericValue = Number.parseFloat(value);
+  if (Number.isNaN(numericValue)) {
+    return value;
+  }
+
+  return new Intl.NumberFormat("pt-BR", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: fractionDigits,
+  }).format(numericValue);
+}
+
 export function queryErrorMessage(error: unknown, fallback: string) {
   if (error instanceof Error && error.message) {
     return error.message;

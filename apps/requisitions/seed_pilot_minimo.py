@@ -325,21 +325,37 @@ def _seed_requisicao_aguardando_setor_secundario(
 def _seed_requisicao_rascunho_manutencao_terceiro(
     *, criador: User, beneficiario: User, material: Material
 ) -> Requisicao:
+    item_desejado = ItemRascunhoData(
+        material_id=material.id,
+        quantidade_solicitada=Decimal("1"),
+        observacao="Rascunho de manutencao com beneficiario de terceiro",
+    )
     requisicao = Requisicao.objects.filter(observacao=SEED_RASCUNHO_MANUTENCAO_TERC).first()
     if requisicao is not None:
-        return requisicao
+        item_atual = requisicao.itens.first()
+        if (
+            requisicao.beneficiario_id == beneficiario.id
+            and requisicao.itens.count() == 1
+            and item_atual is not None
+            and item_atual.material_id == item_desejado.material_id
+            and item_atual.quantidade_solicitada == item_desejado.quantidade_solicitada
+            and item_atual.observacao == item_desejado.observacao
+        ):
+            return requisicao
+
+        return atualizar_rascunho_requisicao(
+            requisicao_id=requisicao.id,
+            ator=criador,
+            beneficiario_id=beneficiario.id,
+            observacao=SEED_RASCUNHO_MANUTENCAO_TERC,
+            itens=[item_desejado],
+        )
 
     return criar_rascunho_requisicao(
         criador=criador,
         beneficiario=beneficiario,
         observacao=SEED_RASCUNHO_MANUTENCAO_TERC,
-        itens=[
-            ItemRascunhoData(
-                material_id=material.id,
-                quantidade_solicitada=Decimal("1"),
-                observacao="Rascunho de manutencao com beneficiario de terceiro",
-            )
-        ],
+        itens=[item_desejado],
     )
 
 

@@ -8,6 +8,7 @@ import { authQueryKeys, isAuthError } from "../../features/auth/session";
 import {
     displayRequisitionIdentifier,
     formatDateTime,
+    formatQuantity,
     isThirdPartyBeneficiary,
     queryErrorMessage,
     requisitionDetailQueryOptions,
@@ -34,19 +35,19 @@ function QuantityBlock({ item }: { item: RequisicaoActionItem }) {
       <span>
         Solicitado
         <strong>
-          {item.quantidade_solicitada} {item.unidade_medida}
+          {formatQuantity(item.quantidade_solicitada)} {item.unidade_medida}
         </strong>
       </span>
       <span>
         Autorizado
         <strong>
-          {item.quantidade_autorizada} {item.unidade_medida}
+          {formatQuantity(item.quantidade_autorizada)} {item.unidade_medida}
         </strong>
       </span>
       <span>
         Entregue
         <strong>
-          {item.quantidade_entregue} {item.unidade_medida}
+          {formatQuantity(item.quantidade_entregue)} {item.unidade_medida}
         </strong>
       </span>
     </div>
