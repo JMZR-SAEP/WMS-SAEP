@@ -911,7 +911,7 @@ describe("frontend scaffold router", () => {
     });
   });
 
-  it("rejects malformed decimal quantities before saving a draft", async () => {
+  it("rejects quantities with dot decimal separator before saving a draft", async () => {
     let createdPayload: unknown;
     const fetchMock = vi.fn(async (request: Request) => {
       if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
@@ -942,7 +942,7 @@ describe("frontend scaffold router", () => {
     });
     fireEvent.click(await screen.findByRole("button", { name: "Adicionar Papel sulfite A4" }));
     fireEvent.change(screen.getByLabelText("Quantidade solicitada"), {
-      target: { value: "1,0,0" },
+      target: { value: "1.5" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Salvar rascunho" }));
 
@@ -1058,6 +1058,13 @@ describe("frontend scaffold router", () => {
         return draftRequisitionDetailResponse();
       }
 
+      if (
+        requestUrl(request).includes("/api/v1/materials/") &&
+        requestSearchParam(request, "search") === "010.001.001"
+      ) {
+        return materialListResponse();
+      }
+
       if (requestUrl(request).endsWith("/api/v1/requisitions/101/draft/")) {
         updatedPayload = await request.json();
         return draftRequisitionDetailResponse({ observacao: "Observacao nova" });
@@ -1070,6 +1077,9 @@ describe("frontend scaffold router", () => {
     const { container } = renderRoute("/requisicoes/101");
 
     expect(await screen.findByRole("heading", { name: "Editar rascunho" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Quantidade solicitada")).toHaveValue("2");
+    expect(screen.queryByText(/Saldo não exibido/)).not.toBeInTheDocument();
+    expect(await screen.findByText("Saldo 12 UN")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Observação geral"), {
       target: { value: "Observacao nova" },
     });
@@ -1136,7 +1146,7 @@ describe("frontend scaffold router", () => {
         itens: [
           {
             material_id: 301,
-            quantidade_solicitada: "2.000",
+            quantidade_solicitada: "2",
             observacao: "Item antigo",
           },
         ],

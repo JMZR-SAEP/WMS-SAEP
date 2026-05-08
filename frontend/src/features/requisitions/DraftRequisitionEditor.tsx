@@ -11,6 +11,7 @@ import {
   displayRequisitionIdentifier,
   draftBeneficiariesQueryOptions,
   draftMaterialsQueryOptions,
+  fetchMaterialsForDraft,
   formatQuantity,
   queryErrorMessage,
   requisitionsQueryKeys,
@@ -103,7 +104,7 @@ function formValuesFromRequisition(
         materialCode: item.material.codigo_completo,
         unidadeMedida: item.unidade_medida,
         saldoDisponivel: null,
-        quantidadeSolicitada: item.quantidade_solicitada,
+        quantidadeSolicitada: quantityInputValue(item.quantidade_solicitada),
         observacao: item.observacao,
       })) ?? [],
   };
@@ -121,7 +122,18 @@ function normalizeQuantity(value: string) {
   return value.trim().replace(/,/g, ".");
 }
 
+function quantityInputValue(value: string) {
+  const trimmedValue = value.trim();
+  if (!trimmedValue.includes(".")) {
+    return trimmedValue;
+  }
+  return trimmedValue.replace(/0+$/, "").replace(/\.$/, "").replace(".", ",");
+}
+
 function isPositiveQuantity(value: string) {
+  if (!/^\d+(,\d+)?$/.test(value.trim())) {
+    return false;
+  }
   const quantity = Number(normalizeQuantity(value));
   return Number.isFinite(quantity) && quantity > 0;
 }
@@ -290,7 +302,15 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
       setFormError(null);
       afterMutationSuccess(requisition);
       if (initialRequisition) {
-        form.reset(formValuesFromRequisition(requisition, stableSession));
+        const currentItems = form.getValues("itens");
+        const nextValues = formValuesFromRequisition(requisition, stableSession);
+        nextValues.itens = nextValues.itens.map((item) => ({
+          ...item,
+          saldoDisponivel:
+            currentItems.find((currentItem) => currentItem.materialId === item.materialId)?.saldoDisponivel ??
+            item.saldoDisponivel,
+        }));
+        form.reset(nextValues);
       }
       if (!initialRequisition) {
         await navigate({ to: "/requisicoes/$id", params: { id: String(requisition.id) } });
@@ -343,10 +363,52 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
   const pending = saveMutation.isPending || submitMutation.isPending || discardMutation.isPending;
   const materials = materialsQuery.data?.results ?? [];
   const beneficiaries = beneficiaryQuery.data ?? [];
+  const missingStockSignature = selectedItems
+    .filter((item) => item.saldoDisponivel === null)
+    .map((item) => `${item.materialId}:${item.materialCode}`)
+    .join("|");
 
   useEffect(() => {
     pendingRef.current = pending;
   }, [pending]);
+
+  useEffect(() => {
+    if (!initialRequisition || !missingStockSignature) {
+      return;
+    }
+    const itemsToHydrate = form
+      .getValues("itens")
+      .map((item, index) => ({ item, index }))
+      .filter(({ item }) => item.saldoDisponivel === null);
+
+    if (itemsToHydrate.length === 0) {
+      return;
+    }
+
+    let ignore = false;
+
+    void Promise.all(
+      itemsToHydrate.map(async ({ item, index }) => {
+        try {
+          const materialPage = await fetchMaterialsForDraft(item.materialCode);
+          const material = materialPage.results.find(
+            (candidate) => candidate.id === Number.parseInt(item.materialId, 10),
+          );
+          if (!ignore && material) {
+            form.setValue(`itens.${index}.saldoDisponivel`, material.saldo_disponivel, {
+              shouldDirty: false,
+            });
+          }
+        } catch {
+          // Best effort: saved drafts still work if stock lookup is temporarily unavailable.
+        }
+      }),
+    );
+
+    return () => {
+      ignore = true;
+    };
+  }, [form, initialRequisition, missingStockSignature]);
 
   const selectedMaterialIds = useMemo(
     () => new Set(selectedItems.map((item) => Number.parseInt(item.materialId, 10))),
@@ -660,48 +722,49 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
             <p className="helper-text">Nenhum material adicionado.</p>
           ) : (
             <div className="draft-items">
-              {fields.map((field, index) => (
-                <article className="draft-item-card" key={field.id}>
-                  <div>
-                    <h2>{field.materialLabel}</h2>
-                    <p>
-                      Saldo{" "}
-                      {field.saldoDisponivel === null
-                        ? "não exibido"
-                        : formatQuantity(String(field.saldoDisponivel))}{" "}
-                      {field.unidadeMedida}
-                    </p>
-                  </div>
-                  <div className="draft-item-fields">
-                    <label className="preview-label">
-                      Quantidade solicitada
-                      <input
-                        className="preview-input"
+              {fields.map((field, index) => {
+                const item = selectedItems[index] ?? field;
+                return (
+                  <article className="draft-item-card" key={field.id}>
+                    <div>
+                      <h2>{field.materialLabel}</h2>
+                      <p>
+                        {item.saldoDisponivel === null
+                          ? "Saldo carregando..."
+                          : `Saldo ${formatQuantity(String(item.saldoDisponivel))} ${field.unidadeMedida}`}
+                      </p>
+                    </div>
+                    <div className="draft-item-fields">
+                      <label className="preview-label">
+                        Quantidade solicitada
+                        <input
+                          className="preview-input"
+                          disabled={pending}
+                          inputMode="decimal"
+                          {...form.register(`itens.${index}.quantidadeSolicitada`)}
+                        />
+                      </label>
+                      <label className="preview-label">
+                        Observação do item
+                        <input
+                          className="preview-input"
+                          disabled={pending}
+                          {...form.register(`itens.${index}.observacao`)}
+                        />
+                      </label>
+                      <button
+                        aria-label={`Remover ${field.materialLabel}`}
+                        className="action-link compact-action"
                         disabled={pending}
-                        inputMode="decimal"
-                        {...form.register(`itens.${index}.quantidadeSolicitada`)}
-                      />
-                    </label>
-                    <label className="preview-label">
-                      Observação do item
-                      <input
-                        className="preview-input"
-                        disabled={pending}
-                        {...form.register(`itens.${index}.observacao`)}
-                      />
-                    </label>
-                    <button
-                      aria-label={`Remover ${field.materialLabel}`}
-                      className="action-link compact-action"
-                      disabled={pending}
-                      onClick={() => removeMaterial(index)}
-                      type="button"
-                    >
-                      Remover
-                    </button>
-                  </div>
-                </article>
-              ))}
+                        onClick={() => removeMaterial(index)}
+                        type="button"
+                      >
+                        Remover
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
             </div>
           )}
         </section>
