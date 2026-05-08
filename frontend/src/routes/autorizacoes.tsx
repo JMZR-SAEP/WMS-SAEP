@@ -192,6 +192,10 @@ function AutorizacoesPage() {
     });
   }, [authError, currentPage, navigate, queryClient]);
 
+  if (authError) {
+    return null;
+  }
+
   return (
     <section className="space-y-6">
       <div className="worklist-header">
@@ -206,13 +210,13 @@ function AutorizacoesPage() {
         </div>
       </div>
 
-      {listQuery.isError && !authError ? (
+      {listQuery.isError ? (
         <div className="error-panel">
           {queryErrorMessage(listQuery.error, "Não foi possível carregar autorizações pendentes.")}
         </div>
       ) : null}
 
-      {!listQuery.isError || authError ? (
+      {!listQuery.isError ? (
         <div className="table-frame">
           {listQuery.isPending ? (
             <div className="loading-state">Carregando autorizações...</div>

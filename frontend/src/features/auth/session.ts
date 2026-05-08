@@ -7,12 +7,15 @@ export type AuthSession = components["schemas"]["AuthSessionOutput"];
 export type AuthLoginInput = components["schemas"]["AuthLoginInput"];
 export type ErrorResponse = components["schemas"]["ErrorResponse"];
 
-export type PapelOperacional =
-  | "solicitante"
-  | "auxiliar_setor"
-  | "chefe_setor"
-  | "auxiliar_almoxarifado"
-  | "chefe_almoxarifado";
+export const PAPEL_OPERACIONAL_VALUES = [
+  "solicitante",
+  "auxiliar_setor",
+  "chefe_setor",
+  "auxiliar_almoxarifado",
+  "chefe_almoxarifado",
+] as const;
+
+export type PapelOperacional = (typeof PAPEL_OPERACIONAL_VALUES)[number];
 
 export const UNKNOWN_ROLE_PATH = "/unknown-role";
 
@@ -110,13 +113,7 @@ export const meQueryOptions = queryOptions({
 });
 
 export function isPapelOperacional(value: string): value is PapelOperacional {
-  return (
-    value === "solicitante" ||
-    value === "auxiliar_setor" ||
-    value === "chefe_setor" ||
-    value === "auxiliar_almoxarifado" ||
-    value === "chefe_almoxarifado"
-  );
+  return PAPEL_OPERACIONAL_VALUES.includes(value as PapelOperacional);
 }
 
 export function homePathForPapel(papel: string) {

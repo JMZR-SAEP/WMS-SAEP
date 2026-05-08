@@ -4,7 +4,12 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 
 import { requireOperationalPapel, requireSession } from "../../features/auth/guards";
-import { authQueryKeys, isAuthError, meQueryOptions } from "../../features/auth/session";
+import {
+  authQueryKeys,
+  isAuthError,
+  isUnauthenticatedError,
+  meQueryOptions,
+} from "../../features/auth/session";
 import { DraftRequisitionEditor } from "../../features/requisitions/DraftRequisitionEditor";
 import {
     authorizeRequisition,
@@ -110,6 +115,26 @@ function normalizeQuantityInput(value: string) {
   return value.replace(",", ".").trim();
 }
 
+function buildRequisicaoRedirect({
+  authorizationPage,
+  contexto,
+  id,
+}: {
+  authorizationPage: number | undefined;
+  contexto: "autorizacao" | "atendimento" | undefined;
+  id: string;
+}) {
+  if (contexto === "autorizacao") {
+    return `/requisicoes/${id}?contexto=autorizacao${authorizationPage && authorizationPage > 1 ? `&page=${authorizationPage}` : ""}`;
+  }
+
+  if (contexto === "atendimento") {
+    return `/requisicoes/${id}?contexto=atendimento`;
+  }
+
+  return `/requisicoes/${id}`;
+}
+
 function authorizationItemLabel(item: RequisicaoActionItem) {
   return item.material.nome;
 }
@@ -137,6 +162,24 @@ function AuthorizationDecisionPanel({
   const queryClient = useQueryClient();
   const navigate = useNavigate({ from: "/requisicoes/$id" });
 
+  function redirectToLoginAfterAuthError(error: unknown) {
+    if (!isUnauthenticatedError(error)) {
+      return;
+    }
+
+    queryClient.removeQueries({ queryKey: authQueryKeys.me });
+    void navigate({
+      to: "/login",
+      search: {
+        redirect: buildRequisicaoRedirect({
+          id: String(requisicao.id),
+          contexto: "autorizacao",
+          authorizationPage,
+        }),
+      },
+    });
+  }
+
   async function afterDecisionSuccess() {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: requisitionsQueryKeys.pendingApprovalsAll }),
@@ -152,10 +195,12 @@ function AuthorizationDecisionPanel({
 
   const authorizeMutation = useMutation({
     mutationFn: (input: RequisicaoAuthorizeInput) => authorizeRequisition(requisicao.id, input),
+    onError: redirectToLoginAfterAuthError,
     onSuccess: afterDecisionSuccess,
   });
   const refuseMutation = useMutation({
     mutationFn: (input: RequisicaoRefuseInput) => refuseRequisition(requisicao.id, input),
+    onError: redirectToLoginAfterAuthError,
     onSuccess: afterDecisionSuccess,
   });
   const pending = authorizeMutation.isPending || refuseMutation.isPending;
@@ -375,12 +420,7 @@ function DetalheRequisicaoPage() {
     void navigate({
       to: "/login",
       search: {
-        redirect:
-          contexto === "autorizacao"
-            ? `/requisicoes/${id}?contexto=autorizacao${authorizationPage && authorizationPage > 1 ? `&page=${authorizationPage}` : ""}`
-            : contexto === "atendimento"
-              ? `/requisicoes/${id}?contexto=atendimento`
-              : `/requisicoes/${id}`,
+        redirect: buildRequisicaoRedirect({ id, contexto, authorizationPage }),
       },
     });
   }, [authError, authorizationPage, contexto, id, navigate, queryClient]);

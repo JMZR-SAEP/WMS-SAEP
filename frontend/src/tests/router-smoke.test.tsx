@@ -1180,6 +1180,28 @@ describe("frontend scaffold router", () => {
     expect(container.ownerDocument.location.search).toBe("?redirect=%2Fautorizacoes%3Fpage%3D2");
   });
 
+  it("does not render empty state while redirecting authorization queue auth error", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((request: Request) => {
+        if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+          return sessionResponse(chefeSession());
+        }
+
+        if (requestUrl(request).includes("/api/v1/requisitions/pending-approvals/")) {
+          return unauthenticatedForbiddenResponse();
+        }
+
+        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+      }),
+    );
+
+    renderRoute("/autorizacoes");
+
+    expect(await screen.findByRole("heading", { name: "Entrar no piloto" })).toBeInTheDocument();
+    expect(screen.queryByText("Nenhuma autorização pendente")).not.toBeInTheDocument();
+  });
+
   it("keeps permission denied queue errors inside the page", async () => {
     vi.stubGlobal(
       "fetch",
@@ -1385,6 +1407,73 @@ describe("frontend scaffold router", () => {
 
     expect(await screen.findByText("Saldo atual insuficiente.")).toBeInTheDocument();
     expect(container.ownerDocument.location.pathname).toBe("/requisicoes/101");
+  });
+
+  it("redirects to login when authorize returns unauthenticated error", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((request: Request) => {
+        if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+          return sessionResponse(chefeSession());
+        }
+
+        if (requestUrl(request).endsWith("/api/v1/requisitions/101/")) {
+          return pendingApprovalDetailResponse();
+        }
+
+        if (requestUrl(request).endsWith("/api/v1/requisitions/101/authorize/")) {
+          return unauthenticatedResponse();
+        }
+
+        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+      }),
+    );
+
+    const { container } = renderRoute("/requisicoes/101?contexto=autorizacao&page=2");
+
+    expect(await screen.findByRole("heading", { name: "REQ-2026-000101" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Autorizar tudo como solicitado" }));
+
+    expect(await screen.findByRole("heading", { name: "Entrar no piloto" })).toBeInTheDocument();
+    expect(container.ownerDocument.location.pathname).toBe("/login");
+    expect(container.ownerDocument.location.search).toBe(
+      "?redirect=%2Frequisicoes%2F101%3Fcontexto%3Dautorizacao%26page%3D2",
+    );
+  });
+
+  it("redirects to login when refuse returns unauthenticated error", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((request: Request) => {
+        if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+          return sessionResponse(chefeSession());
+        }
+
+        if (requestUrl(request).endsWith("/api/v1/requisitions/101/")) {
+          return pendingApprovalDetailResponse();
+        }
+
+        if (requestUrl(request).endsWith("/api/v1/requisitions/101/refuse/")) {
+          return unauthenticatedForbiddenResponse();
+        }
+
+        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+      }),
+    );
+
+    const { container } = renderRoute("/requisicoes/101?contexto=autorizacao&page=2");
+
+    expect(await screen.findByRole("heading", { name: "REQ-2026-000101" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Motivo da recusa"), {
+      target: { value: "Sessão expirou antes da decisão" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Recusar requisição" }));
+
+    expect(await screen.findByRole("heading", { name: "Entrar no piloto" })).toBeInTheDocument();
+    expect(container.ownerDocument.location.pathname).toBe("/login");
+    expect(container.ownerDocument.location.search).toBe(
+      "?redirect=%2Frequisicoes%2F101%3Fcontexto%3Dautorizacao%26page%3D2",
+    );
   });
 
   it("creates draft requisition for the current user", async () => {
