@@ -28,6 +28,10 @@ function requestUrl(request: Request) {
   return request.url;
 }
 
+function requestSearchParam(request: Request, name: string) {
+  return new URL(requestUrl(request)).searchParams.get(name);
+}
+
 function authSession(papel = "solicitante") {
   return {
     id: 10,
@@ -172,6 +176,103 @@ function requisitionDetailResponse(itemOverrides = {}) {
         },
       ],
     }),
+    { status: 200, headers: jsonHeaders },
+  );
+}
+
+function draftRequisitionDetailResponse(overrides = {}) {
+  return new Response(
+    JSON.stringify({
+      id: 101,
+      numero_publico: null,
+      status: "rascunho",
+      criador: {
+        id: 10,
+        matricula_funcional: "91003",
+        nome_completo: "Usuario Piloto",
+      },
+      beneficiario: {
+        id: 10,
+        matricula_funcional: "91003",
+        nome_completo: "Usuario Piloto",
+      },
+      setor_beneficiario: {
+        id: 1,
+        nome: "Operacao",
+      },
+      chefe_autorizador: null,
+      responsavel_atendimento: null,
+      data_criacao: "2026-05-01T10:00:00Z",
+      data_envio_autorizacao: null,
+      data_autorizacao_ou_recusa: null,
+      motivo_recusa: "",
+      motivo_cancelamento: "",
+      data_finalizacao: null,
+      retirante_fisico: "",
+      observacao: "Observacao antiga",
+      observacao_atendimento: "",
+      itens: [
+        {
+          id: 501,
+          material: {
+            id: 301,
+            codigo_completo: "010.001.001",
+            nome: "Papel sulfite A4",
+            unidade_medida: "UN",
+          },
+          unidade_medida: "UN",
+          quantidade_solicitada: "2.000",
+          quantidade_autorizada: "0.000",
+          quantidade_entregue: "0.000",
+          justificativa_autorizacao_parcial: "",
+          justificativa_atendimento_parcial: "",
+          observacao: "Item antigo",
+        },
+      ],
+      eventos: [],
+      ...overrides,
+    }),
+    { status: 200, headers: jsonHeaders },
+  );
+}
+
+function materialListResponse(results = [
+  {
+    id: 301,
+    codigo_completo: "010.001.001",
+    nome: "Papel sulfite A4",
+    descricao: "Pacote com 500 folhas",
+    unidade_medida: "UN",
+    saldo_disponivel: 12,
+  },
+]) {
+  return new Response(
+    JSON.stringify({
+      count: results.length,
+      page: 1,
+      page_size: 10,
+      total_pages: 1,
+      next: null,
+      previous: null,
+      results,
+    }),
+    { status: 200, headers: jsonHeaders },
+  );
+}
+
+function beneficiaryLookupResponse() {
+  return new Response(
+    JSON.stringify([
+      {
+        id: 11,
+        matricula_funcional: "91004",
+        nome_completo: "Beneficiario Terceiro",
+        setor: {
+          id: 1,
+          nome: "Operacao",
+        },
+      },
+    ]),
     { status: 200, headers: jsonHeaders },
   );
 }
@@ -738,6 +839,436 @@ describe("frontend scaffold router", () => {
     expect(screen.getByText("2,5 UN")).toBeInTheDocument();
     expect(screen.getByText("1,25 UN")).toBeInTheDocument();
     expect(screen.getByText("0,125 UN")).toBeInTheDocument();
+  });
+
+  it("creates draft requisition for the current user", async () => {
+    let createdPayload: unknown;
+    const fetchMock = vi.fn(async (request: Request) => {
+      if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+        return sessionResponse();
+      }
+
+      if (
+        requestUrl(request).includes("/api/v1/materials/") &&
+        requestSearchParam(request, "search") === "papel"
+      ) {
+        return materialListResponse();
+      }
+
+      if (requestUrl(request).endsWith("/api/v1/requisitions/") && request.method === "POST") {
+        createdPayload = await request.json();
+        return draftRequisitionDetailResponse({
+          itens: [
+            {
+              id: 501,
+              material: {
+                id: 301,
+                codigo_completo: "010.001.001",
+                nome: "Papel sulfite A4",
+                unidade_medida: "UN",
+              },
+              unidade_medida: "UN",
+              quantidade_solicitada: "3.000",
+              quantidade_autorizada: "0.000",
+              quantidade_entregue: "0.000",
+              justificativa_autorizacao_parcial: "",
+              justificativa_atendimento_parcial: "",
+              observacao: "",
+            },
+          ],
+        });
+      }
+
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { container } = renderRoute("/requisicoes/nova");
+
+    expect(await screen.findByRole("heading", { name: "Nova requisição" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Buscar material"), {
+      target: { value: "papel" },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Adicionar Papel sulfite A4" }));
+    fireEvent.change(screen.getByLabelText("Quantidade solicitada"), {
+      target: { value: "3" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Salvar rascunho" }));
+
+    await waitFor(() => {
+      expect(container.ownerDocument.location.pathname).toBe("/requisicoes/101");
+    });
+    expect(createdPayload).toEqual({
+      beneficiario_id: 10,
+      observacao: "",
+      itens: [
+        {
+          material_id: 301,
+          quantidade_solicitada: "3",
+          observacao: "",
+        },
+      ],
+    });
+  });
+
+  it("rejects quantities with dot decimal separator before saving a draft", async () => {
+    let createdPayload: unknown;
+    const fetchMock = vi.fn(async (request: Request) => {
+      if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+        return sessionResponse();
+      }
+
+      if (
+        requestUrl(request).includes("/api/v1/materials/") &&
+        requestSearchParam(request, "search") === "papel"
+      ) {
+        return materialListResponse();
+      }
+
+      if (requestUrl(request).endsWith("/api/v1/requisitions/") && request.method === "POST") {
+        createdPayload = await request.json();
+        return requisitionDetailResponse();
+      }
+
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderRoute("/requisicoes/nova");
+
+    expect(await screen.findByRole("heading", { name: "Nova requisição" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Buscar material"), {
+      target: { value: "papel" },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Adicionar Papel sulfite A4" }));
+    fireEvent.change(screen.getByLabelText("Quantidade solicitada"), {
+      target: { value: "1.5" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Salvar rascunho" }));
+
+    expect(
+      await screen.findByText(
+        "Quantidade inválida no item 010.001.001 - Papel sulfite A4: use um número válido maior que zero.",
+      ),
+    ).toBeInTheDocument();
+    expect(createdPayload).toBeUndefined();
+  });
+
+  it("creates draft requisition for a third-party beneficiary when allowed", async () => {
+    let createdPayload: unknown;
+    const fetchMock = vi.fn(async (request: Request) => {
+      if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+        return sessionResponse(authSession("auxiliar_setor"));
+      }
+
+      if (requestUrl(request).includes("/api/v1/users/beneficiary-lookup/")) {
+        return beneficiaryLookupResponse();
+      }
+
+      if (
+        requestUrl(request).includes("/api/v1/materials/") &&
+        requestSearchParam(request, "search") === "papel"
+      ) {
+        return materialListResponse();
+      }
+
+      if (requestUrl(request).endsWith("/api/v1/requisitions/") && request.method === "POST") {
+        createdPayload = await request.json();
+        return requisitionDetailResponse();
+      }
+
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderRoute("/requisicoes/nova");
+
+    expect(await screen.findByRole("heading", { name: "Nova requisição" })).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Para terceiro"));
+    fireEvent.change(screen.getByLabelText("Buscar beneficiário"), {
+      target: { value: "Beneficiario" },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: /Beneficiario Terceiro/ }));
+    fireEvent.change(screen.getByLabelText("Buscar material"), {
+      target: { value: "papel" },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Adicionar Papel sulfite A4" }));
+    fireEvent.click(screen.getByRole("button", { name: "Salvar rascunho" }));
+
+    await waitFor(() => {
+      expect(createdPayload).toEqual({
+        beneficiario_id: 11,
+        observacao: "",
+        itens: [
+          {
+            material_id: 301,
+            quantidade_solicitada: "1",
+            observacao: "",
+          },
+        ],
+      });
+    });
+  });
+
+  it("requires selecting a beneficiary after switching from self to third-party", async () => {
+    let createdPayload: unknown;
+    const fetchMock = vi.fn(async (request: Request) => {
+      if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+        return sessionResponse(authSession("auxiliar_setor"));
+      }
+
+      if (
+        requestUrl(request).includes("/api/v1/materials/") &&
+        requestSearchParam(request, "search") === "papel"
+      ) {
+        return materialListResponse();
+      }
+
+      if (requestUrl(request).endsWith("/api/v1/requisitions/") && request.method === "POST") {
+        createdPayload = await request.json();
+        return requisitionDetailResponse();
+      }
+
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderRoute("/requisicoes/nova");
+
+    expect(await screen.findByRole("heading", { name: "Nova requisição" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Buscar material"), {
+      target: { value: "papel" },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Adicionar Papel sulfite A4" }));
+    fireEvent.click(screen.getByLabelText("Para terceiro"));
+    fireEvent.click(screen.getByRole("button", { name: "Salvar rascunho" }));
+
+    expect(await screen.findByText("Informe beneficiário.")).toBeInTheDocument();
+    expect(createdPayload).toBeUndefined();
+  });
+
+  it("updates an existing draft with full replacement payload", async () => {
+    let updatedPayload: unknown;
+    const fetchMock = vi.fn(async (request: Request) => {
+      if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+        return sessionResponse();
+      }
+
+      if (requestUrl(request).endsWith("/api/v1/requisitions/101/")) {
+        return draftRequisitionDetailResponse();
+      }
+
+      if (
+        requestUrl(request).includes("/api/v1/materials/") &&
+        requestSearchParam(request, "search") === "010.001.001"
+      ) {
+        return materialListResponse();
+      }
+
+      if (requestUrl(request).endsWith("/api/v1/requisitions/101/draft/")) {
+        updatedPayload = await request.json();
+        return draftRequisitionDetailResponse({ observacao: "Observacao nova" });
+      }
+
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { container } = renderRoute("/requisicoes/101");
+
+    expect(await screen.findByRole("heading", { name: "Editar rascunho" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Quantidade solicitada")).toHaveValue("2");
+    expect(screen.queryByText(/Saldo não exibido/)).not.toBeInTheDocument();
+    expect(await screen.findByText("Saldo 12 UN")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Observação geral"), {
+      target: { value: "Observacao nova" },
+    });
+    fireEvent.change(screen.getByLabelText("Quantidade solicitada"), {
+      target: { value: "4" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Salvar rascunho" }));
+
+    await waitFor(() => {
+      expect(updatedPayload).toEqual({
+        beneficiario_id: 10,
+        observacao: "Observacao nova",
+        itens: [
+          {
+            material_id: 301,
+            quantidade_solicitada: "4",
+            observacao: "Item antigo",
+          },
+        ],
+      });
+    });
+    expect(container.ownerDocument.location.pathname).toBe("/requisicoes/101");
+  });
+
+  it("confirms and submits a draft to authorization", async () => {
+    let updatedPayload: unknown;
+    let submitCalled = false;
+    const fetchMock = vi.fn(async (request: Request) => {
+      if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+        return sessionResponse();
+      }
+
+      if (requestUrl(request).endsWith("/api/v1/requisitions/101/")) {
+        return draftRequisitionDetailResponse();
+      }
+
+      if (requestUrl(request).endsWith("/api/v1/requisitions/101/draft/")) {
+        updatedPayload = await request.json();
+        return draftRequisitionDetailResponse();
+      }
+
+      if (requestUrl(request).endsWith("/api/v1/requisitions/101/submit/")) {
+        submitCalled = true;
+        return requisitionDetailResponse();
+      }
+
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderRoute("/requisicoes/101");
+
+    expect(await screen.findByRole("heading", { name: "Editar rascunho" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Enviar para autorização" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveTextContent("Enviar rascunho para autorização?");
+    expect(screen.getByRole("button", { name: "Voltar ao rascunho" })).toHaveFocus();
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar envio" }));
+
+    await waitFor(() => {
+      expect(updatedPayload).toEqual({
+        beneficiario_id: 10,
+        observacao: "Observacao antiga",
+        itens: [
+          {
+            material_id: 301,
+            quantidade_solicitada: "2",
+            observacao: "Item antigo",
+          },
+        ],
+      });
+      expect(submitCalled).toBe(true);
+    });
+    expect(await screen.findByRole("heading", { name: "REQ-2026-000101" })).toBeInTheDocument();
+  });
+
+  it("discards an unnumbered draft", async () => {
+    let discardCalled = false;
+    const fetchMock = vi.fn((request: Request) => {
+      if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+        return sessionResponse();
+      }
+
+      if (requestUrl(request).endsWith("/api/v1/requisitions/101/")) {
+        return draftRequisitionDetailResponse();
+      }
+
+      if (requestUrl(request).endsWith("/api/v1/requisitions/101/discard/")) {
+        discardCalled = true;
+        return new Response(null, { status: 204 });
+      }
+
+      if (requestUrl(request).includes("/api/v1/requisitions/mine/")) {
+        return requisitionListResponse([]);
+      }
+
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { container } = renderRoute("/requisicoes/101");
+
+    expect(await screen.findByRole("heading", { name: "Editar rascunho" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Descartar rascunho" }));
+    expect(await screen.findByRole("dialog")).toHaveTextContent("Descartar rascunho?");
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar descarte" }));
+
+    await waitFor(() => {
+      expect(discardCalled).toBe(true);
+      expect(container.ownerDocument.location.pathname).toBe("/minhas-requisicoes");
+    });
+  });
+
+  it("cancels a numbered draft instead of discarding it", async () => {
+    let cancelPayload: unknown;
+    const fetchMock = vi.fn(async (request: Request) => {
+      if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+        return sessionResponse();
+      }
+
+      if (requestUrl(request).endsWith("/api/v1/requisitions/101/")) {
+        return draftRequisitionDetailResponse({ numero_publico: "REQ-2026-000050" });
+      }
+
+      if (requestUrl(request).endsWith("/api/v1/requisitions/101/cancel/")) {
+        cancelPayload = await request.json();
+        return requisitionDetailResponse({ status: "cancelada" });
+      }
+
+      if (requestUrl(request).includes("/api/v1/requisitions/mine/")) {
+        return requisitionListResponse([]);
+      }
+
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { container } = renderRoute("/requisicoes/101");
+
+    expect(await screen.findByRole("heading", { name: "Editar rascunho" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Cancelar requisição" }));
+    expect(await screen.findByRole("dialog")).toHaveTextContent("Cancelar requisição?");
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar cancelamento" }));
+
+    await waitFor(() => {
+      expect(cancelPayload).toEqual({ motivo_cancelamento: "" });
+      expect(container.ownerDocument.location.pathname).toBe("/minhas-requisicoes");
+    });
+  });
+
+  it("shows material stock and blocks adding material without positive stock", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((request: Request) => {
+        if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+          return sessionResponse();
+        }
+
+        if (
+          requestUrl(request).includes("/api/v1/materials/") &&
+          requestSearchParam(request, "search") === "caneta"
+        ) {
+          return materialListResponse([
+            {
+              id: 302,
+              codigo_completo: "010.001.002",
+              nome: "Caneta sem estoque",
+              descricao: "Caneta azul",
+              unidade_medida: "UN",
+              saldo_disponivel: 0,
+            },
+          ]);
+        }
+
+        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+      }),
+    );
+
+    renderRoute("/requisicoes/nova");
+
+    expect(await screen.findByRole("heading", { name: "Nova requisição" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Buscar material"), {
+      target: { value: "caneta" },
+    });
+
+    const addButton = await screen.findByRole("button", { name: "Adicionar Caneta sem estoque" });
+    expect(addButton).toBeDisabled();
+    expect(screen.getByText(/saldo 0 UN/i)).toBeInTheDocument();
+    expect(screen.getByText("Nenhum material adicionado.")).toBeInTheDocument();
   });
 
   it("logs out from authenticated shell and returns to login", async () => {
