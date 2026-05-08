@@ -339,6 +339,7 @@ function AuthorizationDecisionPanel({
                   <input
                     className="preview-input"
                     disabled={pending}
+                    inputMode="decimal"
                     onChange={(event) =>
                       updateItem(item.itemId, "authorizedQuantity", event.target.value)
                     }
@@ -347,11 +348,12 @@ function AuthorizationDecisionPanel({
                 </label>
                 <label className="preview-label">
                   Justificativa para {item.label}
-                  <input
+                  <textarea
                     className="preview-input"
                     disabled={pending}
                     onChange={(event) => updateItem(item.itemId, "justification", event.target.value)}
                     placeholder="Obrigatória quando parcial ou zerada"
+                    rows={3}
                     value={item.justification}
                   />
                 </label>
