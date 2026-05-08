@@ -127,6 +127,7 @@ run: ## Subir servidor de desenvolvimento
 $(FRONTEND_DEPS_STAMP): $(FRONTEND_DIR)/package.json $(FRONTEND_DIR)/pnpm-lock.yaml
 	@test -d $(FRONTEND_DIR) || (echo "Diretório $(FRONTEND_DIR) não encontrado" && exit 1)
 	cd $(FRONTEND_DIR) && $(PNPM) install
+	touch $(FRONTEND_DEPS_STAMP)
 
 frontend-deps: $(FRONTEND_DEPS_STAMP) ## Instalar dependências do frontend quando necessário
 	@test -d $(FRONTEND_DIR) || (echo "Diretório $(FRONTEND_DIR) não encontrado" && exit 1)

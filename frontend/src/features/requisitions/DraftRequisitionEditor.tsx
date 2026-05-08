@@ -289,6 +289,9 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
     onSuccess: async (requisition) => {
       setFormError(null);
       afterMutationSuccess(requisition);
+      if (initialRequisition) {
+        form.reset(formValuesFromRequisition(requisition, stableSession));
+      }
       if (!initialRequisition) {
         await navigate({ to: "/requisicoes/$id", params: { id: String(requisition.id) } });
       }
@@ -351,7 +354,7 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
   );
 
   function addMaterial(material: MaterialListItem) {
-    if (!hasPositiveStock(material) || selectedMaterialIds.has(material.id)) {
+    if (pending || !hasPositiveStock(material) || selectedMaterialIds.has(material.id)) {
       return;
     }
     append({
@@ -367,12 +370,18 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
   }
 
   function chooseBeneficiary(beneficiary: BeneficiaryLookupItem) {
+    if (pending) {
+      return;
+    }
     form.setValue("beneficiaryId", String(beneficiary.id));
     form.setValue("beneficiaryLabel", beneficiaryLabel(beneficiary));
     form.setValue("beneficiarySearch", "");
   }
 
   function chooseBeneficiaryMode(mode: DraftFormValues["beneficiaryMode"]) {
+    if (pending) {
+      return;
+    }
     form.setValue("beneficiaryMode", mode, { shouldDirty: true });
     if (mode === "self") {
       const self = currentUserBeneficiary(stableSession);
@@ -383,6 +392,13 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
     }
     form.setValue("beneficiaryId", "", { shouldDirty: true });
     form.setValue("beneficiaryLabel", "", { shouldDirty: true });
+  }
+
+  function removeMaterial(index: number) {
+    if (pending) {
+      return;
+    }
+    remove(index);
   }
 
   function closeConfirmation() {
@@ -528,6 +544,7 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
             <label className="draft-choice">
               <input
                 checked={beneficiaryMode === "self"}
+                disabled={pending}
                 name="beneficiaryModeChoice"
                 onChange={() => chooseBeneficiaryMode("self")}
                 type="radio"
@@ -539,6 +556,7 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
               <label className="draft-choice">
                 <input
                   checked={beneficiaryMode === "third_party"}
+                  disabled={pending}
                   name="beneficiaryModeChoice"
                   onChange={() => chooseBeneficiaryMode("third_party")}
                   type="radio"
@@ -555,6 +573,7 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
                 Buscar beneficiário
                 <input
                   className="preview-input"
+                  disabled={pending}
                   placeholder="Nome com ao menos 3 letras"
                   {...form.register("beneficiarySearch")}
                 />
@@ -566,6 +585,7 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
                 {beneficiaries.map((beneficiary) => (
                   <button
                     className="lookup-result"
+                    disabled={pending}
                     key={beneficiary.id}
                     onClick={() => chooseBeneficiary(beneficiary)}
                     type="button"
@@ -587,6 +607,7 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
             Observação geral
             <textarea
               className="preview-input draft-textarea"
+              disabled={pending}
               rows={3}
               {...form.register("observacao")}
             />
@@ -599,6 +620,7 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
             Buscar material
             <input
               className="preview-input"
+              disabled={pending}
               placeholder="Código, nome ou descrição"
               {...form.register("materialSearch")}
             />
@@ -608,7 +630,7 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
           ) : null}
           <div className="lookup-results">
             {materials.map((material) => {
-              const disabled = !hasPositiveStock(material) || selectedMaterialIds.has(material.id);
+              const disabled = pending || !hasPositiveStock(material) || selectedMaterialIds.has(material.id);
               return (
                 <button
                   aria-label={`Adicionar ${material.nome}`}
@@ -655,18 +677,24 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
                       Quantidade solicitada
                       <input
                         className="preview-input"
+                        disabled={pending}
                         inputMode="decimal"
                         {...form.register(`itens.${index}.quantidadeSolicitada`)}
                       />
                     </label>
                     <label className="preview-label">
                       Observação do item
-                      <input className="preview-input" {...form.register(`itens.${index}.observacao`)} />
+                      <input
+                        className="preview-input"
+                        disabled={pending}
+                        {...form.register(`itens.${index}.observacao`)}
+                      />
                     </label>
                     <button
                       aria-label={`Remover ${field.materialLabel}`}
                       className="action-link compact-action"
-                      onClick={() => remove(index)}
+                      disabled={pending}
+                      onClick={() => removeMaterial(index)}
                       type="button"
                     >
                       Remover

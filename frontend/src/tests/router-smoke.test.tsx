@@ -857,8 +857,25 @@ describe("frontend scaffold router", () => {
 
       if (requestUrl(request).endsWith("/api/v1/requisitions/") && request.method === "POST") {
         createdPayload = await request.json();
-        return requisitionDetailResponse({
-          quantidade_solicitada: "3.000",
+        return draftRequisitionDetailResponse({
+          itens: [
+            {
+              id: 501,
+              material: {
+                id: 301,
+                codigo_completo: "010.001.001",
+                nome: "Papel sulfite A4",
+                unidade_medida: "UN",
+              },
+              unidade_medida: "UN",
+              quantidade_solicitada: "3.000",
+              quantidade_autorizada: "0.000",
+              quantidade_entregue: "0.000",
+              justificativa_autorizacao_parcial: "",
+              justificativa_atendimento_parcial: "",
+              observacao: "",
+            },
+          ],
         });
       }
 
