@@ -1,7 +1,14 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { redirect } from "@tanstack/react-router";
 
-import { authQueryKeys, isAuthError, meQueryOptions } from "./session";
+import {
+  authQueryKeys,
+  homePathForPapel,
+  isAuthError,
+  isPapelOperacional,
+  meQueryOptions,
+  type PapelOperacional,
+} from "./session";
 
 export async function requireSession({
   queryClient,
@@ -26,4 +33,23 @@ export async function requireSession({
 
     throw error;
   }
+}
+
+export async function requireOperationalPapel({
+  allowedPapeis,
+  locationHref,
+  queryClient,
+}: {
+  allowedPapeis: PapelOperacional[];
+  locationHref: string;
+  queryClient: QueryClient;
+}) {
+  const session = await requireSession({ queryClient, locationHref });
+
+  if (isPapelOperacional(session.papel) && allowedPapeis.includes(session.papel)) {
+    return session;
+  }
+
+  // eslint-disable-next-line @typescript-eslint/only-throw-error
+  throw redirect({ to: homePathForPapel(session.papel) });
 }

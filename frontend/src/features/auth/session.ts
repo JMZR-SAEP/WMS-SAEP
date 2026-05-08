@@ -39,6 +39,18 @@ export function isAuthError(error: unknown) {
   return error instanceof ApiError && (error.status === 401 || error.status === 403);
 }
 
+export function isUnauthenticatedError(error: unknown) {
+  if (!(error instanceof ApiError)) {
+    return false;
+  }
+
+  if (error.status === 401) {
+    return true;
+  }
+
+  return error.status === 403 && error.payload?.error?.code === "not_authenticated";
+}
+
 export async function ensureCsrfCookie() {
   const result = await apiClient.GET("/api/v1/auth/csrf/");
   const error = result.error as ErrorResponse | undefined;
@@ -96,6 +108,16 @@ export const meQueryOptions = queryOptions({
   queryFn: fetchCurrentSession,
   retry: false,
 });
+
+export function isPapelOperacional(value: string): value is PapelOperacional {
+  return (
+    value === "solicitante" ||
+    value === "auxiliar_setor" ||
+    value === "chefe_setor" ||
+    value === "auxiliar_almoxarifado" ||
+    value === "chefe_almoxarifado"
+  );
+}
 
 export function homePathForPapel(papel: string) {
   switch (papel as PapelOperacional) {

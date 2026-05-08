@@ -9,8 +9,8 @@ import {
 } from "@tanstack/react-table";
 import { z } from "zod";
 
-import { requireSession } from "../features/auth/guards";
-import { authQueryKeys, isAuthError } from "../features/auth/session";
+import { requireOperationalPapel } from "../features/auth/guards";
+import { authQueryKeys, isUnauthenticatedError } from "../features/auth/session";
 import {
   formatDateTime,
   pendingApprovalsQueryOptions,
@@ -28,7 +28,11 @@ const authorizationSearchSchema = z.object({
 export const Route = createFileRoute("/autorizacoes")({
   validateSearch: authorizationSearchSchema,
   beforeLoad: ({ context, location }) =>
-    requireSession({ queryClient: context.queryClient, locationHref: location.href }),
+    requireOperationalPapel({
+      allowedPapeis: ["chefe_setor", "chefe_almoxarifado"],
+      queryClient: context.queryClient,
+      locationHref: location.href,
+    }),
   component: AutorizacoesPage,
 });
 
@@ -42,6 +46,30 @@ function EmptyState() {
   );
 }
 
+function recordsLabelForList({
+  count,
+  hasError,
+  isLoading,
+}: {
+  count: number | undefined;
+  hasError: boolean;
+  isLoading: boolean;
+}) {
+  if (isLoading) {
+    return "Carregando...";
+  }
+
+  if (hasError) {
+    return "Erro ao carregar";
+  }
+
+  if (typeof count === "number") {
+    return `${count} ${count === 1 ? "registro" : "registros"}`;
+  }
+
+  return "0 registros";
+}
+
 function AutorizacoesPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate({ from: "/autorizacoes" });
@@ -53,15 +81,13 @@ function AutorizacoesPage() {
       pageSize: DEFAULT_PAGE_SIZE,
     }),
   );
-  const authError = listQuery.isError && isAuthError(listQuery.error);
+  const authError = listQuery.isError && isUnauthenticatedError(listQuery.error);
   const rows = listQuery.data?.results ?? [];
-  const recordsLabel = listQuery.isLoading
-    ? "Carregando..."
-    : listQuery.isError && !listQuery.data
-      ? "Erro ao carregar"
-      : listQuery.data
-        ? `${listQuery.data.count} ${listQuery.data.count === 1 ? "registro" : "registros"}`
-        : "0 registros";
+  const recordsLabel = recordsLabelForList({
+    count: listQuery.data?.count,
+    hasError: listQuery.isError && !listQuery.data,
+    isLoading: listQuery.isLoading,
+  });
   const columns = useMemo<ColumnDef<RequisicaoPendingApprovalItem>[]>(
     () => [
       {
@@ -145,8 +171,8 @@ function AutorizacoesPage() {
     },
   });
 
-  async function goToPage(page: number) {
-    await navigate({
+  function goToPage(page: number) {
+    void navigate({
       search: {
         page: page === 1 ? undefined : page,
       },
@@ -161,10 +187,10 @@ function AutorizacoesPage() {
     void navigate({
       to: "/login",
       search: {
-        redirect: "/autorizacoes",
+        redirect: currentPage === 1 ? "/autorizacoes" : `/autorizacoes?page=${currentPage}`,
       },
     });
-  }, [authError, navigate, queryClient]);
+  }, [authError, currentPage, navigate, queryClient]);
 
   return (
     <section className="space-y-6">
@@ -225,7 +251,7 @@ function AutorizacoesPage() {
         <button
           className="action-link compact-action"
           disabled={currentPage <= 1 || listQuery.isPending}
-          onClick={() => void goToPage(currentPage - 1)}
+          onClick={() => goToPage(currentPage - 1)}
           type="button"
         >
           Anterior
@@ -240,7 +266,7 @@ function AutorizacoesPage() {
             !listQuery.data ||
             currentPage >= listQuery.data.total_pages
           }
-          onClick={() => void goToPage(currentPage + 1)}
+          onClick={() => goToPage(currentPage + 1)}
           type="button"
         >
           Próxima

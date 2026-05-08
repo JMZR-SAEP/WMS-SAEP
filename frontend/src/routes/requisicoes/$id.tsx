@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 
-import { requireSession } from "../../features/auth/guards";
+import { requireOperationalPapel, requireSession } from "../../features/auth/guards";
 import { authQueryKeys, isAuthError, meQueryOptions } from "../../features/auth/session";
 import { DraftRequisitionEditor } from "../../features/requisitions/DraftRequisitionEditor";
 import {
@@ -21,6 +21,7 @@ import {
     type RequisicaoActionItem,
     type RequisicaoAuthorizeInput,
     type RequisicaoDetail,
+    type RequisicaoRefuseInput,
     type RequisicaoTimelineEvent,
   } from "../../features/requisitions/requisitions";
 
@@ -31,8 +32,18 @@ const detailSearchSchema = z.object({
 
 export const Route = createFileRoute("/requisicoes/$id")({
   validateSearch: detailSearchSchema,
-  beforeLoad: ({ context, location }) =>
-    requireSession({ queryClient: context.queryClient, locationHref: location.href }),
+  beforeLoad: async ({ context, location, search }) => {
+    if (search.contexto === "autorizacao") {
+      await requireOperationalPapel({
+        allowedPapeis: ["chefe_setor", "chefe_almoxarifado"],
+        queryClient: context.queryClient,
+        locationHref: location.href,
+      });
+      return;
+    }
+
+    await requireSession({ queryClient: context.queryClient, locationHref: location.href });
+  },
   component: DetalheRequisicaoPage,
 });
 
@@ -95,6 +106,10 @@ function quantityNumber(value: string) {
   return Number(normalizedValue);
 }
 
+function normalizeQuantityInput(value: string) {
+  return value.replace(",", ".").trim();
+}
+
 function authorizationItemLabel(item: RequisicaoActionItem) {
   return item.material.nome;
 }
@@ -122,8 +137,7 @@ function AuthorizationDecisionPanel({
   const queryClient = useQueryClient();
   const navigate = useNavigate({ from: "/requisicoes/$id" });
 
-  async function afterDecisionSuccess(updatedRequisition: RequisicaoDetail) {
-    queryClient.setQueryData(requisitionsQueryKeys.detail(requisicao.id), updatedRequisition);
+  async function afterDecisionSuccess() {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: requisitionsQueryKeys.pendingApprovalsAll }),
       queryClient.invalidateQueries({ queryKey: requisitionsQueryKeys.detail(requisicao.id) }),
@@ -141,24 +155,30 @@ function AuthorizationDecisionPanel({
     onSuccess: afterDecisionSuccess,
   });
   const refuseMutation = useMutation({
-    mutationFn: (input: { motivo_recusa: string }) => refuseRequisition(requisicao.id, input),
+    mutationFn: (input: RequisicaoRefuseInput) => refuseRequisition(requisicao.id, input),
     onSuccess: afterDecisionSuccess,
   });
   const pending = authorizeMutation.isPending || refuseMutation.isPending;
   const mutationError = authorizeMutation.error ?? refuseMutation.error;
 
+  function resetDecisionFeedback() {
+    setValidationError("");
+    authorizeMutation.reset();
+    refuseMutation.reset();
+  }
+
   function updateItem(itemId: number, field: "authorizedQuantity" | "justification", value: string) {
     setItems((currentItems) =>
       currentItems.map((item) => (item.itemId === itemId ? { ...item, [field]: value } : item)),
     );
-    setValidationError("");
+    resetDecisionFeedback();
   }
 
   function payloadFromItems(nextItems: AuthorizationItemForm[]) {
     return {
       itens: nextItems.map((item) => ({
         item_id: item.itemId,
-        quantidade_autorizada: item.authorizedQuantity.trim(),
+        quantidade_autorizada: normalizeQuantityInput(item.authorizedQuantity),
         justificativa_autorizacao_parcial: item.justification.trim(),
       })),
     };
@@ -205,12 +225,13 @@ function AuthorizationDecisionPanel({
       justification: "",
     }));
     setItems(nextItems);
-    setValidationError("");
+    resetDecisionFeedback();
     authorizeMutation.mutate(payloadFromItems(nextItems));
   }
 
   function authorizeAdjusted(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    resetDecisionFeedback();
     const error = validateAuthorization(items);
 
     if (error) {
@@ -218,12 +239,12 @@ function AuthorizationDecisionPanel({
       return;
     }
 
-    setValidationError("");
     authorizeMutation.mutate(payloadFromItems(items));
   }
 
   function refuse(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    resetDecisionFeedback();
     const trimmedReason = refusalReason.trim();
 
     if (!trimmedReason) {
@@ -231,7 +252,6 @@ function AuthorizationDecisionPanel({
       return;
     }
 
-    setValidationError("");
     refuseMutation.mutate({ motivo_recusa: trimmedReason });
   }
 
@@ -309,7 +329,7 @@ function AuthorizationDecisionPanel({
             disabled={pending}
             onChange={(event) => {
               setRefusalReason(event.target.value);
-              setValidationError("");
+              resetDecisionFeedback();
             }}
             rows={3}
             value={refusalReason}
@@ -341,7 +361,10 @@ function DetalheRequisicaoPage() {
     ...requisitionDetailQueryOptions(requisicaoId),
     enabled: Number.isInteger(requisicaoId) && requisicaoId > 0,
   });
-  const sessionQuery = useQuery(meQueryOptions);
+  const sessionQuery = useQuery({
+    ...meQueryOptions,
+    enabled: detailQuery.data?.status === "rascunho",
+  });
   const authError = detailQuery.isError && isAuthError(detailQuery.error);
 
   useEffect(() => {
@@ -352,10 +375,15 @@ function DetalheRequisicaoPage() {
     void navigate({
       to: "/login",
       search: {
-        redirect: `/requisicoes/${id}`,
+        redirect:
+          contexto === "autorizacao"
+            ? `/requisicoes/${id}?contexto=autorizacao${authorizationPage && authorizationPage > 1 ? `&page=${authorizationPage}` : ""}`
+            : contexto === "atendimento"
+              ? `/requisicoes/${id}?contexto=atendimento`
+              : `/requisicoes/${id}`,
       },
     });
-  }, [authError, id, navigate, queryClient]);
+  }, [authError, authorizationPage, contexto, id, navigate, queryClient]);
 
   if (!Number.isInteger(requisicaoId) || requisicaoId <= 0) {
     return <div className="error-panel">Identificador de requisição inválido.</div>;

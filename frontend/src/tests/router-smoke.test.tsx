@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { AppProviders } from "../app/providers";
 import { createAppQueryClient } from "../app/query-client";
 import { buildRouter } from "../app/router";
+import { formatDateTime } from "../features/requisitions/requisitions";
 
 function renderRoute(pathname: string) {
   window.history.replaceState({}, "", pathname);
@@ -403,6 +404,20 @@ function unauthenticatedResponse() {
       },
     }),
     { status: 401, headers: jsonHeaders },
+  );
+}
+
+function unauthenticatedForbiddenResponse() {
+  return new Response(
+    JSON.stringify({
+      error: {
+        code: "not_authenticated",
+        message: "Autenticação necessária.",
+        details: {},
+        trace_id: null,
+      },
+    }),
+    { status: 403, headers: jsonHeaders },
   );
 }
 
@@ -878,6 +893,47 @@ describe("frontend scaffold router", () => {
     expect(screen.getByText("1 registro")).toBeInTheDocument();
   });
 
+  it("redirects solicitante away from authorization queue", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((request: Request) => {
+        if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+          return sessionResponse(authSession("solicitante"));
+        }
+
+        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+      }),
+    );
+
+    const { container } = renderRoute("/autorizacoes");
+
+    await waitFor(() => {
+      expect(container.ownerDocument.location.pathname).toBe("/minhas-requisicoes");
+    });
+  });
+
+  it("renders formatted envio timestamp in authorization queue", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((request: Request) => {
+        if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+          return sessionResponse(chefeSession());
+        }
+
+        if (requestUrl(request).includes("/api/v1/requisitions/pending-approvals/")) {
+          return pendingApprovalListResponse();
+        }
+
+        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+      }),
+    );
+
+    renderRoute("/autorizacoes");
+
+    expect(await screen.findByText("REQ-2026-000101")).toBeInTheDocument();
+    expect(screen.getByText(formatDateTime("2026-05-01T11:00:00Z"))).toBeInTheDocument();
+  });
+
   it("sends authorization queue pagination from the URL to backend", async () => {
     const requestedUrls: string[] = [];
     vi.stubGlobal(
@@ -936,7 +992,7 @@ describe("frontend scaffold router", () => {
       expect(container.ownerDocument.location.pathname).toBe("/requisicoes/101");
       expect(container.ownerDocument.location.search).toBe("?contexto=autorizacao");
     });
-    expect(await screen.findByText("Contexto: autorizacao")).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "Voltar" })).toHaveAttribute("href", "/autorizacoes");
   });
 
   it("opens canonical requisition detail from the list", async () => {
@@ -1004,6 +1060,29 @@ describe("frontend scaffold router", () => {
     await waitFor(() => {
       expect(container.ownerDocument.location.pathname).toBe("/autorizacoes");
     });
+  });
+
+  it("does not render authorization panel outside pending authorization status", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((request: Request) => {
+        if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+          return sessionResponse(chefeSession());
+        }
+
+        if (requestUrl(request).endsWith("/api/v1/requisitions/101/")) {
+          return requisitionDetailResponse();
+        }
+
+        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+      }),
+    );
+
+    renderRoute("/requisicoes/101?contexto=autorizacao");
+
+    expect(await screen.findByRole("heading", { name: "REQ-2026-000101" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Autorizar ou recusar requisição" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Autorizar tudo como solicitado" })).not.toBeInTheDocument();
   });
 
   it("formats requisition quantities with pt-BR decimal rendering", async () => {
@@ -1075,6 +1154,52 @@ describe("frontend scaffold router", () => {
       });
       expect(container.ownerDocument.location.pathname).toBe("/autorizacoes");
     });
+    expect(await screen.findByText("Nenhuma autorização pendente")).toBeInTheDocument();
+  });
+
+  it("preserves authorization page when queue request expires", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((request: Request) => {
+        if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+          return sessionResponse(chefeSession());
+        }
+
+        if (requestUrl(request).includes("/api/v1/requisitions/pending-approvals/")) {
+          return unauthenticatedForbiddenResponse();
+        }
+
+        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+      }),
+    );
+
+    const { container } = renderRoute("/autorizacoes?page=2");
+
+    expect(await screen.findByRole("heading", { name: "Entrar no piloto" })).toBeInTheDocument();
+    expect(container.ownerDocument.location.pathname).toBe("/login");
+    expect(container.ownerDocument.location.search).toBe("?redirect=%2Fautorizacoes%3Fpage%3D2");
+  });
+
+  it("keeps permission denied queue errors inside the page", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((request: Request) => {
+        if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+          return sessionResponse(chefeSession());
+        }
+
+        if (requestUrl(request).includes("/api/v1/requisitions/pending-approvals/")) {
+          return forbiddenResponse();
+        }
+
+        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+      }),
+    );
+
+    const { container } = renderRoute("/autorizacoes");
+
+    expect(await screen.findByText("Permissão negada.")).toBeInTheDocument();
+    expect(container.ownerDocument.location.pathname).toBe("/autorizacoes");
   });
 
   it("requires inline justification for partial authorization", async () => {
@@ -1123,6 +1248,54 @@ describe("frontend scaffold router", () => {
           {
             item_id: 501,
             quantidade_autorizada: "1",
+            justificativa_autorizacao_parcial: "Saldo parcial",
+          },
+        ],
+      });
+    });
+  });
+
+  it("normalizes comma decimal separator before sending authorization payload", async () => {
+    let authorizePayload: unknown;
+    const fetchMock = vi.fn(async (request: Request) => {
+      if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+        return sessionResponse(chefeSession());
+      }
+
+      if (requestUrl(request).endsWith("/api/v1/requisitions/101/")) {
+        return pendingApprovalDetailResponse();
+      }
+
+      if (requestUrl(request).endsWith("/api/v1/requisitions/101/authorize/")) {
+        authorizePayload = await request.json();
+        return requisitionDetailResponse({ quantidade_autorizada: "1.500" });
+      }
+
+      if (requestUrl(request).includes("/api/v1/requisitions/pending-approvals/")) {
+        return pendingApprovalListResponse([]);
+      }
+
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderRoute("/requisicoes/101?contexto=autorizacao");
+
+    expect(await screen.findByRole("heading", { name: "REQ-2026-000101" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Quantidade autorizada para Papel sulfite A4"), {
+      target: { value: "1,5" },
+    });
+    fireEvent.change(screen.getByLabelText("Justificativa para Papel sulfite A4"), {
+      target: { value: "Saldo parcial" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Autorizar conforme ajustes" }));
+
+    await waitFor(() => {
+      expect(authorizePayload).toEqual({
+        itens: [
+          {
+            item_id: 501,
+            quantidade_autorizada: "1.5",
             justificativa_autorizacao_parcial: "Saldo parcial",
           },
         ],
