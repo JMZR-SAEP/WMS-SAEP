@@ -108,6 +108,46 @@ function requisitionListResponse(results = [requisitionListItem()]) {
   );
 }
 
+function pendingApprovalListItem(overrides = {}) {
+  return {
+    id: 101,
+    numero_publico: "REQ-2026-000101",
+    status: "aguardando_autorizacao",
+    data_envio_autorizacao: "2026-05-01T11:00:00Z",
+    criador: {
+      id: 10,
+      matricula_funcional: "91003",
+      nome_completo: "Usuario Piloto",
+    },
+    beneficiario: {
+      id: 11,
+      matricula_funcional: "91004",
+      nome_completo: "Beneficiario Piloto",
+    },
+    setor_beneficiario: {
+      id: 2,
+      nome: "Manutencao",
+    },
+    total_itens: 2,
+    ...overrides,
+  };
+}
+
+function pendingApprovalListResponse(results = [pendingApprovalListItem()]) {
+  return new Response(
+    JSON.stringify({
+      count: results.length,
+      page: 1,
+      page_size: 20,
+      total_pages: 1,
+      next: null,
+      previous: null,
+      results,
+    }),
+    { status: 200, headers: jsonHeaders },
+  );
+}
+
 function requisitionDetailResponse(itemOverrides = {}) {
   return new Response(
     JSON.stringify({
@@ -173,6 +213,74 @@ function requisitionDetailResponse(itemOverrides = {}) {
           },
           data_hora: "2026-05-01T12:00:00Z",
           observacao: "Autorizado parcialmente por saldo.",
+        },
+      ],
+    }),
+    { status: 200, headers: jsonHeaders },
+  );
+}
+
+function pendingApprovalDetailResponse(itemOverrides = {}) {
+  return new Response(
+    JSON.stringify({
+      id: 101,
+      numero_publico: "REQ-2026-000101",
+      status: "aguardando_autorizacao",
+      criador: {
+        id: 10,
+        matricula_funcional: "91003",
+        nome_completo: "Usuario Piloto",
+      },
+      beneficiario: {
+        id: 11,
+        matricula_funcional: "91004",
+        nome_completo: "Beneficiario Piloto",
+      },
+      setor_beneficiario: {
+        id: 2,
+        nome: "Manutencao",
+      },
+      chefe_autorizador: null,
+      responsavel_atendimento: null,
+      data_criacao: "2026-05-01T10:00:00Z",
+      data_envio_autorizacao: "2026-05-01T11:00:00Z",
+      data_autorizacao_ou_recusa: null,
+      motivo_recusa: "",
+      motivo_cancelamento: "",
+      data_finalizacao: null,
+      retirante_fisico: "",
+      observacao: "Observacao operacional",
+      observacao_atendimento: "",
+      itens: [
+        {
+          id: 501,
+          material: {
+            id: 301,
+            codigo_completo: "010.001.001",
+            nome: "Papel sulfite A4",
+            unidade_medida: "UN",
+          },
+          unidade_medida: "UN",
+          quantidade_solicitada: "2.000",
+          quantidade_autorizada: "0.000",
+          quantidade_entregue: "0.000",
+          justificativa_autorizacao_parcial: "",
+          justificativa_atendimento_parcial: "",
+          observacao: "Urgente",
+          ...itemOverrides,
+        },
+      ],
+      eventos: [
+        {
+          id: 701,
+          tipo_evento: "envio_autorizacao",
+          usuario: {
+            id: 10,
+            matricula_funcional: "91003",
+            nome_completo: "Usuario Piloto",
+          },
+          data_hora: "2026-05-01T11:00:00Z",
+          observacao: "Enviada para avaliação.",
         },
       ],
     }),
@@ -746,6 +854,91 @@ describe("frontend scaffold router", () => {
     });
   });
 
+  it("renders authorization queue worklist", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((request: Request) => {
+        if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+          return sessionResponse(chefeSession());
+        }
+
+        if (requestUrl(request).includes("/api/v1/requisitions/pending-approvals/")) {
+          return pendingApprovalListResponse();
+        }
+
+        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+      }),
+    );
+
+    renderRoute("/autorizacoes");
+
+    expect(await screen.findByRole("heading", { name: "Fila de autorizações" })).toBeInTheDocument();
+    expect(await screen.findByText("REQ-2026-000101")).toBeInTheDocument();
+    expect(screen.getByText("Beneficiario Piloto")).toBeInTheDocument();
+    expect(screen.getByText("1 registro")).toBeInTheDocument();
+  });
+
+  it("sends authorization queue pagination from the URL to backend", async () => {
+    const requestedUrls: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((request: Request) => {
+        requestedUrls.push(requestUrl(request));
+
+        if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+          return sessionResponse(chefeSession());
+        }
+
+        if (requestUrl(request).includes("/api/v1/requisitions/pending-approvals/")) {
+          return pendingApprovalListResponse();
+        }
+
+        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+      }),
+    );
+
+    renderRoute("/autorizacoes?page=2");
+
+    expect(await screen.findByText("REQ-2026-000101")).toBeInTheDocument();
+    const listUrl = new URL(
+      requestedUrls.find((url) => url.includes("/api/v1/requisitions/pending-approvals/"))!,
+    );
+    expect(listUrl.searchParams.get("page")).toBe("2");
+    expect(listUrl.searchParams.get("page_size")).toBe("20");
+  });
+
+  it("opens canonical requisition detail from authorization queue with context", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((request: Request) => {
+        if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+          return sessionResponse(chefeSession());
+        }
+
+        if (requestUrl(request).endsWith("/api/v1/requisitions/101/")) {
+          return pendingApprovalDetailResponse();
+        }
+
+        if (requestUrl(request).includes("/api/v1/requisitions/pending-approvals/")) {
+          return pendingApprovalListResponse();
+        }
+
+        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+      }),
+    );
+
+    const { container } = renderRoute("/autorizacoes");
+
+    expect(await screen.findByText("REQ-2026-000101")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("link", { name: "Abrir" }));
+
+    await waitFor(() => {
+      expect(container.ownerDocument.location.pathname).toBe("/requisicoes/101");
+      expect(container.ownerDocument.location.search).toBe("?contexto=autorizacao");
+    });
+    expect(await screen.findByText("Contexto: autorizacao")).toBeInTheDocument();
+  });
+
   it("opens canonical requisition detail from the list", async () => {
     vi.stubGlobal(
       "fetch",
@@ -839,6 +1032,186 @@ describe("frontend scaffold router", () => {
     expect(screen.getByText("2,5 UN")).toBeInTheDocument();
     expect(screen.getByText("1,25 UN")).toBeInTheDocument();
     expect(screen.getByText("0,125 UN")).toBeInTheDocument();
+  });
+
+  it("authorizes all requested items from authorization context", async () => {
+    let authorizePayload: unknown;
+    const fetchMock = vi.fn(async (request: Request) => {
+      if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+        return sessionResponse(chefeSession());
+      }
+
+      if (requestUrl(request).endsWith("/api/v1/requisitions/101/")) {
+        return pendingApprovalDetailResponse();
+      }
+
+      if (requestUrl(request).endsWith("/api/v1/requisitions/101/authorize/")) {
+        authorizePayload = await request.json();
+        return requisitionDetailResponse({ quantidade_autorizada: "2.000" });
+      }
+
+      if (requestUrl(request).includes("/api/v1/requisitions/pending-approvals/")) {
+        return pendingApprovalListResponse([]);
+      }
+
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { container } = renderRoute("/requisicoes/101?contexto=autorizacao");
+
+    expect(await screen.findByRole("heading", { name: "REQ-2026-000101" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Autorizar tudo como solicitado" }));
+
+    await waitFor(() => {
+      expect(authorizePayload).toEqual({
+        itens: [
+          {
+            item_id: 501,
+            quantidade_autorizada: "2.000",
+            justificativa_autorizacao_parcial: "",
+          },
+        ],
+      });
+      expect(container.ownerDocument.location.pathname).toBe("/autorizacoes");
+    });
+  });
+
+  it("requires inline justification for partial authorization", async () => {
+    let authorizePayload: unknown;
+    const fetchMock = vi.fn(async (request: Request) => {
+      if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+        return sessionResponse(chefeSession());
+      }
+
+      if (requestUrl(request).endsWith("/api/v1/requisitions/101/")) {
+        return pendingApprovalDetailResponse();
+      }
+
+      if (requestUrl(request).endsWith("/api/v1/requisitions/101/authorize/")) {
+        authorizePayload = await request.json();
+        return requisitionDetailResponse({ quantidade_autorizada: "1.000" });
+      }
+
+      if (requestUrl(request).includes("/api/v1/requisitions/pending-approvals/")) {
+        return pendingApprovalListResponse([]);
+      }
+
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderRoute("/requisicoes/101?contexto=autorizacao");
+
+    expect(await screen.findByRole("heading", { name: "REQ-2026-000101" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Quantidade autorizada para Papel sulfite A4"), {
+      target: { value: "1" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Autorizar conforme ajustes" }));
+
+    expect(await screen.findByText("Informe justificativa para autorização parcial ou zerada.")).toBeInTheDocument();
+    expect(authorizePayload).toBeUndefined();
+
+    fireEvent.change(screen.getByLabelText("Justificativa para Papel sulfite A4"), {
+      target: { value: "Saldo parcial" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Autorizar conforme ajustes" }));
+
+    await waitFor(() => {
+      expect(authorizePayload).toEqual({
+        itens: [
+          {
+            item_id: 501,
+            quantidade_autorizada: "1",
+            justificativa_autorizacao_parcial: "Saldo parcial",
+          },
+        ],
+      });
+    });
+  });
+
+  it("refuses a requisition only with a reason", async () => {
+    let refusePayload: unknown;
+    const fetchMock = vi.fn(async (request: Request) => {
+      if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+        return sessionResponse(chefeSession());
+      }
+
+      if (requestUrl(request).endsWith("/api/v1/requisitions/101/")) {
+        return pendingApprovalDetailResponse();
+      }
+
+      if (requestUrl(request).endsWith("/api/v1/requisitions/101/refuse/")) {
+        refusePayload = await request.json();
+        return requisitionDetailResponse();
+      }
+
+      if (requestUrl(request).includes("/api/v1/requisitions/pending-approvals/")) {
+        return pendingApprovalListResponse([]);
+      }
+
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { container } = renderRoute("/requisicoes/101?contexto=autorizacao");
+
+    expect(await screen.findByRole("heading", { name: "REQ-2026-000101" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Recusar requisição" }));
+
+    expect(await screen.findByText("Informe o motivo da recusa.")).toBeInTheDocument();
+    expect(refusePayload).toBeUndefined();
+
+    fireEvent.change(screen.getByLabelText("Motivo da recusa"), {
+      target: { value: "Pedido fora do escopo do setor" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Recusar requisição" }));
+
+    await waitFor(() => {
+      expect(refusePayload).toEqual({
+        motivo_recusa: "Pedido fora do escopo do setor",
+      });
+      expect(container.ownerDocument.location.pathname).toBe("/autorizacoes");
+    });
+  });
+
+  it("keeps user on detail when authorization action returns domain error", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((request: Request) => {
+        if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+          return sessionResponse(chefeSession());
+        }
+
+        if (requestUrl(request).endsWith("/api/v1/requisitions/101/")) {
+          return pendingApprovalDetailResponse();
+        }
+
+        if (requestUrl(request).endsWith("/api/v1/requisitions/101/authorize/")) {
+          return new Response(
+            JSON.stringify({
+              error: {
+                code: "domain_conflict",
+                message: "Saldo atual insuficiente.",
+                details: {},
+                trace_id: "trace-domain",
+              },
+            }),
+            { status: 409, headers: jsonHeaders },
+          );
+        }
+
+        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+      }),
+    );
+
+    const { container } = renderRoute("/requisicoes/101?contexto=autorizacao");
+
+    expect(await screen.findByRole("heading", { name: "REQ-2026-000101" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Autorizar tudo como solicitado" }));
+
+    expect(await screen.findByText("Saldo atual insuficiente.")).toBeInTheDocument();
+    expect(container.ownerDocument.location.pathname).toBe("/requisicoes/101");
   });
 
   it("creates draft requisition for the current user", async () => {

@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState, type FormEvent } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 
@@ -7,20 +7,26 @@ import { requireSession } from "../../features/auth/guards";
 import { authQueryKeys, isAuthError, meQueryOptions } from "../../features/auth/session";
 import { DraftRequisitionEditor } from "../../features/requisitions/DraftRequisitionEditor";
 import {
+    authorizeRequisition,
     displayRequisitionIdentifier,
     formatDateTime,
     formatQuantity,
     isThirdPartyBeneficiary,
     queryErrorMessage,
+    refuseRequisition,
     requisitionDetailQueryOptions,
+    requisitionsQueryKeys,
     statusLabel,
     tipoEventoLabel,
     type RequisicaoActionItem,
+    type RequisicaoAuthorizeInput,
+    type RequisicaoDetail,
     type RequisicaoTimelineEvent,
   } from "../../features/requisitions/requisitions";
 
 const detailSearchSchema = z.object({
   contexto: z.enum(["autorizacao", "atendimento"]).optional().catch(undefined),
+  page: z.coerce.number().int().min(1).optional().catch(undefined),
 });
 
 export const Route = createFileRoute("/requisicoes/$id")({
@@ -73,9 +79,255 @@ function TimelineEvent({ event }: { event: RequisicaoTimelineEvent }) {
   );
 }
 
+type AuthorizationItemForm = {
+  itemId: number;
+  label: string;
+  requestedQuantity: string;
+  authorizedQuantity: string;
+  justification: string;
+};
+
+function quantityNumber(value: string) {
+  const normalizedValue = value.replace(",", ".").trim();
+  if (!normalizedValue) {
+    return Number.NaN;
+  }
+  return Number(normalizedValue);
+}
+
+function authorizationItemLabel(item: RequisicaoActionItem) {
+  return item.material.nome;
+}
+
+function authorizationItemsFromRequisition(requisicao: RequisicaoDetail): AuthorizationItemForm[] {
+  return requisicao.itens.map((item) => ({
+    itemId: item.id,
+    label: authorizationItemLabel(item),
+    requestedQuantity: item.quantidade_solicitada,
+    authorizedQuantity: item.quantidade_solicitada,
+    justification: item.justificativa_autorizacao_parcial,
+  }));
+}
+
+function AuthorizationDecisionPanel({
+  authorizationPage,
+  requisicao,
+}: {
+  authorizationPage: number | undefined;
+  requisicao: RequisicaoDetail;
+}) {
+  const [items, setItems] = useState(() => authorizationItemsFromRequisition(requisicao));
+  const [refusalReason, setRefusalReason] = useState("");
+  const [validationError, setValidationError] = useState("");
+  const queryClient = useQueryClient();
+  const navigate = useNavigate({ from: "/requisicoes/$id" });
+
+  async function afterDecisionSuccess(updatedRequisition: RequisicaoDetail) {
+    queryClient.setQueryData(requisitionsQueryKeys.detail(requisicao.id), updatedRequisition);
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: requisitionsQueryKeys.pendingApprovalsAll }),
+      queryClient.invalidateQueries({ queryKey: requisitionsQueryKeys.detail(requisicao.id) }),
+    ]);
+    await navigate({
+      to: "/autorizacoes",
+      search: {
+        page: authorizationPage && authorizationPage > 1 ? authorizationPage : undefined,
+      },
+    });
+  }
+
+  const authorizeMutation = useMutation({
+    mutationFn: (input: RequisicaoAuthorizeInput) => authorizeRequisition(requisicao.id, input),
+    onSuccess: afterDecisionSuccess,
+  });
+  const refuseMutation = useMutation({
+    mutationFn: (input: { motivo_recusa: string }) => refuseRequisition(requisicao.id, input),
+    onSuccess: afterDecisionSuccess,
+  });
+  const pending = authorizeMutation.isPending || refuseMutation.isPending;
+  const mutationError = authorizeMutation.error ?? refuseMutation.error;
+
+  function updateItem(itemId: number, field: "authorizedQuantity" | "justification", value: string) {
+    setItems((currentItems) =>
+      currentItems.map((item) => (item.itemId === itemId ? { ...item, [field]: value } : item)),
+    );
+    setValidationError("");
+  }
+
+  function payloadFromItems(nextItems: AuthorizationItemForm[]) {
+    return {
+      itens: nextItems.map((item) => ({
+        item_id: item.itemId,
+        quantidade_autorizada: item.authorizedQuantity.trim(),
+        justificativa_autorizacao_parcial: item.justification.trim(),
+      })),
+    };
+  }
+
+  function validateAuthorization(nextItems: AuthorizationItemForm[]) {
+    const authorizedQuantities = nextItems.map((item) => quantityNumber(item.authorizedQuantity));
+
+    if (authorizedQuantities.some((quantity) => Number.isNaN(quantity) || quantity < 0)) {
+      return "Informe quantidades autorizadas válidas.";
+    }
+
+    const itemAboveRequested = nextItems.find(
+      (item) => quantityNumber(item.authorizedQuantity) > quantityNumber(item.requestedQuantity),
+    );
+
+    if (itemAboveRequested) {
+      return "Quantidade autorizada não pode exceder a quantidade solicitada.";
+    }
+
+    if (authorizedQuantities.every((quantity) => quantity === 0)) {
+      return "Para negar todos os itens, use Recusar requisição.";
+    }
+
+    const partialWithoutJustification = nextItems.find(
+      (item) =>
+        quantityNumber(item.authorizedQuantity) < quantityNumber(item.requestedQuantity) &&
+        !item.justification.trim(),
+    );
+
+    if (partialWithoutJustification) {
+      return "Informe justificativa para autorização parcial ou zerada.";
+    }
+
+    return "";
+  }
+
+  function authorizeAll() {
+    const nextItems = requisicao.itens.map((item) => ({
+      itemId: item.id,
+      label: authorizationItemLabel(item),
+      requestedQuantity: item.quantidade_solicitada,
+      authorizedQuantity: item.quantidade_solicitada,
+      justification: "",
+    }));
+    setItems(nextItems);
+    setValidationError("");
+    authorizeMutation.mutate(payloadFromItems(nextItems));
+  }
+
+  function authorizeAdjusted(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const error = validateAuthorization(items);
+
+    if (error) {
+      setValidationError(error);
+      return;
+    }
+
+    setValidationError("");
+    authorizeMutation.mutate(payloadFromItems(items));
+  }
+
+  function refuse(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const trimmedReason = refusalReason.trim();
+
+    if (!trimmedReason) {
+      setValidationError("Informe o motivo da recusa.");
+      return;
+    }
+
+    setValidationError("");
+    refuseMutation.mutate({ motivo_recusa: trimmedReason });
+  }
+
+  return (
+    <section className="detail-panel authorization-panel">
+      <div className="authorization-panel-header">
+        <div>
+          <p className="eyebrow">Decisão da chefia</p>
+          <h2>Autorizar ou recusar requisição</h2>
+          <p>O backend revalida saldo, setor, estado e permissão no momento da decisão.</p>
+        </div>
+        <button
+          className="preview-button draft-primary"
+          disabled={pending}
+          onClick={authorizeAll}
+          type="button"
+        >
+          {authorizeMutation.isPending ? "Autorizando..." : "Autorizar tudo como solicitado"}
+        </button>
+      </div>
+
+      {validationError ? <div className="error-panel compact-error">{validationError}</div> : null}
+      {mutationError ? (
+        <div className="error-panel compact-error">
+          {queryErrorMessage(mutationError, "Não foi possível concluir a decisão.")}
+        </div>
+      ) : null}
+
+      <form className="authorization-form" onSubmit={authorizeAdjusted}>
+        <div className="authorization-items">
+          {items.map((item) => (
+            <article className="draft-item-card" key={item.itemId}>
+              <div>
+                <h2>{item.label}</h2>
+                <p>Solicitado: {formatQuantity(item.requestedQuantity)}</p>
+              </div>
+              <div className="authorization-item-fields">
+                <label className="preview-label">
+                  Quantidade autorizada para {item.label}
+                  <input
+                    className="preview-input"
+                    disabled={pending}
+                    onChange={(event) =>
+                      updateItem(item.itemId, "authorizedQuantity", event.target.value)
+                    }
+                    value={item.authorizedQuantity}
+                  />
+                </label>
+                <label className="preview-label">
+                  Justificativa para {item.label}
+                  <input
+                    className="preview-input"
+                    disabled={pending}
+                    onChange={(event) => updateItem(item.itemId, "justification", event.target.value)}
+                    placeholder="Obrigatória quando parcial ou zerada"
+                    value={item.justification}
+                  />
+                </label>
+              </div>
+            </article>
+          ))}
+        </div>
+        <div className="draft-actions">
+          <button className="preview-button draft-primary" disabled={pending} type="submit">
+            Autorizar conforme ajustes
+          </button>
+        </div>
+      </form>
+
+      <form className="authorization-refusal" onSubmit={refuse}>
+        <label className="preview-label">
+          Motivo da recusa
+          <textarea
+            className="preview-input draft-textarea"
+            disabled={pending}
+            onChange={(event) => {
+              setRefusalReason(event.target.value);
+              setValidationError("");
+            }}
+            rows={3}
+            value={refusalReason}
+          />
+        </label>
+        <div className="draft-actions">
+          <button className="preview-button draft-primary danger-action" disabled={pending} type="submit">
+            Recusar requisição
+          </button>
+        </div>
+      </form>
+    </section>
+  );
+}
+
 function DetalheRequisicaoPage() {
   const { id } = Route.useParams();
-  const { contexto } = Route.useSearch();
+  const { contexto, page: authorizationPage } = Route.useSearch();
   const requisicaoId = Number(id);
   const backTo =
     contexto === "autorizacao"
@@ -157,11 +409,27 @@ function DetalheRequisicaoPage() {
         </div>
         <div className="detail-actions">
           {contexto ? <span className="context-chip">Contexto: {contexto}</span> : null}
-          <Link className="action-link compact-action" to={backTo}>
+          <Link
+            className="action-link compact-action"
+            search={
+              contexto === "autorizacao"
+                ? { page: authorizationPage && authorizationPage > 1 ? authorizationPage : undefined }
+                : undefined
+            }
+            to={backTo}
+          >
             Voltar
           </Link>
         </div>
       </div>
+
+      {contexto === "autorizacao" && requisicao.status === "aguardando_autorizacao" ? (
+        <AuthorizationDecisionPanel
+          authorizationPage={authorizationPage}
+          key={requisicao.id}
+          requisicao={requisicao}
+        />
+      ) : null}
 
       <div className="detail-grid">
         <section className="detail-panel">

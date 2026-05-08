@@ -12,6 +12,10 @@ export type RequisicaoTimelineEvent = components["schemas"]["RequisicaoTimelineE
 export type RequisicaoActionItem = components["schemas"]["RequisicaoActionOutput"];
 export type RequisicaoTimelineEventType = components["schemas"]["TipoEventoEnum"];
 export type RequisicaoDraftInput = components["schemas"]["RequisicaoCreateInput"];
+export type RequisicaoAuthorizeInput = components["schemas"]["RequisicaoAuthorizeInput"];
+export type RequisicaoRefuseInput = components["schemas"]["RequisicaoRefuseInput"];
+export type RequisicaoPendingApprovalItem = components["schemas"]["RequisicaoPendingApprovalOutput"];
+export type RequisicaoPendingApprovalResponse = components["schemas"]["RequisicaoPendingApprovalPaginated"];
 export type MaterialListItem = components["schemas"]["MaterialListOutput"];
 export type MaterialListResponse = components["schemas"]["MaterialListPaginated"];
 export type BeneficiaryLookupItem = components["schemas"]["BeneficiaryLookupOutput"];
@@ -48,11 +52,19 @@ export type RequisicoesListParams = {
   status?: RequisicaoStatus;
 };
 
+export type PendingApprovalsParams = {
+  page: number;
+  pageSize: number;
+};
+
+const requisitionsBaseQueryKey = ["requisitions"] as const;
+const pendingApprovalsBaseQueryKey = [...requisitionsBaseQueryKey, "pending-approvals"] as const;
+
 export const requisitionsQueryKeys = {
-  all: ["requisitions"] as const,
+  all: requisitionsBaseQueryKey,
   mine: (params: RequisicoesListParams) =>
     [
-      ...requisitionsQueryKeys.all,
+      ...requisitionsBaseQueryKey,
       "mine",
       {
         page: params.page,
@@ -61,10 +73,19 @@ export const requisitionsQueryKeys = {
         status: params.status ?? "",
       },
     ] as const,
-  detail: (id: number) => [...requisitionsQueryKeys.all, "detail", id] as const,
-  materials: (search: string) => [...requisitionsQueryKeys.all, "materials", search] as const,
+  pendingApprovalsAll: pendingApprovalsBaseQueryKey,
+  pendingApprovals: (params: PendingApprovalsParams) =>
+    [
+      ...pendingApprovalsBaseQueryKey,
+      {
+        page: params.page,
+        pageSize: params.pageSize,
+      },
+    ] as const,
+  detail: (id: number) => [...requisitionsBaseQueryKey, "detail", id] as const,
+  materials: (search: string) => [...requisitionsBaseQueryKey, "materials", search] as const,
   beneficiaries: (search: string) =>
-    [...requisitionsQueryKeys.all, "beneficiaries", search] as const,
+    [...requisitionsBaseQueryKey, "beneficiaries", search] as const,
 };
 
 function messageFromError(error: ErrorResponse | undefined, fallback: string) {
@@ -94,6 +115,27 @@ export async function fetchMyRequisitions(params: RequisicoesListParams) {
   return data;
 }
 
+export async function fetchPendingApprovals(params: PendingApprovalsParams) {
+  const { data, error, response } = await apiClient.GET("/api/v1/requisitions/pending-approvals/", {
+    params: {
+      query: {
+        page: params.page,
+        page_size: params.pageSize,
+      },
+    },
+  });
+
+  if (error || !data) {
+    throw new ApiError(
+      messageFromError(error, "Não foi possível carregar autorizações pendentes."),
+      response.status,
+      error,
+    );
+  }
+
+  return data;
+}
+
 export async function fetchRequisitionDetail(id: number) {
   const { data, error, response } = await apiClient.GET("/api/v1/requisitions/{id}/", {
     params: {
@@ -106,6 +148,48 @@ export async function fetchRequisitionDetail(id: number) {
   if (error || !data) {
     throw new ApiError(
       messageFromError(error, "Não foi possível carregar a requisição."),
+      response.status,
+      error,
+    );
+  }
+
+  return data;
+}
+
+export async function authorizeRequisition(id: number, input: RequisicaoAuthorizeInput) {
+  const { data, error, response } = await apiClient.POST("/api/v1/requisitions/{id}/authorize/", {
+    params: {
+      path: {
+        id,
+      },
+    },
+    body: input,
+  });
+
+  if (error || !data) {
+    throw new ApiError(
+      messageFromError(error, "Não foi possível autorizar a requisição."),
+      response.status,
+      error,
+    );
+  }
+
+  return data;
+}
+
+export async function refuseRequisition(id: number, input: RequisicaoRefuseInput) {
+  const { data, error, response } = await apiClient.POST("/api/v1/requisitions/{id}/refuse/", {
+    params: {
+      path: {
+        id,
+      },
+    },
+    body: input,
+  });
+
+  if (error || !data) {
+    throw new ApiError(
+      messageFromError(error, "Não foi possível recusar a requisição."),
       response.status,
       error,
     );
@@ -257,6 +341,15 @@ export function myRequisitionsQueryOptions(params: RequisicoesListParams) {
   return queryOptions({
     queryKey: requisitionsQueryKeys.mine(params),
     queryFn: () => fetchMyRequisitions(params),
+    placeholderData: keepPreviousData,
+    retry: retryUnlessClientOrAuthError,
+  });
+}
+
+export function pendingApprovalsQueryOptions(params: PendingApprovalsParams) {
+  return queryOptions({
+    queryKey: requisitionsQueryKeys.pendingApprovals(params),
+    queryFn: () => fetchPendingApprovals(params),
     placeholderData: keepPreviousData,
     retry: retryUnlessClientOrAuthError,
   });

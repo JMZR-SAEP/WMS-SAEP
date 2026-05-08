@@ -496,6 +496,42 @@ a {
   font-size: 0.9rem;
 }
 
+.authorization-panel,
+.authorization-form,
+.authorization-items,
+.authorization-refusal {
+  display: grid;
+  gap: 1rem;
+}
+
+.authorization-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.authorization-panel-header h2 {
+  margin-top: 0.55rem;
+  font-size: 1.35rem;
+  color: var(--ink-strong);
+}
+
+.authorization-panel-header p {
+  margin-top: 0.4rem;
+  color: var(--ink-soft);
+}
+
+.authorization-item-fields {
+  display: grid;
+  grid-template-columns: minmax(10rem, 14rem) minmax(14rem, 1fr);
+  gap: 1rem;
+}
+
+.compact-error {
+  padding: 1rem;
+}
+
 .timeline-list {
   list-style: none;
   padding: 0;
@@ -648,8 +684,13 @@ a {
   .filters-bar,
   .detail-grid,
   .quantity-grid,
+  .authorization-item-fields,
   .draft-item-fields {
     grid-template-columns: 1fr;
+  }
+
+  .authorization-panel-header {
+    flex-direction: column;
   }
 
   .table-frame {
