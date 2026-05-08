@@ -67,6 +67,7 @@ jobs:
 
   frontend:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     services:
       postgres:
         image: postgres:16
@@ -106,12 +107,16 @@ jobs:
       - name: Install backend dependencies
         run: uv sync --locked
       - name: Install frontend dependencies
-        run: make frontend-deps PNPM="$PNPM"
+        run: make frontend-deps
       - name: Generate frontend API types
-        run: make frontend-gen-api PNPM="$PNPM" DJANGO_SETTINGS_MODULE="$DJANGO_SETTINGS_MODULE" TEST_SETTINGS_MODULE="$TEST_SETTINGS_MODULE" SECRET_KEY="$SECRET_KEY" DATABASE_URL="$DATABASE_URL"
+        run: make frontend-gen-api
       - name: Lint frontend
-        run: make frontend-lint PNPM="$PNPM" DJANGO_SETTINGS_MODULE="$DJANGO_SETTINGS_MODULE" TEST_SETTINGS_MODULE="$TEST_SETTINGS_MODULE" SECRET_KEY="$SECRET_KEY" DATABASE_URL="$DATABASE_URL"
+        run: make frontend-lint
       - name: Build frontend
-        run: make frontend-build PNPM="$PNPM" DJANGO_SETTINGS_MODULE="$DJANGO_SETTINGS_MODULE" TEST_SETTINGS_MODULE="$TEST_SETTINGS_MODULE" SECRET_KEY="$SECRET_KEY" DATABASE_URL="$DATABASE_URL"
+        run: make frontend-build
       - name: Check generated frontend API contract
-        run: git diff --exit-code -- frontend/openapi/schema.json frontend/src/shared/api/schema.d.ts
+        run: |
+          git diff --exit-code -- frontend/openapi/schema.json frontend/src/shared/api/schema.d.ts || {
+            echo "Run 'make frontend-gen-api' locally and commit the updated files."
+            exit 1
+          }

@@ -331,7 +331,7 @@ Implementada no workflow `CI`, job `frontend`:
 
 ### Fase 2
 
-Escopo da issue `#43`:
+Escopo da issue #43:
 
 - subir backend com bloco 0 estável
 - carregar `seed_pilot_minimo`
