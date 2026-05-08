@@ -64,3 +64,40 @@ jobs:
         run: uv run python manage.py check
       - name: Run pytest
         run: make test DATABASE_URL="$DATABASE_URL" DJANGO_SETTINGS_MODULE="$DJANGO_SETTINGS_MODULE" TEST_SETTINGS_MODULE="$TEST_SETTINGS_MODULE" SECRET_KEY="$SECRET_KEY"
+
+  frontend:
+    runs-on: ubuntu-latest
+    env:
+      SECRET_KEY: test-secret-key-for-ci
+      DATABASE_URL: postgres://saep:saep@localhost:5432/test_wms_saep
+      DJANGO_SETTINGS_MODULE: config.settings.test
+      TEST_SETTINGS_MODULE: config.settings.test
+      PNPM: pnpm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.1
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - uses: actions/setup-python@v6
+        with:
+          python-version-file: ".python-version"
+      - uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+      - name: Install backend dependencies
+        run: uv sync --locked
+      - name: Install frontend dependencies
+        run: make frontend-deps PNPM="$PNPM"
+      - name: Generate frontend API types
+        run: make frontend-gen-api PNPM="$PNPM" DJANGO_SETTINGS_MODULE="$DJANGO_SETTINGS_MODULE" TEST_SETTINGS_MODULE="$TEST_SETTINGS_MODULE" SECRET_KEY="$SECRET_KEY" DATABASE_URL="$DATABASE_URL"
+      - name: Lint frontend
+        run: make frontend-lint PNPM="$PNPM" DJANGO_SETTINGS_MODULE="$DJANGO_SETTINGS_MODULE" TEST_SETTINGS_MODULE="$TEST_SETTINGS_MODULE" SECRET_KEY="$SECRET_KEY" DATABASE_URL="$DATABASE_URL"
+      - name: Build frontend
+        run: make frontend-build PNPM="$PNPM" DJANGO_SETTINGS_MODULE="$DJANGO_SETTINGS_MODULE" TEST_SETTINGS_MODULE="$TEST_SETTINGS_MODULE" SECRET_KEY="$SECRET_KEY" DATABASE_URL="$DATABASE_URL"
+      - name: Check generated frontend API contract
+        run: git diff --exit-code -- frontend/openapi/schema.json frontend/src/shared/api/schema.d.ts

@@ -321,12 +321,17 @@ Entrada em duas fases:
 
 ### Fase 1
 
+Implementada no workflow `CI`, job `frontend`:
+
 - instalar dependências do frontend
 - gerar tipos OpenAPI
 - lint
 - build
+- não roda Playwright
 
 ### Fase 2
+
+Escopo da issue `#43`:
 
 - subir backend com bloco 0 estável
 - carregar `seed_pilot_minimo`
