@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useFieldArray, useForm, useWatch } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -49,6 +49,15 @@ type DraftRequisitionEditorProps = {
   initialRequisition?: RequisicaoDetail;
   session: AuthSession;
 };
+
+type ConfirmAction =
+  | {
+      type: "submit";
+      values: DraftFormValues;
+    }
+  | {
+      type: "discard" | "cancel";
+    };
 
 function currentUserBeneficiary(session: AuthSession) {
   return {
@@ -141,7 +150,10 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [formError, setFormError] = useState<string | null>(null);
-  const [submitConfirmationValues, setSubmitConfirmationValues] = useState<DraftFormValues | null>(null);
+  const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const cancelConfirmationButtonRef = useRef<HTMLButtonElement | null>(null);
+  const pendingRef = useRef(false);
   const sessionSetorId = session.setor?.id ?? null;
   const sessionSetorNome = session.setor?.nome ?? null;
   const stableSession = useMemo(
@@ -178,7 +190,6 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
   });
   const beneficiaryMode = useWatch({ control: form.control, name: "beneficiaryMode" }) ?? "self";
   const previousBeneficiaryModeRef = useRef(beneficiaryMode);
-  const beneficiaryIdValue = useWatch({ control: form.control, name: "beneficiaryId" }) ?? "";
   const beneficiaryLabelValue = useWatch({ control: form.control, name: "beneficiaryLabel" });
   const beneficiarySearch =
     useWatch({ control: form.control, name: "beneficiarySearch" })?.trim() ?? "";
@@ -200,14 +211,39 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
     ...draftMaterialsQueryOptions(materialSearch),
     enabled: materialSearch.length >= 2,
   });
-  const canSubmitForm =
-    Number.parseInt(beneficiaryIdValue, 10) > 0 &&
-    selectedItems.length > 0 &&
-    selectedItems.every((item) => isPositiveQuantity(item.quantidadeSolicitada));
+  const resetIdentity = `${initialRequisition?.id ?? "new"}:${stableSession.id}`;
+  const resetIdentityRef = useRef(resetIdentity);
 
   useEffect(() => {
+    if (resetIdentityRef.current === resetIdentity) {
+      return;
+    }
+    resetIdentityRef.current = resetIdentity;
     form.reset(formValuesFromRequisition(initialRequisition, stableSession));
-  }, [form, initialRequisition, stableSession]);
+  }, [form, initialRequisition, resetIdentity, stableSession]);
+
+  useEffect(() => {
+    if (!confirmAction) {
+      return;
+    }
+    cancelConfirmationButtonRef.current?.focus();
+  }, [confirmAction]);
+
+  useEffect(() => {
+    if (!confirmAction) {
+      return undefined;
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape" && !pendingRef.current) {
+        event.preventDefault();
+        setConfirmAction(null);
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [confirmAction]);
 
   useEffect(() => {
     if (beneficiaryMode === "self") {
@@ -231,7 +267,7 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
   }
 
   function handleMutationError(error: unknown) {
-    setSubmitConfirmationValues(null);
+    setConfirmAction(null);
     if (isAuthError(error)) {
       queryClient.removeQueries({ queryKey: authQueryKeys.me });
       void navigate({
@@ -269,7 +305,7 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
     },
     onSuccess: async (requisition) => {
       setFormError(null);
-      setSubmitConfirmationValues(null);
+      setConfirmAction(null);
       afterMutationSuccess(requisition);
       await navigate({ to: "/requisicoes/$id", params: { id: String(requisition.id) } });
     },
@@ -305,6 +341,10 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
   const materials = materialsQuery.data?.results ?? [];
   const beneficiaries = beneficiaryQuery.data ?? [];
 
+  useEffect(() => {
+    pendingRef.current = pending;
+  }, [pending]);
+
   const selectedMaterialIds = useMemo(
     () => new Set(selectedItems.map((item) => Number.parseInt(item.materialId, 10))),
     [selectedItems],
@@ -332,28 +372,131 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
     form.setValue("beneficiarySearch", "");
   }
 
+  function chooseBeneficiaryMode(mode: DraftFormValues["beneficiaryMode"]) {
+    form.setValue("beneficiaryMode", mode, { shouldDirty: true });
+    if (mode === "self") {
+      const self = currentUserBeneficiary(stableSession);
+      form.setValue("beneficiaryId", String(self.id), { shouldDirty: true });
+      form.setValue("beneficiaryLabel", beneficiaryLabel(self), { shouldDirty: true });
+      form.setValue("beneficiarySearch", "");
+      return;
+    }
+    form.setValue("beneficiaryId", "", { shouldDirty: true });
+    form.setValue("beneficiaryLabel", "", { shouldDirty: true });
+  }
+
+  function closeConfirmation() {
+    if (!pending) {
+      setConfirmAction(null);
+    }
+  }
+
+  function validationErrorMessage(values: DraftFormValues) {
+    const selectedBeneficiaryId = Number.parseInt(values.beneficiaryId, 10);
+    if (
+      !values.beneficiaryId ||
+      !Number.isFinite(selectedBeneficiaryId) ||
+      selectedBeneficiaryId <= 0 ||
+      (values.beneficiaryMode === "third_party" && selectedBeneficiaryId === stableSession.id)
+    ) {
+      return "Informe beneficiário.";
+    }
+    if (values.itens.length === 0) {
+      return "Adicione ao menos um item.";
+    }
+    const invalidItemIndex = values.itens.findIndex(
+      (item) => !isPositiveQuantity(item.quantidadeSolicitada),
+    );
+    if (invalidItemIndex >= 0) {
+      const item = values.itens[invalidItemIndex];
+      return `Quantidade inválida no item ${item.materialLabel || invalidItemIndex + 1}: use um número válido maior que zero.`;
+    }
+    return null;
+  }
+
   function saveDraft(valuesToSave: DraftFormValues) {
-    if (!canSubmitForm) {
-      setFormError("Informe beneficiário e ao menos um item com quantidade maior que zero.");
+    const validationError = validationErrorMessage(valuesToSave);
+    if (validationError) {
+      setFormError(validationError);
       return;
     }
     saveMutation.mutate(payloadFromValues(valuesToSave));
   }
 
   function requestSubmitDraft(valuesToSubmit: DraftFormValues) {
-    if (!canSubmitForm) {
-      setFormError("Informe beneficiário e ao menos um item com quantidade maior que zero.");
+    const validationError = validationErrorMessage(valuesToSubmit);
+    if (validationError) {
+      setFormError(validationError);
       return;
     }
-    setSubmitConfirmationValues(valuesToSubmit);
+    setConfirmAction({ type: "submit", values: valuesToSubmit });
   }
 
-  function confirmSubmitDraft() {
-    if (!submitConfirmationValues) {
+  function requestDiscardOrCancel() {
+    setConfirmAction({ type: initialRequisition?.numero_publico ? "cancel" : "discard" });
+  }
+
+  function confirmSelectedAction() {
+    if (!confirmAction) {
       return;
     }
-    submitMutation.mutate(payloadFromValues(submitConfirmationValues));
+    if (confirmAction.type === "submit") {
+      submitMutation.mutate(payloadFromValues(confirmAction.values));
+      return;
+    }
+    discardMutation.mutate();
   }
+
+  function confirmationContent() {
+    switch (confirmAction?.type) {
+      case "submit":
+        return {
+          title: "Enviar rascunho para autorização?",
+          message: "Após o envio, a requisição sai do modo rascunho e segue para avaliação do autorizador.",
+          confirmLabel: "Confirmar envio",
+        };
+      case "cancel":
+        return {
+          title: "Cancelar requisição?",
+          message: "A requisição numerada será encerrada e não poderá voltar ao modo rascunho.",
+          confirmLabel: "Confirmar cancelamento",
+        };
+      case "discard":
+        return {
+          title: "Descartar rascunho?",
+          message: "O rascunho ainda sem número será removido e os dados não salvos serão perdidos.",
+          confirmLabel: "Confirmar descarte",
+        };
+      default:
+        return null;
+    }
+  }
+
+  function trapDialogFocus(event: ReactKeyboardEvent<HTMLDivElement>) {
+    if (event.key !== "Tab" || !dialogRef.current) {
+      return;
+    }
+    const focusableElements = dialogRef.current.querySelectorAll<HTMLElement>(
+      'button:not([disabled]), [href], input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    );
+    const firstElement = focusableElements[0];
+    const lastElement = focusableElements[focusableElements.length - 1];
+
+    if (!firstElement || !lastElement) {
+      return;
+    }
+    if (event.shiftKey && document.activeElement === firstElement) {
+      event.preventDefault();
+      lastElement.focus();
+      return;
+    }
+    if (!event.shiftKey && document.activeElement === lastElement) {
+      event.preventDefault();
+      firstElement.focus();
+    }
+  }
+
+  const confirmation = confirmationContent();
 
   return (
     <section className="space-y-6">
@@ -378,14 +521,29 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
       >
         <section className="detail-panel draft-section">
           <p className="eyebrow">Beneficiário</p>
+          <input type="hidden" {...form.register("beneficiaryMode")} />
+          <input type="hidden" {...form.register("beneficiaryId")} />
+          <input type="hidden" {...form.register("beneficiaryLabel")} />
           <div className="draft-choice-grid">
             <label className="draft-choice">
-              <input type="radio" value="self" {...form.register("beneficiaryMode")} />
+              <input
+                checked={beneficiaryMode === "self"}
+                name="beneficiaryModeChoice"
+                onChange={() => chooseBeneficiaryMode("self")}
+                type="radio"
+                value="self"
+              />
               Para mim
             </label>
             {canRequestForThirdParty(stableSession) ? (
               <label className="draft-choice">
-                <input type="radio" value="third_party" {...form.register("beneficiaryMode")} />
+                <input
+                  checked={beneficiaryMode === "third_party"}
+                  name="beneficiaryModeChoice"
+                  onChange={() => chooseBeneficiaryMode("third_party")}
+                  type="radio"
+                  value="third_party"
+                />
                 Para terceiro
               </label>
             ) : null}
@@ -525,7 +683,7 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
             <button
               className="action-link compact-action danger-action"
               disabled={pending}
-              onClick={() => discardMutation.mutate()}
+              onClick={requestDiscardOrCancel}
               type="button"
             >
               {initialRequisition.numero_publico ? "Cancelar requisição" : "Descartar rascunho"}
@@ -547,22 +705,26 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
         </div>
       </form>
 
-      {submitConfirmationValues ? (
+      {confirmation ? (
         <div
           aria-labelledby="draft-submit-confirmation-title"
           aria-modal="true"
           className="draft-confirmation-backdrop"
+          onClick={closeConfirmation}
+          onKeyDown={trapDialogFocus}
+          ref={dialogRef}
           role="dialog"
         >
-          <section className="draft-confirmation-panel">
+          <section className="draft-confirmation-panel" onClick={(event) => event.stopPropagation()}>
             <p className="eyebrow">Confirmação</p>
-            <h2 id="draft-submit-confirmation-title">Enviar rascunho para autorização?</h2>
-            <p>Após o envio, a requisição sai do modo rascunho e segue para avaliação do autorizador.</p>
+            <h2 id="draft-submit-confirmation-title">{confirmation.title}</h2>
+            <p>{confirmation.message}</p>
             <div className="draft-actions">
               <button
                 className="action-link compact-action"
                 disabled={pending}
-                onClick={() => setSubmitConfirmationValues(null)}
+                onClick={closeConfirmation}
+                ref={cancelConfirmationButtonRef}
                 type="button"
               >
                 Voltar ao rascunho
@@ -570,10 +732,10 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
               <button
                 className="preview-button draft-primary"
                 disabled={pending}
-                onClick={confirmSubmitDraft}
+                onClick={confirmSelectedAction}
                 type="button"
               >
-                Confirmar envio
+                {confirmation.confirmLabel}
               </button>
             </div>
           </section>

@@ -32,6 +32,7 @@ MANAGE_PY ?= manage.py
 DJANGO_ADMIN ?= $(PYTHON) $(MANAGE_PY)
 FRONTEND_DIR ?= frontend
 FRONTEND_SCHEMA_FILE ?= $(FRONTEND_DIR)/openapi/schema.json
+FRONTEND_DEPS_STAMP ?= $(FRONTEND_DIR)/node_modules/.modules.yaml
 
 DJANGO_SETTINGS_MODULE ?= config.settings.dev
 TEST_SETTINGS_MODULE ?= config.settings.test
@@ -123,12 +124,18 @@ seed-pilot-minimo: ## Carregar seed minima oficial do piloto
 run: ## Subir servidor de desenvolvimento
 	DJANGO_SETTINGS_MODULE=$(DJANGO_SETTINGS_MODULE) $(DJANGO_ADMIN) runserver
 
-frontend-init: ## Instalar dependências do frontend e preparar Playwright
+$(FRONTEND_DEPS_STAMP): $(FRONTEND_DIR)/package.json $(FRONTEND_DIR)/pnpm-lock.yaml
 	@test -d $(FRONTEND_DIR) || (echo "Diretório $(FRONTEND_DIR) não encontrado" && exit 1)
 	cd $(FRONTEND_DIR) && $(PNPM) install
+
+frontend-deps: $(FRONTEND_DEPS_STAMP) ## Instalar dependências do frontend quando necessário
+	@test -d $(FRONTEND_DIR) || (echo "Diretório $(FRONTEND_DIR) não encontrado" && exit 1)
+
+frontend-init: frontend-deps ## Instalar dependências do frontend e preparar Playwright
+	@test -d $(FRONTEND_DIR) || (echo "Diretório $(FRONTEND_DIR) não encontrado" && exit 1)
 	cd $(FRONTEND_DIR) && ./node_modules/.bin/playwright install chromium
 
-frontend-gen-api: frontend-init ## Exportar OpenAPI do backend e regenerar tipos do frontend
+frontend-gen-api: frontend-deps ## Exportar OpenAPI do backend e regenerar tipos do frontend
 	@test -d $(FRONTEND_DIR) || (echo "Diretório $(FRONTEND_DIR) não encontrado" && exit 1)
 	mkdir -p $(FRONTEND_DIR)/openapi
 	DJANGO_SETTINGS_MODULE=$(DJANGO_SETTINGS_MODULE) $(DJANGO_ADMIN) spectacular --format openapi-json --file $(FRONTEND_SCHEMA_FILE)
@@ -153,5 +160,5 @@ frontend-test: frontend-gen-api ## Rodar smoke tests unitários/integration do f
 frontend-e2e: frontend-gen-api ## Rodar smoke E2E do frontend com Playwright
 	cd $(FRONTEND_DIR) && ./node_modules/.bin/playwright test
 
-.PHONY: help prepare init setup clean cleanall veryclean test seed-pilot-minimo run resetdb resetpostgres frontend-init frontend-gen-api frontend-dev frontend-build frontend-lint frontend-test frontend-e2e
+.PHONY: help prepare init setup clean cleanall veryclean test seed-pilot-minimo run resetdb resetpostgres frontend-deps frontend-init frontend-gen-api frontend-dev frontend-build frontend-lint frontend-test frontend-e2e
 .EXPORT_ALL_VARIABLES:

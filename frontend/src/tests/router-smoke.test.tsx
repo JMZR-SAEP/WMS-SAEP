@@ -930,7 +930,9 @@ describe("frontend scaffold router", () => {
     fireEvent.click(screen.getByRole("button", { name: "Salvar rascunho" }));
 
     expect(
-      await screen.findByText("Informe beneficiário e ao menos um item com quantidade maior que zero."),
+      await screen.findByText(
+        "Quantidade inválida no item 010.001.001 - Papel sulfite A4: use um número válido maior que zero.",
+      ),
     ).toBeInTheDocument();
     expect(createdPayload).toBeUndefined();
   });
@@ -1024,9 +1026,7 @@ describe("frontend scaffold router", () => {
     fireEvent.click(screen.getByLabelText("Para terceiro"));
     fireEvent.click(screen.getByRole("button", { name: "Salvar rascunho" }));
 
-    expect(
-      await screen.findByText("Informe beneficiário e ao menos um item com quantidade maior que zero."),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("Informe beneficiário.")).toBeInTheDocument();
     expect(createdPayload).toBeUndefined();
   });
 
@@ -1107,7 +1107,9 @@ describe("frontend scaffold router", () => {
 
     expect(await screen.findByRole("heading", { name: "Editar rascunho" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Enviar para autorização" }));
-    expect(await screen.findByRole("dialog")).toHaveTextContent("Enviar rascunho para autorização?");
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveTextContent("Enviar rascunho para autorização?");
+    expect(screen.getByRole("button", { name: "Voltar ao rascunho" })).toHaveFocus();
     fireEvent.click(screen.getByRole("button", { name: "Confirmar envio" }));
 
     await waitFor(() => {
@@ -1155,6 +1157,8 @@ describe("frontend scaffold router", () => {
 
     expect(await screen.findByRole("heading", { name: "Editar rascunho" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Descartar rascunho" }));
+    expect(await screen.findByRole("dialog")).toHaveTextContent("Descartar rascunho?");
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar descarte" }));
 
     await waitFor(() => {
       expect(discardCalled).toBe(true);
@@ -1190,6 +1194,8 @@ describe("frontend scaffold router", () => {
 
     expect(await screen.findByRole("heading", { name: "Editar rascunho" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Cancelar requisição" }));
+    expect(await screen.findByRole("dialog")).toHaveTextContent("Cancelar requisição?");
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar cancelamento" }));
 
     await waitFor(() => {
       expect(cancelPayload).toEqual({ motivo_cancelamento: "" });
