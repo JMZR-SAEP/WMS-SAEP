@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 // Keep aligned with apps/requisitions/seed_pilot_minimo.py (SEED_PASSWORD).
-const SEED_PASSWORD = process.env.PLAYWRIGHT_SEED_PASSWORD ?? "piloto-minimo";
+const SEED_PASSWORD = "piloto-minimo";
 
 async function loginAs(page: Page, matricula: string, expectedPath: RegExp) {
   await page.goto("/login");
