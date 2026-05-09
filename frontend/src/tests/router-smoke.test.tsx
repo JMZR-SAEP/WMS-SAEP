@@ -1500,6 +1500,40 @@ describe("frontend scaffold router", () => {
     expect(container.ownerDocument.location.search).toBe("?contexto=atendimento");
   });
 
+  it("redirects to login when fulfillment action returns 401", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn((request: Request) => {
+          if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+            return sessionResponse(warehouseSession());
+          }
+
+          if (requestUrl(request).endsWith("/api/v1/requisitions/101/")) {
+            return requisitionDetailResponse({ quantidade_autorizada: "1.000" });
+          }
+
+          if (requestUrl(request).endsWith("/api/v1/requisitions/101/fulfill/")) {
+            return new Response(null, { status: 401, headers: jsonHeaders });
+          }
+
+          throw new Error(`Unexpected request: ${requestUrl(request)}`);
+        }),
+      );
+
+      const { container } = renderRoute("/requisicoes/101?contexto=atendimento");
+
+      expect(await screen.findByRole("heading", { name: "REQ-2026-000101" })).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Preencher entrega completa" }));
+      fireEvent.click(screen.getByRole("button", { name: "Registrar atendimento" }));
+
+      expect(await screen.findByRole("heading", { name: "Entrar no piloto" })).toBeInTheDocument();
+      expect(container.ownerDocument.location.pathname).toBe("/login");
+      expect(container.ownerDocument.location.search).toBe(
+        "?redirect=%2Frequisicoes%2F101%3Fcontexto%3Datendimento",
+      );
+    },
+  );
+
   it("cancels authorized requisition from fulfillment context only with a reason", async () => {
     let cancelPayload: unknown;
     const fetchMock = vi.fn(async (request: Request) => {
@@ -1544,6 +1578,43 @@ describe("frontend scaffold router", () => {
       expect(container.ownerDocument.location.pathname).toBe("/atendimentos");
     });
   });
+
+  it("redirects to login when cancel action returns 401", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn((request: Request) => {
+          if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+            return sessionResponse(warehouseSession());
+          }
+
+          if (requestUrl(request).endsWith("/api/v1/requisitions/101/")) {
+            return requisitionDetailResponse({ quantidade_autorizada: "1.000" });
+          }
+
+          if (requestUrl(request).endsWith("/api/v1/requisitions/101/cancel/")) {
+            return new Response(null, { status: 401, headers: jsonHeaders });
+          }
+
+          throw new Error(`Unexpected request: ${requestUrl(request)}`);
+        }),
+      );
+
+      const { container } = renderRoute("/requisicoes/101?contexto=atendimento");
+
+      expect(await screen.findByRole("heading", { name: "REQ-2026-000101" })).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "Cancelar requisição autorizada" }));
+      fireEvent.change(screen.getByLabelText("Motivo do cancelamento operacional"), {
+        target: { value: "Material indisponível no balcão" },
+      });
+      fireEvent.click(screen.getByRole("button", { name: "Cancelar requisição autorizada" }));
+
+      expect(await screen.findByRole("heading", { name: "Entrar no piloto" })).toBeInTheDocument();
+      expect(container.ownerDocument.location.pathname).toBe("/login");
+      expect(container.ownerDocument.location.search).toBe(
+        "?redirect=%2Frequisicoes%2F101%3Fcontexto%3Datendimento",
+      );
+    },
+  );
 
   it("preserves authorization page when queue request expires", async () => {
     vi.stubGlobal(
