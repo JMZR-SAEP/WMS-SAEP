@@ -499,7 +499,8 @@ a {
 .authorization-panel,
 .authorization-form,
 .authorization-items,
-.authorization-refusal {
+.authorization-refusal,
+.fulfillment-cancellation {
   display: grid;
   gap: 1rem;
 }

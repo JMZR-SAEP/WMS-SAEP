@@ -203,7 +203,10 @@ function pendingFulfillmentListResponse(results = [pendingFulfillmentListItem()]
   );
 }
 
-function requisitionDetailResponse(itemOverrides = {}) {
+function requisitionDetailResponse(
+  itemOverrides: Record<string, unknown> = {},
+  requisitionOverrides: Record<string, unknown> = {},
+) {
   return new Response(
     JSON.stringify({
       id: 101,
@@ -270,6 +273,7 @@ function requisitionDetailResponse(itemOverrides = {}) {
           observacao: "Autorizado parcialmente por saldo.",
         },
       ],
+      ...requisitionOverrides,
     }),
     { status: 200, headers: jsonHeaders },
   );
@@ -1177,6 +1181,33 @@ describe("frontend scaffold router", () => {
     });
   });
 
+  it("returns from requisition detail to fulfillment queue when opened with fulfillment context", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((request: Request) => {
+        if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+          return sessionResponse(warehouseSession());
+        }
+
+        if (requestUrl(request).endsWith("/api/v1/requisitions/101/")) {
+          return requisitionDetailResponse();
+        }
+
+        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+      }),
+    );
+
+    const { container } = renderRoute("/requisicoes/101?contexto=atendimento&page=2");
+
+    expect(await screen.findByRole("heading", { name: "REQ-2026-000101" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("link", { name: "Voltar" }));
+
+    await waitFor(() => {
+      expect(container.ownerDocument.location.pathname).toBe("/atendimentos");
+      expect(container.ownerDocument.location.search).toBe("?page=2");
+    });
+  });
+
   it("redirects solicitante away from fulfillment detail context", async () => {
     vi.stubGlobal(
       "fetch",
@@ -1482,7 +1513,7 @@ describe("frontend scaffold router", () => {
 
       if (requestUrl(request).endsWith("/api/v1/requisitions/101/cancel/")) {
         cancelPayload = await request.json();
-        return requisitionDetailResponse({ status: "cancelada" });
+        return requisitionDetailResponse({}, { status: "cancelada" });
       }
 
       if (requestUrl(request).includes("/api/v1/requisitions/pending-fulfillments/")) {
@@ -2198,7 +2229,7 @@ describe("frontend scaffold router", () => {
 
       if (requestUrl(request).endsWith("/api/v1/requisitions/101/cancel/")) {
         cancelPayload = await request.json();
-        return requisitionDetailResponse({ status: "cancelada" });
+        return requisitionDetailResponse({}, { status: "cancelada" });
       }
 
       if (requestUrl(request).includes("/api/v1/requisitions/mine/")) {

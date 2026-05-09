@@ -681,7 +681,7 @@ function FulfillmentDecisionPanel({
         </div>
       </form>
 
-      <form className="authorization-refusal" onSubmit={cancel}>
+      <form className="fulfillment-cancellation" onSubmit={cancel}>
         <label className="preview-label">
           Motivo do cancelamento operacional
           <textarea
