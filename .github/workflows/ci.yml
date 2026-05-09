@@ -171,8 +171,6 @@ jobs:
         run: cd frontend && ./node_modules/.bin/playwright install --with-deps chromium
       - name: Rebuild ephemeral schema/migrations
         run: make setup DATABASE_URL="$DATABASE_URL" DJANGO_SETTINGS_MODULE="$DJANGO_SETTINGS_MODULE" TEST_SETTINGS_MODULE="$TEST_SETTINGS_MODULE" SECRET_KEY="$SECRET_KEY"
-      - name: Seed pilot baseline
-        run: make seed-pilot-minimo DATABASE_URL="$DATABASE_URL" DJANGO_SETTINGS_MODULE="$DJANGO_SETTINGS_MODULE" TEST_SETTINGS_MODULE="$TEST_SETTINGS_MODULE" SECRET_KEY="$SECRET_KEY"
       - name: Run frontend real E2E
         run: make frontend-e2e DATABASE_URL="$DATABASE_URL" DJANGO_SETTINGS_MODULE="$DJANGO_SETTINGS_MODULE" TEST_SETTINGS_MODULE="$TEST_SETTINGS_MODULE" SECRET_KEY="$SECRET_KEY"
       - name: Upload Playwright artifacts

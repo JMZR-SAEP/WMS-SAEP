@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
-const SEED_PASSWORD = "piloto-minimo";
+// Keep aligned with apps/requisitions/seed_pilot_minimo.py (SEED_PASSWORD).
+const SEED_PASSWORD = process.env.PLAYWRIGHT_SEED_PASSWORD ?? "piloto-minimo";
 
 async function loginAs(page: Page, matricula: string, expectedPath: RegExp) {
   await page.goto("/login");
@@ -29,7 +30,7 @@ test("opens minhas requisicoes and canonical detail with real data", async ({ pa
   await formalRow.getByRole("link", { name: "Abrir" }).click();
 
   await expect(page).toHaveURL(/\/requisicoes\/\d+$/);
-  await expect(page.locator(".detail-hero h1")).toContainText(/REQ-\d{4}-\d+/);
+  await expect(page.getByRole("heading", { name: /REQ-\d{4}-\d+/ })).toBeVisible();
 });
 
 test("creates draft and submits to authorization using seed scenario", async ({ page }) => {
@@ -53,7 +54,7 @@ test("creates draft and submits to authorization using seed scenario", async ({ 
   await page.getByRole("button", { name: "Enviar para autorização" }).click();
   await page.getByRole("button", { name: "Confirmar envio" }).click();
 
-  await expect(page.locator(".detail-hero h1")).toContainText(/REQ-\d{4}-\d+/);
+  await expect(page.getByRole("heading", { name: /REQ-\d{4}-\d+/ })).toBeVisible();
   await expect(page.getByText("Aguardando autorização")).toBeVisible();
 });
 

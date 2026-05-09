@@ -150,6 +150,9 @@ def _upsert_material(
         estoque.saldo_fisico != saldo_inicial
         and not Requisicao.objects.filter(itens__material=material).exists()
     ):
+        # SEED ONLY: this direct stock reset is restricted to ephemeral bootstrap
+        # inside carregar_seed_pilot_minimo() transaction; do not copy this path
+        # to runtime/business flows (use stock services with lock semantics there).
         estoque.saldo_fisico = saldo_inicial
         estoque.saldo_reservado = Decimal("0")
         estoque.save(update_fields=["saldo_fisico", "saldo_reservado", "updated_at"])
