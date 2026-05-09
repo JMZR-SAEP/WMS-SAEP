@@ -1243,10 +1243,10 @@ Status do enablement do frontend: bloco 0 do backend concluído em código/contr
 
 Débito técnico residual do scaffold frontend:
 
-- O repositório ainda não tem a primeira fatia de CI do frontend. Ela deve validar artefatos gerados (`frontend/src/routeTree.gen.ts` e OpenAPI/types), lint, typecheck, smoke tests e Playwright.
+- A fase 1 de CI do frontend está ativa no workflow `CI`, job `frontend`, validando geração OpenAPI/types, lint e build.
 - A árvore `src/features/` começou a receber comportamento real por `features/auth`, mas as próximas fatias ainda devem evitar crescimento permanente de placeholders em `routes/`/`shared/`.
 - `frontend-gen-api`/`frontend-test` ainda depende de `frontend-init` via `npx pnpm@10.15.1`; em ambiente sem rede, use os binários locais em `frontend/node_modules/.bin` ou conclua a instalação oficial antes dos checks completos.
-- O E2E atual da SPA é smoke mockado para login/logout. Próximo degrau: E2E real com backend e seed mínima quando a infra estiver estável.
+- A fase 2 de CI do frontend está ativa no workflow `CI`, job `frontend-e2e`, com backend real + seed mínima + Playwright (Chromium, traces em retry).
 - `/unknown-role` é fallback defensivo para papel não mapeado, não fluxo de negócio. Se aparecer em uso real, tratar como desalinhamento de contrato/cadastro/OpenAPI.
 
 Próxima fatia recomendada:
