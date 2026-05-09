@@ -6,7 +6,6 @@ import { z } from "zod";
 import { requireOperationalPapel, requireSession } from "../../features/auth/guards";
 import {
   authQueryKeys,
-  isAuthError,
   isUnauthenticatedError,
   meQueryOptions,
 } from "../../features/auth/session";
@@ -412,7 +411,7 @@ function DetalheRequisicaoPage() {
     ...meQueryOptions,
     enabled: detailQuery.data?.status === "rascunho",
   });
-  const authError = detailQuery.isError && isAuthError(detailQuery.error);
+  const authError = detailQuery.isError && isUnauthenticatedError(detailQuery.error);
 
   useEffect(() => {
     if (!authError) {

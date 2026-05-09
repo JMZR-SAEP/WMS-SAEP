@@ -1062,6 +1062,28 @@ describe("frontend scaffold router", () => {
     });
   });
 
+  it("keeps permission denied detail errors inline instead of redirecting to login", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((request: Request) => {
+        if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+          return sessionResponse(chefeSession());
+        }
+
+        if (requestUrl(request).endsWith("/api/v1/requisitions/101/")) {
+          return forbiddenResponse();
+        }
+
+        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+      }),
+    );
+
+    const { container } = renderRoute("/requisicoes/101?contexto=autorizacao");
+
+    expect(await screen.findByText("Permissão negada.")).toBeInTheDocument();
+    expect(container.ownerDocument.location.pathname).toBe("/requisicoes/101");
+  });
+
   it("does not render authorization panel outside pending authorization status", async () => {
     vi.stubGlobal(
       "fetch",
