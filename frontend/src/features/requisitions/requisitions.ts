@@ -14,8 +14,14 @@ export type RequisicaoTimelineEventType = components["schemas"]["TipoEventoEnum"
 export type RequisicaoDraftInput = components["schemas"]["RequisicaoCreateInput"];
 export type RequisicaoAuthorizeInput = components["schemas"]["RequisicaoAuthorizeInput"];
 export type RequisicaoRefuseInput = components["schemas"]["RequisicaoRefuseInput"];
+export type RequisicaoFulfillInput = components["schemas"]["RequisicaoFulfillInput"];
+export type RequisicaoCancelInput = components["schemas"]["RequisicaoCancelInput"];
 export type RequisicaoPendingApprovalItem = components["schemas"]["RequisicaoPendingApprovalOutput"];
 export type RequisicaoPendingApprovalResponse = components["schemas"]["RequisicaoPendingApprovalPaginated"];
+export type RequisicaoPendingFulfillmentItem =
+  components["schemas"]["RequisicaoPendingFulfillmentOutput"];
+export type RequisicaoPendingFulfillmentResponse =
+  components["schemas"]["RequisicaoPendingFulfillmentPaginated"];
 export type MaterialListItem = components["schemas"]["MaterialListOutput"];
 export type MaterialListResponse = components["schemas"]["MaterialListPaginated"];
 export type BeneficiaryLookupItem = components["schemas"]["BeneficiaryLookupOutput"];
@@ -57,8 +63,17 @@ export type PendingApprovalsParams = {
   pageSize: number;
 };
 
+export type PendingFulfillmentsParams = {
+  page: number;
+  pageSize: number;
+};
+
 const requisitionsBaseQueryKey = ["requisitions"] as const;
 const pendingApprovalsBaseQueryKey = [...requisitionsBaseQueryKey, "pending-approvals"] as const;
+const pendingFulfillmentsBaseQueryKey = [
+  ...requisitionsBaseQueryKey,
+  "pending-fulfillments",
+] as const;
 
 export const requisitionsQueryKeys = {
   all: requisitionsBaseQueryKey,
@@ -74,9 +89,18 @@ export const requisitionsQueryKeys = {
       },
     ] as const,
   pendingApprovalsAll: pendingApprovalsBaseQueryKey,
+  pendingFulfillmentsAll: pendingFulfillmentsBaseQueryKey,
   pendingApprovals: (params: PendingApprovalsParams) =>
     [
       ...pendingApprovalsBaseQueryKey,
+      {
+        page: params.page,
+        pageSize: params.pageSize,
+      },
+    ] as const,
+  pendingFulfillments: (params: PendingFulfillmentsParams) =>
+    [
+      ...pendingFulfillmentsBaseQueryKey,
       {
         page: params.page,
         pageSize: params.pageSize,
@@ -128,6 +152,30 @@ export async function fetchPendingApprovals(params: PendingApprovalsParams) {
   if (error || !data) {
     throw new ApiError(
       messageFromError(error, "Não foi possível carregar autorizações pendentes."),
+      response.status,
+      error,
+    );
+  }
+
+  return data;
+}
+
+export async function fetchPendingFulfillments(params: PendingFulfillmentsParams) {
+  const { data, error, response } = await apiClient.GET(
+    "/api/v1/requisitions/pending-fulfillments/",
+    {
+      params: {
+        query: {
+          page: params.page,
+          page_size: params.pageSize,
+        },
+      },
+    },
+  );
+
+  if (error || !data) {
+    throw new ApiError(
+      messageFromError(error, "Não foi possível carregar atendimentos pendentes."),
       response.status,
       error,
     );
@@ -190,6 +238,48 @@ export async function refuseRequisition(id: number, input: RequisicaoRefuseInput
   if (error || !data) {
     throw new ApiError(
       messageFromError(error, "Não foi possível recusar a requisição."),
+      response.status,
+      error,
+    );
+  }
+
+  return data;
+}
+
+export async function fulfillRequisition(id: number, input: RequisicaoFulfillInput) {
+  const { data, error, response } = await apiClient.POST("/api/v1/requisitions/{id}/fulfill/", {
+    params: {
+      path: {
+        id,
+      },
+    },
+    body: input,
+  });
+
+  if (error || !data) {
+    throw new ApiError(
+      messageFromError(error, "Não foi possível registrar atendimento."),
+      response.status,
+      error,
+    );
+  }
+
+  return data;
+}
+
+export async function cancelAuthorizedRequisition(id: number, input: RequisicaoCancelInput) {
+  const { data, error, response } = await apiClient.POST("/api/v1/requisitions/{id}/cancel/", {
+    params: {
+      path: {
+        id,
+      },
+    },
+    body: input,
+  });
+
+  if (error || !data) {
+    throw new ApiError(
+      messageFromError(error, "Não foi possível cancelar a requisição."),
       response.status,
       error,
     );
@@ -350,6 +440,15 @@ export function pendingApprovalsQueryOptions(params: PendingApprovalsParams) {
   return queryOptions({
     queryKey: requisitionsQueryKeys.pendingApprovals(params),
     queryFn: () => fetchPendingApprovals(params),
+    placeholderData: keepPreviousData,
+    retry: retryUnlessClientOrAuthError,
+  });
+}
+
+export function pendingFulfillmentsQueryOptions(params: PendingFulfillmentsParams) {
+  return queryOptions({
+    queryKey: requisitionsQueryKeys.pendingFulfillments(params),
+    queryFn: () => fetchPendingFulfillments(params),
     placeholderData: keepPreviousData,
     retry: retryUnlessClientOrAuthError,
   });
