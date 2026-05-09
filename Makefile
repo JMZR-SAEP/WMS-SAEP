@@ -158,7 +158,7 @@ frontend-lint: frontend-gen-api ## Rodar lint e typecheck do frontend
 frontend-test: frontend-gen-api ## Rodar smoke tests unitários/integration do frontend
 	cd $(FRONTEND_DIR) && ./node_modules/.bin/vitest run
 
-frontend-e2e: frontend-gen-api ## Rodar smoke E2E do frontend com Playwright
+frontend-e2e: frontend-gen-api seed-pilot-minimo ## Rodar E2E real do frontend com Playwright + backend seedado
 	cd $(FRONTEND_DIR) && ./node_modules/.bin/playwright test
 
 .PHONY: help prepare init setup clean cleanall veryclean test seed-pilot-minimo run resetdb resetpostgres frontend-deps frontend-init frontend-gen-api frontend-dev frontend-build frontend-lint frontend-test frontend-e2e
