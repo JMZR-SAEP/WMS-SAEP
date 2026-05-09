@@ -11,6 +11,26 @@ async function loginAs(page: Page, matricula: string, expectedPath: RegExp) {
   await expect(page).toHaveURL(expectedPath);
 }
 
+function expectDetailContextUrl(
+  rawUrl: string,
+  contexto: "autorizacao" | "atendimento",
+  allowPageParam = true,
+) {
+  const url = new URL(rawUrl);
+
+  expect(url.pathname).toMatch(/^\/requisicoes\/\d+$/);
+  expect(url.searchParams.get("contexto")).toBe(contexto);
+
+  const pageParam = url.searchParams.get("page");
+  if (!allowPageParam) {
+    expect(pageParam).toBeNull();
+    return;
+  }
+  if (pageParam !== null) {
+    expect(pageParam).toMatch(/^\d+$/);
+  }
+}
+
 test("logs in and logs out through real backend", async ({ page }) => {
   await loginAs(page, "chefe-setor", /\/autorizacoes(?:\?.*)?$/);
   await expect(page.getByRole("heading", { name: "Fila de autorizações" })).toBeVisible();
@@ -66,7 +86,8 @@ test("authorizes pending requisition from worklist", async ({ page }) => {
   await expect(approvalRow).toBeVisible();
   await approvalRow.getByRole("link", { name: "Abrir" }).click();
 
-  await expect(page).toHaveURL(/\/requisicoes\/\d+\?contexto=autorizacao(?:&page=\d+)?$/);
+  await expect(page).toHaveURL(/\/requisicoes\/\d+\?/);
+  expectDetailContextUrl(page.url(), "autorizacao");
   await page.getByRole("button", { name: "Autorizar tudo como solicitado" }).click();
   await expect(page).toHaveURL(/\/autorizacoes(?:\?.*)?$/);
   await expect(page.getByRole("heading", { name: "Fila de autorizações" })).toBeVisible();
@@ -80,7 +101,8 @@ test("fulfills authorized requisition from worklist", async ({ page }) => {
   await expect(fulfillmentRow).toBeVisible();
   await fulfillmentRow.getByRole("link", { name: "Abrir" }).click();
 
-  await expect(page).toHaveURL(/\/requisicoes\/\d+\?contexto=atendimento(?:&page=\d+)?$/);
+  await expect(page).toHaveURL(/\/requisicoes\/\d+\?/);
+  expectDetailContextUrl(page.url(), "atendimento");
   await page.getByRole("button", { name: "Preencher entrega completa" }).click();
   await page.getByLabel("Retirante físico").fill("Servidor piloto E2E");
   await page.getByRole("button", { name: "Registrar atendimento" }).click();
