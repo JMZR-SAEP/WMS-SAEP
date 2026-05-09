@@ -149,6 +149,60 @@ function pendingApprovalListResponse(results = [pendingApprovalListItem()]) {
   );
 }
 
+function warehouseSession() {
+  return {
+    id: 30,
+    matricula_funcional: "91005",
+    nome_completo: "Almoxarifado Piloto",
+    papel: "auxiliar_almoxarifado",
+    setor: {
+      id: 3,
+      nome: "Almoxarifado",
+    },
+    is_authenticated: true,
+  };
+}
+
+function pendingFulfillmentListItem(overrides = {}) {
+  return {
+    id: 101,
+    numero_publico: "REQ-2026-000101",
+    status: "autorizada",
+    beneficiario: {
+      id: 11,
+      matricula_funcional: "91004",
+      nome_completo: "Beneficiario Piloto",
+    },
+    setor_beneficiario: {
+      id: 2,
+      nome: "Manutencao",
+    },
+    chefe_autorizador: {
+      id: 20,
+      matricula_funcional: "91001",
+      nome_completo: "Chefe Piloto",
+    },
+    data_autorizacao_ou_recusa: "2026-05-01T12:00:00Z",
+    total_itens: 2,
+    ...overrides,
+  };
+}
+
+function pendingFulfillmentListResponse(results = [pendingFulfillmentListItem()]) {
+  return new Response(
+    JSON.stringify({
+      count: results.length,
+      page: 1,
+      page_size: 20,
+      total_pages: 1,
+      next: null,
+      previous: null,
+      results,
+    }),
+    { status: 200, headers: jsonHeaders },
+  );
+}
+
 function requisitionDetailResponse(itemOverrides = {}) {
   return new Response(
     JSON.stringify({
@@ -995,6 +1049,67 @@ describe("frontend scaffold router", () => {
     expect(await screen.findByRole("link", { name: "Voltar" })).toHaveAttribute("href", "/autorizacoes");
   });
 
+  it("renders fulfillment queue worklist", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((request: Request) => {
+        if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+          return sessionResponse(warehouseSession());
+        }
+
+        if (requestUrl(request).includes("/api/v1/requisitions/pending-fulfillments/")) {
+          return pendingFulfillmentListResponse();
+        }
+
+        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+      }),
+    );
+
+    renderRoute("/atendimentos");
+
+    expect(await screen.findByRole("heading", { name: "Fila de atendimento" })).toBeInTheDocument();
+    expect(await screen.findByText("REQ-2026-000101")).toBeInTheDocument();
+    expect(screen.getByText("Beneficiario Piloto")).toBeInTheDocument();
+    expect(screen.getByText("Chefe Piloto")).toBeInTheDocument();
+    expect(screen.getByText(formatDateTime("2026-05-01T12:00:00Z"))).toBeInTheDocument();
+    expect(screen.getByText("1 registro")).toBeInTheDocument();
+  });
+
+  it("opens canonical requisition detail from fulfillment queue with context", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((request: Request) => {
+        if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+          return sessionResponse(warehouseSession());
+        }
+
+        if (requestUrl(request).endsWith("/api/v1/requisitions/101/")) {
+          return requisitionDetailResponse();
+        }
+
+        if (requestUrl(request).includes("/api/v1/requisitions/pending-fulfillments/")) {
+          return pendingFulfillmentListResponse();
+        }
+
+        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+      }),
+    );
+
+    const { container } = renderRoute("/atendimentos?page=2");
+
+    expect(await screen.findByText("REQ-2026-000101")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("link", { name: "Abrir" }));
+
+    await waitFor(() => {
+      expect(container.ownerDocument.location.pathname).toBe("/requisicoes/101");
+      expect(container.ownerDocument.location.search).toBe("?contexto=atendimento&page=2");
+    });
+    expect(await screen.findByRole("link", { name: "Voltar" })).toHaveAttribute(
+      "href",
+      "/atendimentos?page=2",
+    );
+  });
+
   it("opens canonical requisition detail from the list", async () => {
     vi.stubGlobal(
       "fetch",
@@ -1059,6 +1174,25 @@ describe("frontend scaffold router", () => {
 
     await waitFor(() => {
       expect(container.ownerDocument.location.pathname).toBe("/autorizacoes");
+    });
+  });
+
+  it("redirects solicitante away from fulfillment detail context", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((request: Request) => {
+        if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+          return sessionResponse(authSession("solicitante"));
+        }
+
+        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+      }),
+    );
+
+    const { container } = renderRoute("/requisicoes/101?contexto=atendimento");
+
+    await waitFor(() => {
+      expect(container.ownerDocument.location.pathname).toBe("/minhas-requisicoes");
     });
   });
 
@@ -1177,6 +1311,207 @@ describe("frontend scaffold router", () => {
       expect(container.ownerDocument.location.pathname).toBe("/autorizacoes");
     });
     expect(await screen.findByText("Nenhuma autorização pendente")).toBeInTheDocument();
+  });
+
+  it("fulfills all authorized items from fulfillment context", async () => {
+    let fulfillPayload: unknown;
+    const fetchMock = vi.fn(async (request: Request) => {
+      if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+        return sessionResponse(warehouseSession());
+      }
+
+      if (requestUrl(request).endsWith("/api/v1/requisitions/101/")) {
+        return requisitionDetailResponse({ quantidade_autorizada: "1.000" });
+      }
+
+      if (requestUrl(request).endsWith("/api/v1/requisitions/101/fulfill/")) {
+        fulfillPayload = await request.json();
+        return requisitionDetailResponse({
+          quantidade_autorizada: "1.000",
+          quantidade_entregue: "1.000",
+        });
+      }
+
+      if (requestUrl(request).includes("/api/v1/requisitions/pending-fulfillments/")) {
+        return pendingFulfillmentListResponse([]);
+      }
+
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { container } = renderRoute("/requisicoes/101?contexto=atendimento");
+
+    expect(await screen.findByRole("heading", { name: "REQ-2026-000101" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Retirante físico"), {
+      target: { value: "Joao da Silva" },
+    });
+    fireEvent.change(screen.getByLabelText("Observação do atendimento"), {
+      target: { value: "Retirada no balcão" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Preencher entrega completa" }));
+    fireEvent.click(screen.getByRole("button", { name: "Registrar atendimento" }));
+
+    await waitFor(() => {
+      expect(fulfillPayload).toEqual({
+        retirante_fisico: "Joao da Silva",
+        observacao_atendimento: "Retirada no balcão",
+        itens: [
+          {
+            item_id: 501,
+            quantidade_entregue: "1.000",
+            justificativa_atendimento_parcial: "",
+          },
+        ],
+      });
+      expect(container.ownerDocument.location.pathname).toBe("/atendimentos");
+    });
+    expect(await screen.findByText("Nenhum atendimento pendente")).toBeInTheDocument();
+  });
+
+  it("requires inline justification for partial fulfillment", async () => {
+    let fulfillPayload: unknown;
+    const fetchMock = vi.fn(async (request: Request) => {
+      if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+        return sessionResponse(warehouseSession());
+      }
+
+      if (requestUrl(request).endsWith("/api/v1/requisitions/101/")) {
+        return requisitionDetailResponse({ quantidade_autorizada: "2.000" });
+      }
+
+      if (requestUrl(request).endsWith("/api/v1/requisitions/101/fulfill/")) {
+        fulfillPayload = await request.json();
+        return requisitionDetailResponse({
+          quantidade_autorizada: "2.000",
+          quantidade_entregue: "1.500",
+          justificativa_atendimento_parcial: "Retirada parcial",
+        });
+      }
+
+      if (requestUrl(request).includes("/api/v1/requisitions/pending-fulfillments/")) {
+        return pendingFulfillmentListResponse([]);
+      }
+
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderRoute("/requisicoes/101?contexto=atendimento");
+
+    expect(await screen.findByRole("heading", { name: "REQ-2026-000101" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Quantidade entregue para Papel sulfite A4"), {
+      target: { value: "1,5" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Registrar atendimento" }));
+
+    expect(await screen.findByText("Informe justificativa para atendimento parcial ou zerado.")).toBeInTheDocument();
+    expect(fulfillPayload).toBeUndefined();
+
+    fireEvent.change(screen.getByLabelText("Justificativa de atendimento para Papel sulfite A4"), {
+      target: { value: "Retirada parcial" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Registrar atendimento" }));
+
+    await waitFor(() => {
+      expect(fulfillPayload).toEqual({
+        retirante_fisico: "",
+        observacao_atendimento: "",
+        itens: [
+          {
+            item_id: 501,
+            quantidade_entregue: "1.5",
+            justificativa_atendimento_parcial: "Retirada parcial",
+          },
+        ],
+      });
+    });
+  });
+
+  it("keeps user on detail when fulfillment action returns domain error", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((request: Request) => {
+        if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+          return sessionResponse(warehouseSession());
+        }
+
+        if (requestUrl(request).endsWith("/api/v1/requisitions/101/")) {
+          return requisitionDetailResponse({ quantidade_autorizada: "1.000" });
+        }
+
+        if (requestUrl(request).endsWith("/api/v1/requisitions/101/fulfill/")) {
+          return new Response(
+            JSON.stringify({
+              error: {
+                code: "domain_conflict",
+                message: "Somente requisições autorizadas podem ser atendidas.",
+                details: {},
+                trace_id: "trace-domain",
+              },
+            }),
+            { status: 409, headers: jsonHeaders },
+          );
+        }
+
+        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+      }),
+    );
+
+    const { container } = renderRoute("/requisicoes/101?contexto=atendimento");
+
+    expect(await screen.findByRole("heading", { name: "REQ-2026-000101" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Preencher entrega completa" }));
+    fireEvent.click(screen.getByRole("button", { name: "Registrar atendimento" }));
+
+    expect(await screen.findByText("Somente requisições autorizadas podem ser atendidas.")).toBeInTheDocument();
+    expect(container.ownerDocument.location.pathname).toBe("/requisicoes/101");
+    expect(container.ownerDocument.location.search).toBe("?contexto=atendimento");
+  });
+
+  it("cancels authorized requisition from fulfillment context only with a reason", async () => {
+    let cancelPayload: unknown;
+    const fetchMock = vi.fn(async (request: Request) => {
+      if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+        return sessionResponse(warehouseSession());
+      }
+
+      if (requestUrl(request).endsWith("/api/v1/requisitions/101/")) {
+        return requisitionDetailResponse({ quantidade_autorizada: "1.000" });
+      }
+
+      if (requestUrl(request).endsWith("/api/v1/requisitions/101/cancel/")) {
+        cancelPayload = await request.json();
+        return requisitionDetailResponse({ status: "cancelada" });
+      }
+
+      if (requestUrl(request).includes("/api/v1/requisitions/pending-fulfillments/")) {
+        return pendingFulfillmentListResponse([]);
+      }
+
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { container } = renderRoute("/requisicoes/101?contexto=atendimento");
+
+    expect(await screen.findByRole("heading", { name: "REQ-2026-000101" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Cancelar requisição autorizada" }));
+
+    expect(await screen.findByText("Informe o motivo do cancelamento.")).toBeInTheDocument();
+    expect(cancelPayload).toBeUndefined();
+
+    fireEvent.change(screen.getByLabelText("Motivo do cancelamento operacional"), {
+      target: { value: "Material indisponível no balcão" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Cancelar requisição autorizada" }));
+
+    await waitFor(() => {
+      expect(cancelPayload).toEqual({
+        motivo_cancelamento: "Material indisponível no balcão",
+      });
+      expect(container.ownerDocument.location.pathname).toBe("/atendimentos");
+    });
   });
 
   it("preserves authorization page when queue request expires", async () => {

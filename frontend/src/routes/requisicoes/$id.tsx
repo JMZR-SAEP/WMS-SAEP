@@ -11,23 +11,27 @@ import {
 } from "../../features/auth/session";
 import { DraftRequisitionEditor } from "../../features/requisitions/DraftRequisitionEditor";
 import {
-    authorizeRequisition,
-    displayRequisitionIdentifier,
-    formatDateTime,
-    formatQuantity,
-    isThirdPartyBeneficiary,
-    queryErrorMessage,
-    refuseRequisition,
-    requisitionDetailQueryOptions,
-    requisitionsQueryKeys,
-    statusLabel,
-    tipoEventoLabel,
-    type RequisicaoActionItem,
-    type RequisicaoAuthorizeInput,
-    type RequisicaoDetail,
-    type RequisicaoRefuseInput,
-    type RequisicaoTimelineEvent,
-  } from "../../features/requisitions/requisitions";
+  authorizeRequisition,
+  cancelAuthorizedRequisition,
+  displayRequisitionIdentifier,
+  formatDateTime,
+  formatQuantity,
+  fulfillRequisition,
+  isThirdPartyBeneficiary,
+  queryErrorMessage,
+  refuseRequisition,
+  requisitionDetailQueryOptions,
+  requisitionsQueryKeys,
+  statusLabel,
+  tipoEventoLabel,
+  type RequisicaoActionItem,
+  type RequisicaoAuthorizeInput,
+  type RequisicaoCancelInput,
+  type RequisicaoDetail,
+  type RequisicaoFulfillInput,
+  type RequisicaoRefuseInput,
+  type RequisicaoTimelineEvent,
+} from "../../features/requisitions/requisitions";
 
 const detailSearchSchema = z.object({
   contexto: z.enum(["autorizacao", "atendimento"]).optional().catch(undefined),
@@ -40,6 +44,15 @@ export const Route = createFileRoute("/requisicoes/$id")({
     if (search.contexto === "autorizacao") {
       await requireOperationalPapel({
         allowedPapeis: ["chefe_setor", "chefe_almoxarifado"],
+        queryClient: context.queryClient,
+        locationHref: location.href,
+      });
+      return;
+    }
+
+    if (search.contexto === "atendimento") {
+      await requireOperationalPapel({
+        allowedPapeis: ["auxiliar_almoxarifado", "chefe_almoxarifado"],
         queryClient: context.queryClient,
         locationHref: location.href,
       });
@@ -102,6 +115,14 @@ type AuthorizationItemForm = {
   justification: string;
 };
 
+type FulfillmentItemForm = {
+  itemId: number;
+  label: string;
+  authorizedQuantity: string;
+  deliveredQuantity: string;
+  justification: string;
+};
+
 function quantityNumber(value: string) {
   const normalizedValue = value.replace(",", ".").trim();
   if (!normalizedValue) {
@@ -115,20 +136,22 @@ function normalizeQuantityInput(value: string) {
 }
 
 function buildRequisicaoRedirect({
-  authorizationPage,
+  sourcePage,
   contexto,
   id,
 }: {
-  authorizationPage: number | undefined;
+  sourcePage: number | undefined;
   contexto: "autorizacao" | "atendimento" | undefined;
   id: string;
 }) {
+  const pageSearch = sourcePage && sourcePage > 1 ? `&page=${sourcePage}` : "";
+
   if (contexto === "autorizacao") {
-    return `/requisicoes/${id}?contexto=autorizacao${authorizationPage && authorizationPage > 1 ? `&page=${authorizationPage}` : ""}`;
+    return `/requisicoes/${id}?contexto=autorizacao${pageSearch}`;
   }
 
   if (contexto === "atendimento") {
-    return `/requisicoes/${id}?contexto=atendimento`;
+    return `/requisicoes/${id}?contexto=atendimento${pageSearch}`;
   }
 
   return `/requisicoes/${id}`;
@@ -146,6 +169,22 @@ function authorizationItemsFromRequisition(requisicao: RequisicaoDetail): Author
     authorizedQuantity: item.quantidade_solicitada,
     justification: item.justificativa_autorizacao_parcial,
   }));
+}
+
+function fulfillmentItemLabel(item: RequisicaoActionItem) {
+  return item.material.nome;
+}
+
+function fulfillmentItemsFromRequisition(requisicao: RequisicaoDetail): FulfillmentItemForm[] {
+  return requisicao.itens
+    .filter((item) => quantityNumber(item.quantidade_autorizada) > 0)
+    .map((item) => ({
+      itemId: item.id,
+      label: fulfillmentItemLabel(item),
+      authorizedQuantity: item.quantidade_autorizada,
+      deliveredQuantity: item.quantidade_entregue,
+      justification: item.justificativa_atendimento_parcial,
+    }));
 }
 
 function AuthorizationDecisionPanel({
@@ -173,7 +212,7 @@ function AuthorizationDecisionPanel({
         redirect: buildRequisicaoRedirect({
           id: String(requisicao.id),
           contexto: "autorizacao",
-          authorizationPage,
+          sourcePage: authorizationPage,
         }),
       },
     });
@@ -391,9 +430,284 @@ function AuthorizationDecisionPanel({
   );
 }
 
+function FulfillmentDecisionPanel({
+  fulfillmentPage,
+  requisicao,
+}: {
+  fulfillmentPage: number | undefined;
+  requisicao: RequisicaoDetail;
+}) {
+  const [items, setItems] = useState(() => fulfillmentItemsFromRequisition(requisicao));
+  const [retiranteFisico, setRetiranteFisico] = useState("");
+  const [observacaoAtendimento, setObservacaoAtendimento] = useState("");
+  const [motivoCancelamento, setMotivoCancelamento] = useState("");
+  const [validationError, setValidationError] = useState("");
+  const queryClient = useQueryClient();
+  const navigate = useNavigate({ from: "/requisicoes/$id" });
+
+  function redirectToLoginAfterAuthError(error: unknown) {
+    if (!isUnauthenticatedError(error)) {
+      return;
+    }
+
+    queryClient.removeQueries({ queryKey: authQueryKeys.me });
+    void navigate({
+      to: "/login",
+      search: {
+        redirect: buildRequisicaoRedirect({
+          id: String(requisicao.id),
+          contexto: "atendimento",
+          sourcePage: fulfillmentPage,
+        }),
+      },
+    });
+  }
+
+  async function afterDecisionSuccess() {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: requisitionsQueryKeys.pendingFulfillmentsAll }),
+      queryClient.invalidateQueries({ queryKey: requisitionsQueryKeys.detail(requisicao.id) }),
+    ]);
+    await navigate({
+      to: "/atendimentos",
+      search: {
+        page: fulfillmentPage && fulfillmentPage > 1 ? fulfillmentPage : undefined,
+      },
+    });
+  }
+
+  const fulfillMutation = useMutation({
+    mutationFn: (input: RequisicaoFulfillInput) => fulfillRequisition(requisicao.id, input),
+    onError: redirectToLoginAfterAuthError,
+    onSuccess: afterDecisionSuccess,
+  });
+  const cancelMutation = useMutation({
+    mutationFn: (input: RequisicaoCancelInput) =>
+      cancelAuthorizedRequisition(requisicao.id, input),
+    onError: redirectToLoginAfterAuthError,
+    onSuccess: afterDecisionSuccess,
+  });
+  const pending = fulfillMutation.isPending || cancelMutation.isPending;
+  const mutationError = fulfillMutation.error ?? cancelMutation.error;
+
+  function resetDecisionFeedback() {
+    setValidationError("");
+    fulfillMutation.reset();
+    cancelMutation.reset();
+  }
+
+  function updateItem(itemId: number, field: "deliveredQuantity" | "justification", value: string) {
+    setItems((currentItems) =>
+      currentItems.map((item) => (item.itemId === itemId ? { ...item, [field]: value } : item)),
+    );
+    resetDecisionFeedback();
+  }
+
+  function fillCompleteDelivery() {
+    setItems((currentItems) =>
+      currentItems.map((item) => ({
+        ...item,
+        deliveredQuantity: item.authorizedQuantity,
+        justification: "",
+      })),
+    );
+    resetDecisionFeedback();
+  }
+
+  function payloadFromItems(nextItems: FulfillmentItemForm[]): RequisicaoFulfillInput {
+    return {
+      retirante_fisico: retiranteFisico.trim(),
+      observacao_atendimento: observacaoAtendimento.trim(),
+      itens: nextItems.map((item) => ({
+        item_id: item.itemId,
+        quantidade_entregue: normalizeQuantityInput(item.deliveredQuantity),
+        justificativa_atendimento_parcial: item.justification.trim(),
+      })),
+    };
+  }
+
+  function validateFulfillment(nextItems: FulfillmentItemForm[]) {
+    const deliveredQuantities = nextItems.map((item) => quantityNumber(item.deliveredQuantity));
+
+    if (deliveredQuantities.some((quantity) => Number.isNaN(quantity) || quantity < 0)) {
+      return "Informe quantidades entregues válidas.";
+    }
+
+    const itemAboveAuthorized = nextItems.find(
+      (item) => quantityNumber(item.deliveredQuantity) > quantityNumber(item.authorizedQuantity),
+    );
+
+    if (itemAboveAuthorized) {
+      return "Quantidade entregue não pode exceder a quantidade autorizada.";
+    }
+
+    if (deliveredQuantities.every((quantity) => quantity === 0)) {
+      return "Atendimento deve entregar ao menos um item.";
+    }
+
+    const partialWithoutJustification = nextItems.find(
+      (item) =>
+        quantityNumber(item.deliveredQuantity) < quantityNumber(item.authorizedQuantity) &&
+        !item.justification.trim(),
+    );
+
+    if (partialWithoutJustification) {
+      return "Informe justificativa para atendimento parcial ou zerado.";
+    }
+
+    return "";
+  }
+
+  function fulfill(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    resetDecisionFeedback();
+    const error = validateFulfillment(items);
+
+    if (error) {
+      setValidationError(error);
+      return;
+    }
+
+    fulfillMutation.mutate(payloadFromItems(items));
+  }
+
+  function cancel(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    resetDecisionFeedback();
+    const trimmedReason = motivoCancelamento.trim();
+
+    if (!trimmedReason) {
+      setValidationError("Informe o motivo do cancelamento.");
+      return;
+    }
+
+    cancelMutation.mutate({ motivo_cancelamento: trimmedReason });
+  }
+
+  return (
+    <section className="detail-panel authorization-panel">
+      <div className="authorization-panel-header">
+        <div>
+          <p className="eyebrow">Atendimento do Almoxarifado</p>
+          <h2>Registrar atendimento</h2>
+          <p>O backend revalida estoque, reserva, estado e permissão no momento da retirada.</p>
+        </div>
+        <button
+          className="preview-button draft-primary"
+          disabled={pending}
+          onClick={fillCompleteDelivery}
+          type="button"
+        >
+          Preencher entrega completa
+        </button>
+      </div>
+
+      {validationError ? <div className="error-panel compact-error">{validationError}</div> : null}
+      {mutationError ? (
+        <div className="error-panel compact-error">
+          {queryErrorMessage(mutationError, "Não foi possível concluir a ação de atendimento.")}
+        </div>
+      ) : null}
+
+      <form className="authorization-form" onSubmit={fulfill}>
+        <div className="authorization-item-fields">
+          <label className="preview-label">
+            Retirante físico
+            <input
+              className="preview-input"
+              disabled={pending}
+              onChange={(event) => {
+                setRetiranteFisico(event.target.value);
+                resetDecisionFeedback();
+              }}
+              value={retiranteFisico}
+            />
+          </label>
+          <label className="preview-label">
+            Observação do atendimento
+            <textarea
+              className="preview-input"
+              disabled={pending}
+              onChange={(event) => {
+                setObservacaoAtendimento(event.target.value);
+                resetDecisionFeedback();
+              }}
+              rows={3}
+              value={observacaoAtendimento}
+            />
+          </label>
+        </div>
+
+        <div className="authorization-items">
+          {items.map((item) => (
+            <article className="draft-item-card" key={item.itemId}>
+              <div>
+                <h2>{item.label}</h2>
+                <p>Autorizado: {formatQuantity(item.authorizedQuantity)}</p>
+              </div>
+              <div className="authorization-item-fields">
+                <label className="preview-label">
+                  Quantidade entregue para {item.label}
+                  <input
+                    className="preview-input"
+                    disabled={pending}
+                    inputMode="decimal"
+                    onChange={(event) =>
+                      updateItem(item.itemId, "deliveredQuantity", event.target.value)
+                    }
+                    value={item.deliveredQuantity}
+                  />
+                </label>
+                <label className="preview-label">
+                  Justificativa de atendimento para {item.label}
+                  <textarea
+                    className="preview-input"
+                    disabled={pending}
+                    onChange={(event) => updateItem(item.itemId, "justification", event.target.value)}
+                    placeholder="Obrigatória quando parcial ou zerada"
+                    rows={3}
+                    value={item.justification}
+                  />
+                </label>
+              </div>
+            </article>
+          ))}
+        </div>
+
+        <div className="draft-actions">
+          <button className="preview-button draft-primary" disabled={pending} type="submit">
+            {pending ? "Registrando..." : "Registrar atendimento"}
+          </button>
+        </div>
+      </form>
+
+      <form className="authorization-refusal" onSubmit={cancel}>
+        <label className="preview-label">
+          Motivo do cancelamento operacional
+          <textarea
+            className="preview-input draft-textarea"
+            disabled={pending}
+            onChange={(event) => {
+              setMotivoCancelamento(event.target.value);
+              resetDecisionFeedback();
+            }}
+            rows={3}
+            value={motivoCancelamento}
+          />
+        </label>
+        <div className="draft-actions">
+          <button className="preview-button draft-primary danger-action" disabled={pending} type="submit">
+            Cancelar requisição autorizada
+          </button>
+        </div>
+      </form>
+    </section>
+  );
+}
+
 function DetalheRequisicaoPage() {
   const { id } = Route.useParams();
-  const { contexto, page: authorizationPage } = Route.useSearch();
+  const { contexto, page: sourcePage } = Route.useSearch();
   const requisicaoId = Number(id);
   const backTo =
     contexto === "autorizacao"
@@ -421,10 +735,10 @@ function DetalheRequisicaoPage() {
     void navigate({
       to: "/login",
       search: {
-        redirect: buildRequisicaoRedirect({ id, contexto, authorizationPage }),
+        redirect: buildRequisicaoRedirect({ id, contexto, sourcePage }),
       },
     });
-  }, [authError, authorizationPage, contexto, id, navigate, queryClient]);
+  }, [authError, contexto, id, navigate, queryClient, sourcePage]);
 
   if (!Number.isInteger(requisicaoId) || requisicaoId <= 0) {
     return <div className="error-panel">Identificador de requisição inválido.</div>;
@@ -481,8 +795,8 @@ function DetalheRequisicaoPage() {
           <Link
             className="action-link compact-action"
             search={
-              contexto === "autorizacao"
-                ? { page: authorizationPage && authorizationPage > 1 ? authorizationPage : undefined }
+              contexto
+                ? { page: sourcePage && sourcePage > 1 ? sourcePage : undefined }
                 : undefined
             }
             to={backTo}
@@ -494,7 +808,15 @@ function DetalheRequisicaoPage() {
 
       {contexto === "autorizacao" && requisicao.status === "aguardando_autorizacao" ? (
         <AuthorizationDecisionPanel
-          authorizationPage={authorizationPage}
+          authorizationPage={sourcePage}
+          key={requisicao.id}
+          requisicao={requisicao}
+        />
+      ) : null}
+
+      {contexto === "atendimento" && requisicao.status === "autorizada" ? (
+        <FulfillmentDecisionPanel
+          fulfillmentPage={sourcePage}
           key={requisicao.id}
           requisicao={requisicao}
         />
