@@ -106,6 +106,8 @@ jobs:
           enable-cache: true
       - name: Install backend dependencies
         run: uv sync --locked
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
       - name: Install frontend dependencies
         run: make frontend-deps
       - name: Generate frontend API types
