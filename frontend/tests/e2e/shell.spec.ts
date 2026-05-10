@@ -82,7 +82,9 @@ test("authorizes pending requisition from worklist", async ({ page }) => {
   await loginAs(page, "chefe-setor", /\/autorizacoes(?:\?.*)?$/);
 
   await expect(page.getByRole("heading", { name: "Fila de autorizações" })).toBeVisible();
-  const approvalRow = page.locator("tbody tr").first();
+  const approvalRows = page.locator("tbody tr");
+  await expect(approvalRows).not.toHaveCount(0);
+  const approvalRow = approvalRows.first();
   await expect(approvalRow).toBeVisible();
   await approvalRow.getByRole("link", { name: "Abrir" }).click();
 
@@ -97,7 +99,9 @@ test("fulfills authorized requisition from worklist", async ({ page }) => {
   await loginAs(page, "auxiliar-almox", /\/atendimentos(?:\?.*)?$/);
 
   await expect(page.getByRole("heading", { name: "Fila de atendimento" })).toBeVisible();
-  const fulfillmentRow = page.locator("tbody tr").first();
+  const fulfillmentRows = page.locator("tbody tr");
+  await expect(fulfillmentRows).not.toHaveCount(0);
+  const fulfillmentRow = fulfillmentRows.first();
   await expect(fulfillmentRow).toBeVisible();
   await fulfillmentRow.getByRole("link", { name: "Abrir" }).click();
 
