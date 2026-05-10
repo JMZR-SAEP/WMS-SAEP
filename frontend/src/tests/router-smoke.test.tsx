@@ -2531,6 +2531,57 @@ describe("frontend pilot router", () => {
     expect(window.sessionStorage.getItem("wms-saep:draft:v1:user:10:new")).toContain("2,5");
   });
 
+  it("preserves the current wizard step after the first draft save", async () => {
+    let createdPayload: unknown;
+    const fetchMock = vi.fn(async (request: Request) => {
+      if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+        return sessionResponse();
+      }
+
+      if (
+        requestUrl(request).includes("/api/v1/materials/") &&
+        requestSearchParam(request, "search") === "papel"
+      ) {
+        return materialListResponse();
+      }
+
+      if (requestUrl(request).endsWith("/api/v1/requisitions/") && request.method === "POST") {
+        createdPayload = await request.json();
+        return requisitionDetailResponse();
+      }
+
+      const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { container } = renderRoute("/requisicoes/nova?etapa=itens");
+
+    expect(await screen.findByRole("heading", { name: "Itens" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Buscar material"), {
+      target: { value: "papel" },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Adicionar Papel sulfite A4" }));
+    fireEvent.click(screen.getByRole("button", { name: "Salvar rascunho" }));
+
+    await waitFor(() => {
+      expect(container.ownerDocument.location.pathname).toBe("/requisicoes/101");
+      expect(container.ownerDocument.location.search).toBe("?etapa=itens");
+    });
+    expect(createdPayload).toEqual({
+      beneficiario_id: 10,
+      observacao: "",
+      itens: [
+        {
+          material_id: 301,
+          quantidade_solicitada: "1",
+          observacao: "",
+        },
+      ],
+    });
+  });
+
   it("recovers a local draft snapshot and can discard that copy", async () => {
     window.sessionStorage.setItem(
       "wms-saep:draft:v1:user:10:new",
@@ -2681,6 +2732,67 @@ describe("frontend pilot router", () => {
       expect(screen.getAllByText("Informe beneficiário.").length).toBeGreaterThan(0);
     });
     expect(createdPayload).toBeUndefined();
+  });
+
+  it("clears stale global validation banners after beneficiary and item corrections", async () => {
+    const fetchMock = vi.fn(async (request: Request) => {
+      if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+        return sessionResponse(authSession("auxiliar_setor"));
+      }
+
+      if (requestUrl(request).includes("/api/v1/users/beneficiary-lookup/")) {
+        return beneficiaryLookupResponse();
+      }
+
+      if (
+        requestUrl(request).includes("/api/v1/materials/") &&
+        requestSearchParam(request, "search") === "papel"
+      ) {
+        return materialListResponse();
+      }
+
+      const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderRoute("/requisicoes/nova");
+
+    expect(await screen.findByRole("heading", { name: "Nova requisição" })).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Para terceiro"));
+    fireEvent.click(screen.getByRole("button", { name: "Salvar rascunho" }));
+
+    expect((await screen.findAllByText("Informe beneficiário.")).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByLabelText("Para mim"));
+    await waitFor(() => {
+      expect(screen.queryByText("Informe beneficiário.")).not.toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByLabelText("Para terceiro"));
+    fireEvent.click(screen.getByRole("button", { name: "Salvar rascunho" }));
+    expect((await screen.findAllByText("Informe beneficiário.")).length).toBeGreaterThan(0);
+
+    fireEvent.change(screen.getByLabelText("Buscar beneficiário"), {
+      target: { value: "benef" },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: /Beneficiario Terceiro/ }));
+    await waitFor(() => {
+      expect(screen.queryByText("Informe beneficiário.")).not.toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Próximo: itens" }));
+    expect(await screen.findByRole("heading", { name: "Itens" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Salvar rascunho" }));
+
+    expect((await screen.findAllByText("Adicione ao menos um item.")).length).toBeGreaterThan(0);
+    fireEvent.change(screen.getByLabelText("Buscar material"), {
+      target: { value: "papel" },
+    });
+    fireEvent.click(await screen.findByRole("button", { name: "Adicionar Papel sulfite A4" }));
+    await waitFor(() => {
+      expect(screen.queryByText("Adicione ao menos um item.")).not.toBeInTheDocument();
+    });
   });
 
   it("updates an existing draft with full replacement payload", async () => {

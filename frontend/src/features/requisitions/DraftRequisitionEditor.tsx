@@ -460,7 +460,11 @@ export function DraftRequisitionEditor({
         form.reset(nextValues);
       }
       if (!initialRequisition) {
-        await navigate({ to: "/requisicoes/$id", params: { id: String(requisition.id) } });
+        await navigate({
+          to: "/requisicoes/$id",
+          params: { id: String(requisition.id) },
+          search: { etapa: activeStep },
+        });
       }
     },
     onError: handleMutationError,
@@ -593,6 +597,8 @@ export function DraftRequisitionEditor({
       quantidadeSolicitada: "1",
       observacao: "",
     });
+    form.clearErrors("itens");
+    setFormError(null);
     storeRecentMaterial(material);
     form.setValue("materialSearch", "");
   }
@@ -605,6 +611,7 @@ export function DraftRequisitionEditor({
     form.setValue("beneficiaryLabel", beneficiaryLabel(beneficiary), { shouldDirty: true });
     form.setValue("beneficiarySearch", "");
     form.clearErrors("beneficiaryId");
+    setFormError(null);
   }
 
   function chooseBeneficiaryMode(mode: DraftFormValues["beneficiaryMode"]) {
@@ -618,6 +625,7 @@ export function DraftRequisitionEditor({
       form.setValue("beneficiaryLabel", beneficiaryLabel(self), { shouldDirty: true });
       form.setValue("beneficiarySearch", "");
       form.clearErrors("beneficiaryId");
+      setFormError(null);
       return;
     }
     form.setValue("beneficiaryId", "", { shouldDirty: true });
