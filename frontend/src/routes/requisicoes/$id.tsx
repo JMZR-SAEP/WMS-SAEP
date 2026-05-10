@@ -10,6 +10,7 @@ import {
   meQueryOptions,
 } from "../../features/auth/session";
 import { DraftRequisitionEditor } from "../../features/requisitions/DraftRequisitionEditor";
+import { draftStepSchema, type DraftStep } from "../../features/requisitions/draftSteps";
 import {
   authorizeRequisition,
   cancelAuthorizedRequisition,
@@ -35,6 +36,7 @@ import {
 
 const detailSearchSchema = z.object({
   contexto: z.enum(["autorizacao", "atendimento"]).optional().catch(undefined),
+  etapa: draftStepSchema.optional().catch("beneficiario"),
   page: z.coerce.number().int().min(1).optional().catch(undefined),
 });
 
@@ -707,7 +709,7 @@ function FulfillmentDecisionPanel({
 
 function DetalheRequisicaoPage() {
   const { id } = Route.useParams();
-  const { contexto, page: sourcePage } = Route.useSearch();
+  const { contexto, etapa = "beneficiario", page: sourcePage } = Route.useSearch();
   const requisicaoId = Number(id);
   const backTo =
     contexto === "autorizacao"
@@ -726,6 +728,14 @@ function DetalheRequisicaoPage() {
     enabled: detailQuery.data?.status === "rascunho",
   });
   const authError = detailQuery.isError && isUnauthenticatedError(detailQuery.error);
+
+  function handleDraftStepChange(step: DraftStep) {
+    void navigate({
+      to: "/requisicoes/$id",
+      params: { id },
+      search: (prev) => ({ ...prev, etapa: step }),
+    });
+  }
 
   useEffect(() => {
     if (!authError) {
@@ -775,7 +785,14 @@ function DetalheRequisicaoPage() {
     if (!sessionQuery.data) {
       return <div className="error-panel">Sessão indisponível.</div>;
     }
-    return <DraftRequisitionEditor initialRequisition={requisicao} session={sessionQuery.data} />;
+    return (
+      <DraftRequisitionEditor
+        activeStep={etapa}
+        initialRequisition={requisicao}
+        onStepChange={handleDraftStepChange}
+        session={sessionQuery.data}
+      />
+    );
   }
 
   const thirdParty = isThirdPartyBeneficiary(requisicao);
