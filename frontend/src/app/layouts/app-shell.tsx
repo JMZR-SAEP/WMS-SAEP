@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 
-import saepLogoUrl from "../../assets/saep-logo.svg";
+import saepLogoUrl from "../../assets/saep-logo.webp";
 import { ApiError, authQueryKeys, logoutSession, meQueryOptions } from "../../features/auth/session";
 import {
   formatNotificationDate,

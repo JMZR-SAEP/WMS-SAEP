@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 
-import saepLogoUrl from "../assets/saep-logo.svg";
+import saepLogoUrl from "../assets/saep-logo.webp";
 import {
   ApiError,
   authQueryKeys,
