@@ -2356,6 +2356,7 @@ describe("frontend pilot router", () => {
     await waitFor(() => {
       expect(container.ownerDocument.location.pathname).toBe("/requisicoes/101");
     });
+    expect(window.sessionStorage.getItem("wms-saep:draft:v1:user:10:new")).toBeNull();
     expect(createdPayload).toEqual({
       beneficiario_id: 10,
       observacao: "",
@@ -2735,7 +2736,7 @@ describe("frontend pilot router", () => {
   });
 
   it("clears stale global validation banners after beneficiary and item corrections", async () => {
-    const fetchMock = vi.fn(async (request: Request) => {
+    const fetchMock = vi.fn((request: Request) => {
       if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
         return sessionResponse(authSession("auxiliar_setor"));
       }

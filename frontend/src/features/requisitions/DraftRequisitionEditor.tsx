@@ -319,6 +319,7 @@ export function DraftRequisitionEditor({
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const cancelConfirmationButtonRef = useRef<HTMLButtonElement | null>(null);
   const pendingRef = useRef(false);
+  const suppressNextPersistRef = useRef(false);
   const storageKey = draftStorageKey(session.id, initialRequisition?.id);
   const baseValues = useMemo(
     () => formValuesFromRequisition(initialRequisition, session),
@@ -368,6 +369,10 @@ export function DraftRequisitionEditor({
     enabled: materialSearch.length >= 2,
   });
   useEffect(() => {
+    if (suppressNextPersistRef.current) {
+      suppressNextPersistRef.current = false;
+      return;
+    }
     if (isDraftDirty || hasDraftSnapshot) {
       safeWriteJson(storageKey, normalizeSnapshot(form.getValues()));
       return;
@@ -417,6 +422,7 @@ export function DraftRequisitionEditor({
   }
 
   function afterMutationSuccess(requisition: RequisicaoDetail) {
+    suppressNextPersistRef.current = true;
     clearDraftStorage();
     queryClient.setQueryData(requisitionsQueryKeys.detail(requisition.id), requisition);
     void queryClient.invalidateQueries({
