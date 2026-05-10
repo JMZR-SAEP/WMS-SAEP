@@ -152,6 +152,9 @@ class TestOpenAPISchema:
         assert "/api/v1/requisitions/{id}/fulfill/" in paths
         assert "/api/v1/requisitions/pending-approvals/" in paths
         assert "/api/v1/requisitions/pending-fulfillments/" in paths
+        assert "/api/v1/notifications/" in paths
+        assert "/api/v1/notifications/{id}/mark-read/" in paths
+        assert "/api/v1/notifications/unread-count/" in paths
         assert paths["/api/v1/materials/{id}/"]["get"]["operationId"] == "materials_retrieve"
         assert (
             paths["/api/v1/materials/"]["get"]["responses"]["200"]["content"]["application/json"][
@@ -295,6 +298,63 @@ class TestOpenAPISchema:
                         responses[code]["content"]["application/json"]["schema"]["$ref"]
                         == expectation["success_ref"]
                     )
+
+            for code in expectation["error_codes"]:
+                assert code in responses
+                assert responses[code]["content"]["application/json"]["schema"]["$ref"] == error_ref
+
+    def test_notifications_endpoints_declaram_requests_responses_e_status_esperados(self):
+        """Verify notification endpoints expose explicit list/read/count contracts."""
+        schema = self._get_schema()
+        paths = schema["paths"]
+        error_ref = "#/components/schemas/ErrorResponse"
+
+        expected_operations = {
+            ("/api/v1/notifications/", "get"): {
+                "request_body": False,
+                "success_codes": {"200"},
+                "success_ref": "#/components/schemas/NotificacaoListPaginated",
+                "error_codes": {"403"},
+                "operation_id": "notifications_list",
+                "required_parameters": {"page", "page_size"},
+            },
+            ("/api/v1/notifications/{id}/mark-read/", "post"): {
+                "request_body": False,
+                "success_codes": {"200"},
+                "success_ref": "#/components/schemas/NotificacaoOutput",
+                "error_codes": {"403", "404"},
+                "operation_id": "notifications_mark_read",
+            },
+            ("/api/v1/notifications/unread-count/", "get"): {
+                "request_body": False,
+                "success_codes": {"200"},
+                "success_ref": "#/components/schemas/NotificacaoUnreadCountOutput",
+                "error_codes": {"403"},
+                "operation_id": "notifications_unread_count",
+            },
+        }
+
+        for (path, method), expectation in expected_operations.items():
+            operation = paths[path][method]
+            responses = operation["responses"]
+
+            assert operation["operationId"] == expectation["operation_id"]
+
+            if expectation.get("required_parameters"):
+                parameters = {param["name"] for param in operation["parameters"]}
+                assert expectation["required_parameters"].issubset(parameters)
+
+            if expectation["request_body"]:
+                assert "requestBody" in operation
+            else:
+                assert "requestBody" not in operation
+
+            for code in expectation["success_codes"]:
+                assert code in responses
+                assert (
+                    responses[code]["content"]["application/json"]["schema"]["$ref"]
+                    == expectation["success_ref"]
+                )
 
             for code in expectation["error_codes"]:
                 assert code in responses

@@ -102,6 +102,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/notifications/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Lista paginada das notificações visíveis ao usuário autenticado. Inclui notificações individuais do usuário e notificações coletivas do papel atual. */
+        get: operations["notifications_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/{id}/mark-read/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["notifications_mark_read"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/unread-count/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["notifications_unread_count"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/requisitions/": {
         parameters: {
             query?: never;
@@ -422,6 +471,69 @@ export interface components {
             /** Format: uri */
             readonly previous: string | null;
             readonly results: components["schemas"]["MaterialListOutput"][];
+        };
+        NotificacaoDestinoOutput: {
+            readonly tipo: components["schemas"]["NotificacaoDestinoOutputTipoEnum"];
+            readonly usuario_id: number | null;
+            readonly papel: string | null;
+        };
+        /**
+         * @description * `usuario` - usuario
+         *     * `papel` - papel
+         * @enum {string}
+         */
+        NotificacaoDestinoOutputTipoEnum: "usuario" | "papel";
+        NotificacaoListPaginated: {
+            readonly count: number;
+            readonly page: number;
+            readonly page_size: number;
+            readonly total_pages: number;
+            /** Format: uri */
+            readonly next: string | null;
+            /** Format: uri */
+            readonly previous: string | null;
+            readonly results: components["schemas"]["NotificacaoOutput"][];
+        };
+        NotificacaoObjetoRelacionadoOutput: {
+            readonly tipo: string;
+            readonly id: number;
+            readonly numero_publico: string | null;
+            readonly status: string;
+        };
+        NotificacaoOutput: {
+            readonly id: number;
+            /**
+             * @description Tipo de notificação.
+             *
+             *     * `requisicao_enviada_autorizacao` - Requisição enviada para autorização
+             *     * `requisicao_autorizada` - Requisição autorizada
+             *     * `requisicao_recusada` - Requisição recusada
+             *     * `requisicao_cancelada` - Requisição cancelada
+             *     * `requisicao_atendida` - Requisição atendida
+             */
+            readonly tipo: components["schemas"]["NotificacaoOutputTipoEnum"];
+            readonly titulo: string;
+            readonly mensagem: string;
+            /** Format: date-time */
+            readonly created_at: string;
+            readonly lida: boolean;
+            /** Format: date-time */
+            readonly lida_em: string | null;
+            readonly leitura_suportada: boolean;
+            readonly destino: components["schemas"]["NotificacaoDestinoOutput"];
+            readonly objeto_relacionado: components["schemas"]["NotificacaoObjetoRelacionadoOutput"] | null;
+        };
+        /**
+         * @description * `requisicao_enviada_autorizacao` - Requisição enviada para autorização
+         *     * `requisicao_autorizada` - Requisição autorizada
+         *     * `requisicao_recusada` - Requisição recusada
+         *     * `requisicao_cancelada` - Requisição cancelada
+         *     * `requisicao_atendida` - Requisição atendida
+         * @enum {string}
+         */
+        NotificacaoOutputTipoEnum: "requisicao_enviada_autorizacao" | "requisicao_autorizada" | "requisicao_recusada" | "requisicao_cancelada" | "requisicao_atendida";
+        NotificacaoUnreadCountOutput: {
+            readonly unread_count: number;
         };
         RequisicaoActionOutput: {
             readonly id: number;
@@ -938,6 +1050,103 @@ export interface operations {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    notifications_list: {
+        parameters: {
+            query?: {
+                /** @description Número da página (padrão: 1) */
+                page?: number;
+                /** @description Quantidade de resultados por página (padrão: 20, máximo: 100) */
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificacaoListPaginated"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    notifications_mark_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Um valor inteiro único que identifica este Notificação. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificacaoOutput"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    notifications_unread_count: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificacaoUnreadCountOutput"];
+                };
+            };
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

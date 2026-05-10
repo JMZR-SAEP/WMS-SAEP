@@ -300,6 +300,151 @@
                 }
             }
         },
+        "/api/v1/notifications/": {
+            "get": {
+                "operationId": "notifications_list",
+                "description": "Lista paginada das notificações visíveis ao usuário autenticado. Inclui notificações individuais do usuário e notificações coletivas do papel atual.",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "page",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Número da página (padrão: 1)"
+                    },
+                    {
+                        "in": "query",
+                        "name": "page_size",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Quantidade de resultados por página (padrão: 20, máximo: 100)"
+                    }
+                ],
+                "tags": [
+                    "notifications"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/NotificacaoListPaginated"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/notifications/{id}/mark-read/": {
+            "post": {
+                "operationId": "notifications_mark_read",
+                "parameters": [
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Um valor inteiro único que identifica este Notificação.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "notifications"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/NotificacaoOutput"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/notifications/unread-count/": {
+            "get": {
+                "operationId": "notifications_unread_count",
+                "tags": [
+                    "notifications"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/NotificacaoUnreadCountOutput"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/v1/requisitions/": {
             "get": {
                 "operationId": "requisitions_list",
@@ -1829,6 +1974,216 @@
                     "previous",
                     "results",
                     "total_pages"
+                ]
+            },
+            "NotificacaoDestinoOutput": {
+                "type": "object",
+                "properties": {
+                    "tipo": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/NotificacaoDestinoOutputTipoEnum"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "usuario_id": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "papel": {
+                        "type": "string",
+                        "readOnly": true,
+                        "nullable": true
+                    }
+                },
+                "required": [
+                    "papel",
+                    "tipo",
+                    "usuario_id"
+                ]
+            },
+            "NotificacaoDestinoOutputTipoEnum": {
+                "enum": [
+                    "usuario",
+                    "papel"
+                ],
+                "type": "string",
+                "description": "* `usuario` - usuario\n* `papel` - papel"
+            },
+            "NotificacaoListPaginated": {
+                "type": "object",
+                "properties": {
+                    "count": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "page": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "page_size": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "total_pages": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "next": {
+                        "type": "string",
+                        "format": "uri",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "previous": {
+                        "type": "string",
+                        "format": "uri",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "results": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/NotificacaoOutput"
+                        },
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "count",
+                    "next",
+                    "page",
+                    "page_size",
+                    "previous",
+                    "results",
+                    "total_pages"
+                ]
+            },
+            "NotificacaoObjetoRelacionadoOutput": {
+                "type": "object",
+                "properties": {
+                    "tipo": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "numero_publico": {
+                        "type": "string",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "status": {
+                        "type": "string",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "id",
+                    "numero_publico",
+                    "status",
+                    "tipo"
+                ]
+            },
+            "NotificacaoOutput": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "tipo": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/NotificacaoOutputTipoEnum"
+                            }
+                        ],
+                        "readOnly": true,
+                        "description": "Tipo de notificação.\n\n* `requisicao_enviada_autorizacao` - Requisição enviada para autorização\n* `requisicao_autorizada` - Requisição autorizada\n* `requisicao_recusada` - Requisição recusada\n* `requisicao_cancelada` - Requisição cancelada\n* `requisicao_atendida` - Requisição atendida"
+                    },
+                    "titulo": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "mensagem": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "lida": {
+                        "type": "boolean",
+                        "readOnly": true
+                    },
+                    "lida_em": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "leitura_suportada": {
+                        "type": "boolean",
+                        "readOnly": true
+                    },
+                    "destino": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/NotificacaoDestinoOutput"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "objeto_relacionado": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/NotificacaoObjetoRelacionadoOutput"
+                            }
+                        ],
+                        "nullable": true,
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "created_at",
+                    "destino",
+                    "id",
+                    "leitura_suportada",
+                    "lida",
+                    "lida_em",
+                    "mensagem",
+                    "objeto_relacionado",
+                    "tipo",
+                    "titulo"
+                ]
+            },
+            "NotificacaoOutputTipoEnum": {
+                "enum": [
+                    "requisicao_enviada_autorizacao",
+                    "requisicao_autorizada",
+                    "requisicao_recusada",
+                    "requisicao_cancelada",
+                    "requisicao_atendida"
+                ],
+                "type": "string",
+                "description": "* `requisicao_enviada_autorizacao` - Requisição enviada para autorização\n* `requisicao_autorizada` - Requisição autorizada\n* `requisicao_recusada` - Requisição recusada\n* `requisicao_cancelada` - Requisição cancelada\n* `requisicao_atendida` - Requisição atendida"
+            },
+            "NotificacaoUnreadCountOutput": {
+                "type": "object",
+                "properties": {
+                    "unread_count": {
+                        "type": "integer",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "unread_count"
                 ]
             },
             "RequisicaoActionOutput": {

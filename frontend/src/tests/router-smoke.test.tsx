@@ -203,6 +203,91 @@ function pendingFulfillmentListResponse(results = [pendingFulfillmentListItem()]
   );
 }
 
+function notificationListItem(overrides = {}) {
+  return {
+    id: 901,
+    tipo: "requisicao_enviada_autorizacao",
+    titulo: "Requisição aguardando autorização",
+    mensagem: "A requisição REQ-2026-000101 aguarda autorização.",
+    created_at: "2026-05-02T09:30:00Z",
+    lida: false,
+    lida_em: null,
+    leitura_suportada: true,
+    destino: {
+      tipo: "usuario",
+      usuario_id: 10,
+      papel: null,
+    },
+    objeto_relacionado: {
+      tipo: "requisicao",
+      id: 101,
+      numero_publico: "REQ-2026-000101",
+      status: "aguardando_autorizacao",
+    },
+    ...overrides,
+  };
+}
+
+function notificationListResponse(results = [notificationListItem()]) {
+  return new Response(
+    JSON.stringify({
+      count: results.length,
+      page: 1,
+      page_size: 6,
+      total_pages: 1,
+      next: null,
+      previous: null,
+      results,
+    }),
+    { status: 200, headers: jsonHeaders },
+  );
+}
+
+function notificationUnreadCountResponse(unreadCount = 0) {
+  return new Response(
+    JSON.stringify({
+      unread_count: unreadCount,
+    }),
+    { status: 200, headers: jsonHeaders },
+  );
+}
+
+function maybeNotificationsRequest(request: Request) {
+  if (
+    requestUrl(request).includes("/api/v1/notifications/") &&
+    request.method === "GET" &&
+    requestUrl(request).includes("/api/v1/notifications/unread-count/")
+  ) {
+    return notificationUnreadCountResponse(1);
+  }
+
+  if (
+    requestUrl(request).includes("/api/v1/notifications/") &&
+    request.method === "GET" &&
+    !requestUrl(request).includes("/mark-read/")
+  ) {
+    return notificationListResponse();
+  }
+
+  if (
+    requestUrl(request).includes("/api/v1/notifications/") &&
+    request.method === "POST" &&
+    requestUrl(request).includes("/mark-read/")
+  ) {
+    return new Response(
+      JSON.stringify(
+        notificationListItem({
+          lida: true,
+          lida_em: "2026-05-02T09:35:00Z",
+        }),
+      ),
+      { status: 200, headers: jsonHeaders },
+    );
+  }
+
+  return null;
+}
+
 function requisitionDetailResponse(
   itemOverrides: Record<string, unknown> = {},
   requisitionOverrides: Record<string, unknown> = {},
@@ -501,6 +586,8 @@ function mockCurrentSession(papel = "solicitante") {
         return sessionResponse(authSession(papel));
       }
 
+      const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
       throw new Error(`Unexpected request: ${requestUrl(request)}`);
     }),
   );
@@ -547,6 +634,8 @@ describe("frontend scaffold router", () => {
         return sessionResponse(session);
       }
 
+      const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
       throw new Error(`Unexpected request: ${requestUrl(request)}`);
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -598,7 +687,9 @@ describe("frontend scaffold router", () => {
           );
         }
 
-        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+        const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
       }),
     );
 
@@ -633,6 +724,8 @@ describe("frontend scaffold router", () => {
         return sessionResponse(authSession("solicitante"));
       }
 
+      const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
       throw new Error(`Unexpected request: ${requestUrl(request)}`);
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -669,6 +762,8 @@ describe("frontend scaffold router", () => {
         return sessionResponse(authSession("solicitante"));
       }
 
+      const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
       throw new Error(`Unexpected request: ${requestUrl(request)}`);
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -699,7 +794,9 @@ describe("frontend scaffold router", () => {
           return unauthenticatedResponse();
         }
 
-        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+        const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
       }),
     );
 
@@ -718,7 +815,9 @@ describe("frontend scaffold router", () => {
           return forbiddenResponse();
         }
 
-        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+        const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
       }),
     );
 
@@ -753,7 +852,9 @@ describe("frontend scaffold router", () => {
           ]);
         }
 
-        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+        const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
       }),
     );
     renderRoute("/minhas-requisicoes");
@@ -791,7 +892,9 @@ describe("frontend scaffold router", () => {
           ]);
         }
 
-        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+        const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
       }),
     );
 
@@ -819,7 +922,9 @@ describe("frontend scaffold router", () => {
           ]);
         }
 
-        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+        const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
       }),
     );
 
@@ -854,7 +959,9 @@ describe("frontend scaffold router", () => {
           );
         }
 
-        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+        const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
       }),
     );
 
@@ -881,7 +988,9 @@ describe("frontend scaffold router", () => {
           return requisitionListResponse();
         }
 
-        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+        const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
       }),
     );
 
@@ -908,7 +1017,9 @@ describe("frontend scaffold router", () => {
           return requisitionListResponse();
         }
 
-        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+        const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
       }),
     );
 
@@ -939,7 +1050,9 @@ describe("frontend scaffold router", () => {
           return pendingApprovalListResponse();
         }
 
-        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+        const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
       }),
     );
 
@@ -959,7 +1072,9 @@ describe("frontend scaffold router", () => {
           return sessionResponse(authSession("solicitante"));
         }
 
-        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+        const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
       }),
     );
 
@@ -982,7 +1097,9 @@ describe("frontend scaffold router", () => {
           return pendingApprovalListResponse();
         }
 
-        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+        const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
       }),
     );
 
@@ -1007,7 +1124,9 @@ describe("frontend scaffold router", () => {
           return pendingApprovalListResponse();
         }
 
-        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+        const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
       }),
     );
 
@@ -1037,7 +1156,9 @@ describe("frontend scaffold router", () => {
           return pendingApprovalListResponse();
         }
 
-        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+        const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
       }),
     );
 
@@ -1065,7 +1186,9 @@ describe("frontend scaffold router", () => {
           return pendingFulfillmentListResponse();
         }
 
-        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+        const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
       }),
     );
 
@@ -1095,7 +1218,9 @@ describe("frontend scaffold router", () => {
           return pendingFulfillmentListResponse();
         }
 
-        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+        const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
       }),
     );
 
@@ -1130,7 +1255,9 @@ describe("frontend scaffold router", () => {
           return requisitionListResponse();
         }
 
-        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+        const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
       }),
     );
 
@@ -1167,7 +1294,9 @@ describe("frontend scaffold router", () => {
           return requisitionDetailResponse();
         }
 
-        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+        const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
       }),
     );
 
@@ -1193,7 +1322,9 @@ describe("frontend scaffold router", () => {
           return requisitionDetailResponse();
         }
 
-        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+        const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
       }),
     );
 
@@ -1216,7 +1347,9 @@ describe("frontend scaffold router", () => {
           return sessionResponse(authSession("solicitante"));
         }
 
-        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+        const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
       }),
     );
 
@@ -1239,7 +1372,9 @@ describe("frontend scaffold router", () => {
           return forbiddenResponse();
         }
 
-        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+        const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
       }),
     );
 
@@ -1261,7 +1396,9 @@ describe("frontend scaffold router", () => {
           return requisitionDetailResponse();
         }
 
-        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+        const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
       }),
     );
 
@@ -1288,7 +1425,9 @@ describe("frontend scaffold router", () => {
           });
         }
 
-        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+        const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
       }),
     );
 
@@ -1320,6 +1459,8 @@ describe("frontend scaffold router", () => {
         return pendingApprovalListResponse([]);
       }
 
+      const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
       throw new Error(`Unexpected request: ${requestUrl(request)}`);
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -1367,6 +1508,8 @@ describe("frontend scaffold router", () => {
         return pendingFulfillmentListResponse([]);
       }
 
+      const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
       throw new Error(`Unexpected request: ${requestUrl(request)}`);
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -1424,6 +1567,8 @@ describe("frontend scaffold router", () => {
         return pendingFulfillmentListResponse([]);
       }
 
+      const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
       throw new Error(`Unexpected request: ${requestUrl(request)}`);
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -1485,7 +1630,9 @@ describe("frontend scaffold router", () => {
           );
         }
 
-        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+        const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
       }),
     );
 
@@ -1516,7 +1663,9 @@ describe("frontend scaffold router", () => {
             return new Response(null, { status: 401, headers: jsonHeaders });
           }
 
-          throw new Error(`Unexpected request: ${requestUrl(request)}`);
+          const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
         }),
       );
 
@@ -1554,6 +1703,8 @@ describe("frontend scaffold router", () => {
         return pendingFulfillmentListResponse([]);
       }
 
+      const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
       throw new Error(`Unexpected request: ${requestUrl(request)}`);
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -1595,7 +1746,9 @@ describe("frontend scaffold router", () => {
             return new Response(null, { status: 401, headers: jsonHeaders });
           }
 
-          throw new Error(`Unexpected request: ${requestUrl(request)}`);
+          const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
         }),
       );
 
@@ -1628,7 +1781,9 @@ describe("frontend scaffold router", () => {
           return unauthenticatedForbiddenResponse();
         }
 
-        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+        const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
       }),
     );
 
@@ -1651,7 +1806,9 @@ describe("frontend scaffold router", () => {
           return unauthenticatedForbiddenResponse();
         }
 
-        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+        const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
       }),
     );
 
@@ -1673,7 +1830,9 @@ describe("frontend scaffold router", () => {
           return forbiddenResponse();
         }
 
-        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+        const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
       }),
     );
 
@@ -1703,6 +1862,8 @@ describe("frontend scaffold router", () => {
         return pendingApprovalListResponse([]);
       }
 
+      const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
       throw new Error(`Unexpected request: ${requestUrl(request)}`);
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -1756,6 +1917,8 @@ describe("frontend scaffold router", () => {
         return pendingApprovalListResponse([]);
       }
 
+      const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
       throw new Error(`Unexpected request: ${requestUrl(request)}`);
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -1804,6 +1967,8 @@ describe("frontend scaffold router", () => {
         return pendingApprovalListResponse([]);
       }
 
+      const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
       throw new Error(`Unexpected request: ${requestUrl(request)}`);
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -1855,7 +2020,9 @@ describe("frontend scaffold router", () => {
           );
         }
 
-        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+        const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
       }),
     );
 
@@ -1884,7 +2051,9 @@ describe("frontend scaffold router", () => {
           return unauthenticatedResponse();
         }
 
-        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+        const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
       }),
     );
 
@@ -1916,7 +2085,9 @@ describe("frontend scaffold router", () => {
           return unauthenticatedForbiddenResponse();
         }
 
-        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+        const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
       }),
     );
 
@@ -1973,6 +2144,8 @@ describe("frontend scaffold router", () => {
         });
       }
 
+      const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
       throw new Error(`Unexpected request: ${requestUrl(request)}`);
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -2024,6 +2197,8 @@ describe("frontend scaffold router", () => {
         return requisitionDetailResponse();
       }
 
+      const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
       throw new Error(`Unexpected request: ${requestUrl(request)}`);
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -2071,6 +2246,8 @@ describe("frontend scaffold router", () => {
         return requisitionDetailResponse();
       }
 
+      const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
       throw new Error(`Unexpected request: ${requestUrl(request)}`);
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -2123,6 +2300,8 @@ describe("frontend scaffold router", () => {
         return requisitionDetailResponse();
       }
 
+      const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
       throw new Error(`Unexpected request: ${requestUrl(request)}`);
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -2164,6 +2343,8 @@ describe("frontend scaffold router", () => {
         return draftRequisitionDetailResponse({ observacao: "Observacao nova" });
       }
 
+      const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
       throw new Error(`Unexpected request: ${requestUrl(request)}`);
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -2220,6 +2401,8 @@ describe("frontend scaffold router", () => {
         return requisitionDetailResponse();
       }
 
+      const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
       throw new Error(`Unexpected request: ${requestUrl(request)}`);
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -2270,6 +2453,8 @@ describe("frontend scaffold router", () => {
         return requisitionListResponse([]);
       }
 
+      const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
       throw new Error(`Unexpected request: ${requestUrl(request)}`);
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -2307,6 +2492,8 @@ describe("frontend scaffold router", () => {
         return requisitionListResponse([]);
       }
 
+      const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
       throw new Error(`Unexpected request: ${requestUrl(request)}`);
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -2348,7 +2535,9 @@ describe("frontend scaffold router", () => {
           ]);
         }
 
-        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+        const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
       }),
     );
 
@@ -2363,6 +2552,163 @@ describe("frontend scaffold router", () => {
     expect(addButton).toBeDisabled();
     expect(screen.getByText(/saldo 0 UN/i)).toBeInTheDocument();
     expect(screen.getByText("Nenhum material adicionado.")).toBeInTheDocument();
+  });
+
+  it("renders notifications counter and collective badge in app shell", async () => {
+    const fetchMock = vi.fn((request: Request) => {
+      if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+        return sessionResponse(authSession("solicitante"));
+      }
+
+      if (requestUrl(request).includes("/api/v1/notifications/unread-count/")) {
+        return notificationUnreadCountResponse(2);
+      }
+
+      if (
+        requestUrl(request).includes("/api/v1/notifications/") &&
+        request.method === "GET" &&
+        !requestUrl(request).includes("/mark-read/")
+      ) {
+        return notificationListResponse([
+          notificationListItem({
+            id: 910,
+            destino: { tipo: "papel", usuario_id: null, papel: "chefe_setor" },
+            leitura_suportada: false,
+            tipo: "requisicao_autorizada",
+            titulo: "Aviso coletivo",
+          }),
+          notificationListItem({
+            id: 911,
+            titulo: "Aviso individual",
+            leitura_suportada: true,
+            destino: { tipo: "usuario", usuario_id: 10, papel: null },
+          }),
+        ]);
+      }
+
+      const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderRoute("/minhas-requisicoes");
+
+    expect(await screen.findByText("Notificações")).toBeInTheDocument();
+    expect(await screen.findByText("2")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Aviso coletivo", { selector: ".notification-badge" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Marcar como lida" })).toBeInTheDocument();
+  });
+
+  it("marks individual notification as read and refreshes unread counter", async () => {
+    let unreadCount = 1;
+    let notificationsRead = false;
+
+    const fetchMock = vi.fn((request: Request) => {
+      if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+        return sessionResponse(authSession("solicitante"));
+      }
+
+      if (requestUrl(request).includes("/api/v1/notifications/unread-count/")) {
+        return notificationUnreadCountResponse(unreadCount);
+      }
+
+      if (
+        requestUrl(request).includes("/api/v1/notifications/") &&
+        request.method === "GET" &&
+        !requestUrl(request).includes("/mark-read/")
+      ) {
+        return notificationListResponse([
+          notificationListItem({
+            id: 920,
+            lida: notificationsRead,
+            lida_em: notificationsRead ? "2026-05-02T09:35:00Z" : null,
+            leitura_suportada: true,
+          }),
+        ]);
+      }
+
+      if (requestUrl(request).includes("/api/v1/notifications/920/mark-read/")) {
+        unreadCount = 0;
+        notificationsRead = true;
+        return new Response(
+          JSON.stringify(
+            notificationListItem({
+              id: 920,
+              lida: true,
+              lida_em: "2026-05-02T09:35:00Z",
+              leitura_suportada: true,
+            }),
+          ),
+          { status: 200, headers: jsonHeaders },
+        );
+      }
+
+      const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderRoute("/minhas-requisicoes");
+
+    const markReadButton = await screen.findByRole("button", { name: "Marcar como lida" });
+    fireEvent.click(markReadButton);
+
+    await waitFor(() => {
+      expect(screen.getByText("0")).toBeInTheDocument();
+    });
+
+    expect(
+      fetchMock.mock.calls.some(([request]) =>
+        requestUrl(request).includes("/api/v1/notifications/920/mark-read/"),
+      ),
+    ).toBe(true);
+  });
+
+  it("builds requisition link with operational context from notification type", async () => {
+    const fetchMock = vi.fn((request: Request) => {
+      if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+        return sessionResponse(authSession("chefe_setor"));
+      }
+
+      if (requestUrl(request).includes("/api/v1/notifications/unread-count/")) {
+        return notificationUnreadCountResponse(1);
+      }
+
+      if (
+        requestUrl(request).includes("/api/v1/notifications/") &&
+        request.method === "GET" &&
+        !requestUrl(request).includes("/mark-read/")
+      ) {
+        return notificationListResponse([
+          notificationListItem({
+            id: 930,
+            tipo: "requisicao_enviada_autorizacao",
+            leitura_suportada: true,
+            objeto_relacionado: {
+              tipo: "requisicao",
+              id: 101,
+              numero_publico: "REQ-2026-000101",
+              status: "aguardando_autorizacao",
+            },
+          }),
+        ]);
+      }
+
+      const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderRoute("/minhas-requisicoes");
+
+    const link = await screen.findByRole("link", { name: "Abrir requisição" });
+    expect(link).toHaveAttribute("href", "/requisicoes/101?contexto=autorizacao");
+    expect(screen.getByText("Fila de autorizações", { selector: ".notification-context" })).toBeInTheDocument();
   });
 
   it("logs out from authenticated shell and returns to login", async () => {
@@ -2381,6 +2727,8 @@ describe("frontend scaffold router", () => {
         return new Response(null, { status: 204 });
       }
 
+      const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
       throw new Error(`Unexpected request: ${requestUrl(request)}`);
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -2419,6 +2767,8 @@ describe("frontend scaffold router", () => {
         );
       }
 
+      const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
       throw new Error(`Unexpected request: ${requestUrl(request)}`);
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -2458,6 +2808,8 @@ describe("frontend scaffold router", () => {
         return new Response(null, { status: 204 });
       }
 
+      const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
       throw new Error(`Unexpected request: ${requestUrl(request)}`);
     });
     vi.stubGlobal("fetch", fetchMock);
