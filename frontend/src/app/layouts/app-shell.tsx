@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 
+import saepLogoUrl from "../../assets/saep-logo.webp";
 import { ApiError, authQueryKeys, logoutSession, meQueryOptions } from "../../features/auth/session";
 import {
   formatNotificationDate,
@@ -72,18 +73,25 @@ export function AppShell() {
   const notifications = notificationsQuery.data?.results ?? [];
   const unreadCount = unreadCountQuery.data?.unread_count ?? 0;
 
+  if (location.pathname === "/login") {
+    return (
+      <div className="min-h-screen bg-[var(--page-bg)] px-3 py-3 text-[var(--ink-strong)] sm:px-6 sm:py-6">
+        <main className="mx-auto w-full max-w-5xl">
+          <Outlet />
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[var(--page-bg)] text-[var(--ink-strong)]">
-      <div className="mx-auto flex min-h-screen max-w-[1440px] flex-col px-4 py-4 lg:flex-row lg:px-6">
+      <div className="mx-auto flex min-h-screen max-w-[1440px] flex-col gap-4 px-3 py-3 sm:px-4 lg:flex-row lg:px-6">
         <aside className="glass-panel mb-4 w-full shrink-0 overflow-hidden lg:mb-0 lg:w-[320px]">
-          <div className="border-b border-[var(--line-soft)] px-6 py-5">
-            <p className="eyebrow">Scaffold</p>
-            <h1 className="mt-3 font-title text-3xl leading-none tracking-[-0.03em]">
-              SPA do piloto
-            </h1>
-            <p className="mt-3 max-w-[28ch] text-sm text-[var(--ink-soft)]">
-              Base operacional do piloto, sem fluxos reais ainda. Backend segue dono de domínio,
-              sessão, autorização e contratos.
+          <div className="border-b border-[var(--line-soft)] px-4 py-5 sm:px-6">
+            <img className="brand-logo" src={saepLogoUrl} alt="SAEP" />
+            <h1 className="mt-4 text-2xl font-bold leading-tight">WMS-SAEP</h1>
+            <p className="mt-2 max-w-[30ch] text-sm text-[var(--ink-soft)]">
+              Almoxarifado do piloto para requisições, autorizações e atendimento.
             </p>
           </div>
 
@@ -95,7 +103,7 @@ export function AppShell() {
               const navContent = (
                 <>
                   <div>
-                    <p className="text-[0.68rem] uppercase tracking-[0.28em] text-[var(--ink-muted)]">
+                    <p className="text-[0.75rem] font-bold uppercase text-[var(--ink-muted)]">
                       {item.tag}
                     </p>
                     <p className="mt-1 text-base font-semibold text-[var(--ink-strong)]">
@@ -114,17 +122,17 @@ export function AppShell() {
             })}
           </nav>
 
-          <div className="border-t border-[var(--line-soft)] px-6 py-5">
+          <div className="border-t border-[var(--line-soft)] px-4 py-5 sm:px-6">
             {session ? (
               <div className="space-y-3">
-                <p className="text-xs uppercase tracking-[0.28em] text-[var(--ink-muted)]">
+                <p className="text-xs font-bold uppercase text-[var(--ink-muted)]">
                   Sessão atual
                 </p>
                 <div>
                   <p className="text-sm font-semibold text-[var(--ink-strong)]">
                     {session.nome_completo}
                   </p>
-                  <p className="mt-1 text-xs uppercase tracking-[0.18em] text-[var(--ink-muted)]">
+                  <p className="mt-1 text-xs font-bold uppercase text-[var(--ink-muted)]">
                     {session.papel}
                   </p>
                   {session.setor ? (
@@ -133,7 +141,7 @@ export function AppShell() {
                 </div>
                 <div className="notifications-panel">
                   <div className="notifications-header">
-                    <p className="text-xs uppercase tracking-[0.22em] text-[var(--ink-muted)]">
+                    <p className="text-xs font-bold uppercase text-[var(--ink-muted)]">
                       Notificações
                     </p>
                     <span className="notifications-count">{unreadCount}</span>
@@ -245,41 +253,39 @@ export function AppShell() {
               </div>
             ) : (
               <>
-                <p className="text-xs uppercase tracking-[0.28em] text-[var(--ink-muted)]">
-                  Bloco 0 consumido
+                <p className="text-xs font-bold uppercase text-[var(--ink-muted)]">
+                  Acesso operacional
                 </p>
                 <ul className="mt-3 space-y-2 text-sm text-[var(--ink-soft)]">
-                  <li>`auth/csrf` `auth/login` `auth/logout` `auth/me`</li>
-                  <li>`users/beneficiary-lookup`</li>
-                  <li>`requisitions list/detail` + `draft update`</li>
+                  <li>Entre com matrícula funcional e senha.</li>
+                  <li>O menu é ajustado pelo papel operacional da sessão.</li>
                 </ul>
               </>
             )}
           </div>
         </aside>
 
-        <main className="flex-1 lg:pl-6">
+        <main className="flex-1">
           <div className="glass-panel min-h-full overflow-hidden">
-            <div className="border-b border-[var(--line-soft)] px-6 py-5">
-              <p className="eyebrow">Pilot SPA shell</p>
+            <div className="border-b border-[var(--line-soft)] px-4 py-5 sm:px-6">
+              <p className="eyebrow">Piloto operacional</p>
               <div className="mt-3 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                 <div>
-                  <h2 className="font-title text-3xl tracking-[-0.03em] text-[var(--ink-strong)]">
-                    Repositório pronto para próximas fatias
+                  <h2 className="text-2xl font-bold leading-tight text-[var(--ink-strong)]">
+                    Requisições de materiais
                   </h2>
                   <p className="mt-2 max-w-[52ch] text-sm text-[var(--ink-soft)]">
-                    Router file-based, Query provider, client OpenAPI, smoke tests e comandos
-                    operacionais já conectados ao `Makefile`.
+                    Use as filas do seu papel para criar, autorizar ou atender requisições.
                   </p>
                 </div>
                 <div className="status-chip">
                   <span className="status-dot" />
-                  Fundação entregue
+                  Tema SAEP
                 </div>
               </div>
             </div>
 
-            <div className="p-6">
+            <div className="p-4 sm:p-6">
               <Outlet />
             </div>
           </div>

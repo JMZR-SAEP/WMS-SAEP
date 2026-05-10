@@ -98,7 +98,7 @@ function AtendimentosPage() {
             <span className="font-semibold text-[var(--ink-strong)]">
               {row.original.numero_publico ?? `#${row.original.id}`}
             </span>
-            <p className="mt-2 text-xs uppercase tracking-[0.18em] text-[var(--ink-muted)]">
+            <p className="mt-2 text-xs font-bold uppercase text-[var(--ink-muted)]">
               {row.original.total_itens} {row.original.total_itens === 1 ? "item" : "itens"}
             </p>
           </div>

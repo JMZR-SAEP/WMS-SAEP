@@ -2,13 +2,13 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 
+import saepLogoUrl from "../assets/saep-logo.webp";
 import {
   ApiError,
   authQueryKeys,
   homePathForPapel,
   loginWithMatricula,
 } from "../features/auth/session";
-import { FeaturePlaceholder } from "../shared/ui/feature-placeholder";
 
 function safeInternalRedirectPath(redirect: string | undefined) {
   if (!redirect || redirect.startsWith("//")) {
@@ -75,26 +75,21 @@ function LoginPage() {
   }
 
   return (
-    <FeaturePlaceholder
-      kicker="Auth shell"
-      title="Entrar no piloto"
-      summary="Autenticação por sessão Django + CSRF. A matrícula funcional identifica o usuário e o papel operacional principal define a home inicial."
-      nextSlice="#37 — login e bootstrap de sessão em execução"
-      contracts={[
-        "GET /api/v1/auth/csrf/",
-        "POST /api/v1/auth/login/",
-        "POST /api/v1/auth/logout/",
-        "GET /api/v1/auth/me/",
-      ]}
-      bullets={[
-        "Capturar matrícula funcional e senha sem inventar auth paralela.",
-        "Redirecionar por papel operacional principal depois do bootstrap.",
-        "Tratar sessão expirada com retorno previsível para /login.",
-      ]}
-      preview={
-        <form className="preview-panel space-y-4" onSubmit={handleSubmit}>
+    <section className="mx-auto grid max-w-5xl gap-6 lg:grid-cols-[minmax(0,1fr)_24rem] lg:items-start">
+      <div className="glass-inset p-5 sm:p-6">
+        <img className="brand-logo" src={saepLogoUrl} alt="SAEP" />
+        <p className="eyebrow mt-6">Acesso ao piloto</p>
+        <h3 className="mt-3 text-3xl font-bold leading-tight">Entrar no piloto</h3>
+        <p className="mt-4 max-w-[58ch] text-base leading-7 text-[var(--ink-soft)]">
+          Use sua matrícula funcional para acessar as filas e ações disponíveis ao seu papel.
+        </p>
+      </div>
+
+      <aside className="glass-inset p-5">
+        <p className="eyebrow">Identificação</p>
+        <form className="preview-panel mt-4 space-y-4" onSubmit={handleSubmit}>
           {errorMessage ? (
-            <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
               {errorMessage}
             </div>
           ) : null}
@@ -125,7 +120,7 @@ function LoginPage() {
             {loginMutation.isPending ? "Entrando..." : "Entrar"}
           </button>
         </form>
-      }
-    />
+      </aside>
+    </section>
   );
 }

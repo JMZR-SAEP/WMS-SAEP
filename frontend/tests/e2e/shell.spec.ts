@@ -41,6 +41,28 @@ test("logs in and logs out through real backend", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Entrar no piloto" })).toBeVisible();
 });
 
+test("login fits mobile viewport with SAEP identity", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto("/login");
+
+  await expect(page.getByRole("img", { name: "SAEP" }).first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Entrar no piloto" })).toBeVisible();
+  await expect(page.getByText(/scaffold/i)).toHaveCount(0);
+
+  const hasHorizontalOverflow = await page.evaluate(
+    () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+  );
+  expect(hasHorizontalOverflow).toBe(false);
+
+  for (let index = 0; index < 12; index += 1) {
+    if (await page.getByLabel("Matrícula funcional").evaluate((element) => element === document.activeElement)) {
+      break;
+    }
+    await page.keyboard.press("Tab");
+  }
+  await expect(page.getByLabel("Matrícula funcional")).toBeFocused();
+});
+
 test("opens minhas requisicoes and canonical detail with real data", async ({ page }) => {
   await loginAs(page, "solicitante1", /\/minhas-requisicoes(?:\?.*)?$/);
 

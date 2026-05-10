@@ -15,7 +15,7 @@ function UnknownRolePage() {
   return (
     <section className="glass-inset space-y-4 p-6">
       <p className="eyebrow">Sessão sem home operacional</p>
-      <h3 className="font-title text-4xl leading-none tracking-[-0.04em]">
+      <h3 className="text-3xl font-bold leading-tight">
         Papel operacional não mapeado
       </h3>
       <p className="max-w-[58ch] text-base leading-7 text-[var(--ink-soft)]">
