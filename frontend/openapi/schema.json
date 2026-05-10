@@ -413,6 +413,7 @@
         "/api/v1/notifications/unread-count/": {
             "get": {
                 "operationId": "notifications_unread_count",
+                "description": "Retorna o contador de notificações individuais não lidas do usuário autenticado. Notificações coletivas por papel não entram nesse contador.",
                 "tags": [
                     "notifications"
                 ],

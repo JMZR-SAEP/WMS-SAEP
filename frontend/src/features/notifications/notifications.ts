@@ -116,7 +116,7 @@ export function notificationOperationalLabel(tipo: NotificationType) {
   if (tipo === "requisicao_autorizada") {
     return "Fila de atendimentos";
   }
-  return null;
+  return undefined;
 }
 
 export function formatNotificationDate(value: string) {

@@ -142,6 +142,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** @description Retorna o contador de notificações individuais não lidas do usuário autenticado. Notificações coletivas por papel não entram nesse contador. */
         get: operations["notifications_unread_count"];
         put?: never;
         post?: never;

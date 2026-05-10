@@ -3,7 +3,11 @@ from django.urls import reverse
 from rest_framework.test import APIClient
 
 from apps.notifications.models import TipoNotificacao
-from apps.notifications.services import criar_notificacao_papel, criar_notificacao_usuario
+from apps.notifications.services import (
+    criar_notificacao_papel,
+    criar_notificacao_usuario,
+    marcar_notificacao_como_lida,
+)
 from apps.requisitions.models import Requisicao
 from apps.users.models import PapelChoices, Setor, User
 
@@ -119,7 +123,7 @@ class TestNotificacoesAPI:
             titulo="Lida",
             mensagem="Já lida.",
         )
-        lida.marcar_como_lida()
+        marcar_notificacao_como_lida(notificacao=lida, usuario=usuario)
         criar_notificacao_usuario(
             destinatario=usuario,
             tipo=TipoNotificacao.REQUISICAO_AUTORIZADA,
@@ -151,6 +155,13 @@ class TestNotificacoesAPI:
 
         assert response.status_code == 200
         assert response.data == {"unread_count": 2}
+
+    def test_unread_count_exige_autenticacao(self):
+        client = APIClient()
+        response = client.get(reverse("notification-unread-count"))
+
+        assert response.status_code == 403
+        assert response.data["error"]["code"] == "not_authenticated"
 
     def test_mark_read_marca_individual_e_retorna_estado_atualizado(self):
         setor = self._criar_setor("Mark Read", "41007")
@@ -214,3 +225,45 @@ class TestNotificacoesAPI:
 
         assert response.status_code == 403
         assert response.data["error"]["code"] == "permission_denied"
+
+    def test_mark_read_exige_autenticacao(self):
+        setor = self._criar_setor("Mark Read Auth", "41011")
+        usuario = self._criar_usuario("41012", "Usuario Auth", setor=setor)
+        notificacao = criar_notificacao_usuario(
+            destinatario=usuario,
+            tipo=TipoNotificacao.REQUISICAO_ATENDIDA,
+            titulo="Atendida",
+            mensagem="Requisição atendida.",
+        )
+
+        client = APIClient()
+        response = client.post(
+            reverse("notification-mark-read", kwargs={"pk": notificacao.id}),
+            data={},
+            format="json",
+        )
+
+        assert response.status_code == 403
+        assert response.data["error"]["code"] == "not_authenticated"
+
+    def test_mark_read_de_outro_usuario_retorna_not_found(self):
+        setor = self._criar_setor("Mark Read Outros", "41013")
+        destinatario = self._criar_usuario("41014", "Destinatário", setor=setor)
+        outro_usuario = self._criar_usuario("41015", "Outro Usuário", setor=setor)
+        notificacao = criar_notificacao_usuario(
+            destinatario=destinatario,
+            tipo=TipoNotificacao.REQUISICAO_ATENDIDA,
+            titulo="Atendida",
+            mensagem="Requisição atendida.",
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=outro_usuario)
+        response = client.post(
+            reverse("notification-mark-read", kwargs={"pk": notificacao.id}),
+            data={},
+            format="json",
+        )
+
+        assert response.status_code == 404
+        assert response.data["error"]["code"] == "not_found"

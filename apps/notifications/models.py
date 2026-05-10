@@ -2,7 +2,6 @@ from django.conf import settings
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.db import models
-from django.utils import timezone
 
 from apps.users.models import PapelChoices
 
@@ -97,10 +96,3 @@ class Notificacao(models.Model):
     def __str__(self):
         destino = self.destinatario_id or self.papel_destinatario
         return f"{self.tipo} -> {destino}"
-
-    def marcar_como_lida(self):
-        if self.lida:
-            return
-        self.lida = True
-        self.lida_em = timezone.now()
-        self.save(update_fields=["lida", "lida_em"])

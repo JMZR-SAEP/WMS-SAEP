@@ -16,7 +16,10 @@ from apps.notifications.serializers import (
     NotificacaoOutputSerializer,
     NotificacaoUnreadCountOutputSerializer,
 )
-from apps.notifications.services import marcar_notificacao_como_lida
+from apps.notifications.services import (
+    contar_notificacoes_individuais_nao_lidas,
+    marcar_notificacao_como_lida,
+)
 
 
 class NotificacaoViewSet(mixins.ListModelMixin, GenericViewSet):
@@ -87,6 +90,10 @@ class NotificacaoViewSet(mixins.ListModelMixin, GenericViewSet):
     @extend_schema(
         operation_id="notifications_unread_count",
         tags=["notifications"],
+        description=(
+            "Retorna o contador de notificações individuais não lidas do usuário autenticado. "
+            "Notificações coletivas por papel não entram nesse contador."
+        ),
         responses={
             200: NotificacaoUnreadCountOutputSerializer(),
             403: ErrorResponseSerializer(),
@@ -94,5 +101,5 @@ class NotificacaoViewSet(mixins.ListModelMixin, GenericViewSet):
     )
     @action(detail=False, methods=["get"], url_path="unread-count")
     def unread_count(self, request):
-        unread_count = request.user.notificacoes.filter(lida=False).count()
+        unread_count = contar_notificacoes_individuais_nao_lidas(usuario=request.user)
         return Response({"unread_count": unread_count})

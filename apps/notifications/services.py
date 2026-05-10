@@ -1,6 +1,7 @@
 from collections.abc import Iterable
 
 from django.contrib.contenttypes.models import ContentType
+from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied
 
 from apps.notifications.models import Notificacao, TipoNotificacao
@@ -85,5 +86,12 @@ def marcar_notificacao_como_lida(*, notificacao: Notificacao, usuario: User) -> 
         raise PermissionDenied("Notificações coletivas por papel não possuem leitura individual.")
     if notificacao.destinatario_id != usuario.pk:
         raise PermissionDenied("Usuário não é destinatário desta notificação.")
-    notificacao.marcar_como_lida()
+    if not notificacao.lida:
+        notificacao.lida = True
+        notificacao.lida_em = timezone.now()
+        notificacao.save(update_fields=["lida", "lida_em"])
     return notificacao
+
+
+def contar_notificacoes_individuais_nao_lidas(*, usuario: User) -> int:
+    return Notificacao.objects.filter(destinatario=usuario, lida=False).count()

@@ -48,6 +48,7 @@ export function AppShell() {
     retry: false,
     onSuccess: async () => {
       queryClient.removeQueries({ queryKey: authQueryKeys.me });
+      queryClient.removeQueries({ queryKey: notificationsQueryKeys.all });
       await navigate({ to: "/login", search: { redirect: undefined } });
     },
   });
@@ -205,7 +206,10 @@ export function AppShell() {
                               <button
                                 className="notification-read-button"
                                 disabled={markReadMutation.isPending}
-                                onClick={() => markReadMutation.mutate(notification.id)}
+                                onClick={() => {
+                                  markReadMutation.reset();
+                                  markReadMutation.mutate(notification.id);
+                                }}
                                 type="button"
                               >
                                 Marcar como lida

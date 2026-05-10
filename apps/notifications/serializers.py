@@ -3,6 +3,9 @@ from rest_framework import serializers
 
 from apps.notifications.models import Notificacao
 
+REQUISICAO_APP_LABEL = "requisitions"
+REQUISICAO_MODEL = "requisicao"
+
 
 class NotificacaoDestinoOutputSerializer(serializers.Serializer):
     tipo = serializers.ChoiceField(choices=["usuario", "papel"], read_only=True)
@@ -61,7 +64,10 @@ class NotificacaoOutputSerializer(serializers.ModelSerializer):
         if obj.content_type_id is None or obj.object_id is None:
             return None
 
-        if obj.content_type.app_label != "requisitions" or obj.content_type.model != "requisicao":
+        if (
+            obj.content_type.app_label != REQUISICAO_APP_LABEL
+            or obj.content_type.model != REQUISICAO_MODEL
+        ):
             return None
 
         requisicao = obj.objeto_relacionado
