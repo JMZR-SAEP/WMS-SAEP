@@ -221,6 +221,131 @@ a {
   opacity: 0.82;
 }
 
+.notifications-panel {
+  border-radius: 16px;
+  border: 1px solid var(--line-soft);
+  background: rgba(255, 255, 255, 0.66);
+  padding: 0.75rem;
+}
+
+.notifications-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.notifications-count {
+  display: inline-flex;
+  min-width: 1.7rem;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  padding: 0.1rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.notifications-list {
+  margin: 0.6rem 0 0;
+  display: grid;
+  gap: 0.55rem;
+  list-style: none;
+  padding: 0;
+}
+
+.notification-item {
+  border-radius: 12px;
+  border: 1px solid var(--line-soft);
+  background: rgba(255, 255, 255, 0.86);
+  padding: 0.55rem;
+}
+
+.notification-meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.notification-meta strong {
+  font-size: 0.82rem;
+  color: var(--ink-strong);
+}
+
+.notification-meta span {
+  font-size: 0.7rem;
+  color: var(--ink-muted);
+}
+
+.notification-message {
+  margin: 0.3rem 0 0;
+  font-size: 0.77rem;
+  color: var(--ink-soft);
+}
+
+.notification-badge {
+  margin-top: 0.4rem;
+  display: inline-flex;
+  border-radius: 999px;
+  border: 1px solid var(--line-soft);
+  background: rgba(255, 248, 232, 0.95);
+  padding: 0.2rem 0.55rem;
+  font-size: 0.67rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #8f6020;
+}
+
+.notification-links {
+  margin-top: 0.35rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.notification-link {
+  font-size: 0.74rem;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  color: var(--ink-strong);
+}
+
+.notification-context {
+  font-size: 0.69rem;
+  color: var(--ink-muted);
+}
+
+.notification-read-button {
+  margin-top: 0.45rem;
+  border-radius: 999px;
+  border: 1px solid var(--line-soft);
+  background: rgba(255, 255, 255, 0.95);
+  padding: 0.28rem 0.6rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.notifications-empty {
+  margin: 0.5rem 0 0;
+  font-size: 0.76rem;
+  color: var(--ink-muted);
+}
+
+.notifications-error {
+  margin: 0.5rem 0 0;
+  border-radius: 10px;
+  border: 1px solid #f1caca;
+  background: #fff4f4;
+  padding: 0.45rem 0.55rem;
+  font-size: 0.73rem;
+  color: #902f2f;
+}
+
 .worklist-header,
 .detail-hero {
   display: flex;

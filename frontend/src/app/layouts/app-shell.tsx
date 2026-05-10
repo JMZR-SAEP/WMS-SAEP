@@ -2,6 +2,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 
 import { ApiError, authQueryKeys, logoutSession, meQueryOptions } from "../../features/auth/session";
+import {
+  formatNotificationDate,
+  markNotificationRead,
+  notificationListQueryOptions,
+  notificationOperationalContext,
+  notificationOperationalLabel,
+  notificationUnreadCountQueryOptions,
+  notificationsQueryKeys,
+} from "../../features/notifications/notifications";
 import { navigationItems } from "../../shared/config/navigation";
 
 function messageFromLogoutError(error: unknown) {
@@ -16,6 +25,18 @@ function messageFromLogoutError(error: unknown) {
   return "Não foi possível sair. Tente novamente.";
 }
 
+function messageFromNotificationError(error: unknown) {
+  if (error instanceof ApiError) {
+    return error.payload?.error.message || error.message;
+  }
+
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  return "Não foi possível carregar notificações.";
+}
+
 export function AppShell() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -27,9 +48,29 @@ export function AppShell() {
     retry: false,
     onSuccess: async () => {
       queryClient.removeQueries({ queryKey: authQueryKeys.me });
+      queryClient.removeQueries({ queryKey: notificationsQueryKeys.all });
       await navigate({ to: "/login", search: { redirect: undefined } });
     },
   });
+  const notificationsQuery = useQuery({
+    ...notificationListQueryOptions({ page: 1, pageSize: 6 }),
+    enabled: Boolean(session),
+  });
+  const unreadCountQuery = useQuery({
+    ...notificationUnreadCountQueryOptions,
+    enabled: Boolean(session),
+  });
+  const markReadMutation = useMutation({
+    mutationFn: markNotificationRead,
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: notificationsQueryKeys.all }),
+        queryClient.invalidateQueries({ queryKey: notificationsQueryKeys.unreadCount }),
+      ]);
+    },
+  });
+  const notifications = notificationsQuery.data?.results ?? [];
+  const unreadCount = unreadCountQuery.data?.unread_count ?? 0;
 
   return (
     <div className="min-h-screen bg-[var(--page-bg)] text-[var(--ink-strong)]">
@@ -88,6 +129,104 @@ export function AppShell() {
                   </p>
                   {session.setor ? (
                     <p className="mt-2 text-sm text-[var(--ink-soft)]">{session.setor.nome}</p>
+                  ) : null}
+                </div>
+                <div className="notifications-panel">
+                  <div className="notifications-header">
+                    <p className="text-xs uppercase tracking-[0.22em] text-[var(--ink-muted)]">
+                      Notificações
+                    </p>
+                    <span className="notifications-count">{unreadCount}</span>
+                  </div>
+
+                  {notificationsQuery.isLoading || unreadCountQuery.isLoading ? (
+                    <p className="notifications-empty">Carregando notificações...</p>
+                  ) : null}
+
+                  {notificationsQuery.isError || unreadCountQuery.isError ? (
+                    <p className="notifications-error">
+                      {messageFromNotificationError(
+                        notificationsQuery.error ?? unreadCountQuery.error,
+                      )}
+                    </p>
+                  ) : null}
+
+                  {!notificationsQuery.isLoading &&
+                  !unreadCountQuery.isLoading &&
+                  !notificationsQuery.isError &&
+                  !unreadCountQuery.isError &&
+                  notifications.length === 0 ? (
+                    <p className="notifications-empty">Sem notificações no momento.</p>
+                  ) : null}
+
+                  {!notificationsQuery.isLoading &&
+                  !unreadCountQuery.isLoading &&
+                  !notificationsQuery.isError &&
+                  !unreadCountQuery.isError &&
+                  notifications.length > 0 ? (
+                    <ul className="notifications-list">
+                      {notifications.map((notification) => {
+                        const relatedObject = notification.objeto_relacionado;
+                        const context = notificationOperationalContext(notification.tipo);
+                        const contextLabel = notificationOperationalLabel(notification.tipo);
+
+                        return (
+                          <li className="notification-item" key={notification.id}>
+                            <div className="notification-meta">
+                              <strong>{notification.titulo}</strong>
+                              <span>{formatNotificationDate(notification.created_at)}</span>
+                            </div>
+                            <p className="notification-message">{notification.mensagem}</p>
+
+                            {notification.destino.tipo === "papel" ? (
+                              <span className="notification-badge">Aviso coletivo</span>
+                            ) : null}
+
+                            {relatedObject?.tipo === "requisicao" ? (
+                              <div className="notification-links">
+                                <Link
+                                  className="notification-link"
+                                  params={{ id: String(relatedObject.id) }}
+                                  search={
+                                    context
+                                      ? {
+                                          contexto: context,
+                                        }
+                                      : undefined
+                                  }
+                                  to="/requisicoes/$id"
+                                >
+                                  Abrir requisição
+                                </Link>
+                                {contextLabel ? (
+                                  <span className="notification-context">{contextLabel}</span>
+                                ) : null}
+                              </div>
+                            ) : null}
+
+                            {notification.leitura_suportada && !notification.lida ? (
+                              <button
+                                className="notification-read-button"
+                                disabled={markReadMutation.isPending}
+                                onClick={() => {
+                                  markReadMutation.reset();
+                                  markReadMutation.mutate(notification.id);
+                                }}
+                                type="button"
+                              >
+                                Marcar como lida
+                              </button>
+                            ) : null}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : null}
+
+                  {markReadMutation.isError ? (
+                    <p className="notifications-error">
+                      {messageFromNotificationError(markReadMutation.error)}
+                    </p>
                   ) : null}
                 </div>
                 <button
