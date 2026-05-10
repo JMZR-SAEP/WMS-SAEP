@@ -152,6 +152,7 @@ export function AppShell() {
                   ) : null}
 
                   {!notificationsQuery.isLoading &&
+                  !unreadCountQuery.isLoading &&
                   !notificationsQuery.isError &&
                   !unreadCountQuery.isError &&
                   notifications.length === 0 ? (
@@ -159,6 +160,7 @@ export function AppShell() {
                   ) : null}
 
                   {!notificationsQuery.isLoading &&
+                  !unreadCountQuery.isLoading &&
                   !notificationsQuery.isError &&
                   !unreadCountQuery.isError &&
                   notifications.length > 0 ? (

@@ -86,10 +86,11 @@ def marcar_notificacao_como_lida(*, notificacao: Notificacao, usuario: User) -> 
         raise PermissionDenied("Notificações coletivas por papel não possuem leitura individual.")
     if notificacao.destinatario_id != usuario.pk:
         raise PermissionDenied("Usuário não é destinatário desta notificação.")
-    if not notificacao.lida:
-        notificacao.lida = True
-        notificacao.lida_em = timezone.now()
-        notificacao.save(update_fields=["lida", "lida_em"])
+    Notificacao.objects.filter(pk=notificacao.pk, lida=False).update(
+        lida=True,
+        lida_em=timezone.now(),
+    )
+    notificacao.refresh_from_db(fields=["lida", "lida_em"])
     return notificacao
 
 
