@@ -273,7 +273,7 @@ Significado operacional:
 - `make frontend-build`: executa `frontend-gen-api` e gera o build;
 - `make frontend-lint`: executa `frontend-gen-api`, lint e typecheck;
 - `make frontend-test`: executa `frontend-gen-api` e smoke tests com Vitest;
-- `make frontend-e2e`: executa `frontend-gen-api` e smoke E2E com Playwright.
+- `make frontend-e2e`: executa `frontend-gen-api`, aplica `seed-pilot-minimo` e roda E2E real com Playwright contra backend Django + SPA Vite, sem mocks HTTP.
 
 ## 13. OpenAPI
 
@@ -333,6 +333,8 @@ Implementada no workflow `CI`, job `frontend`:
 
 Escopo da issue #43:
 
-- subir backend com bloco 0 estável
+- job separado no workflow `CI` (`frontend-e2e`)
+- subir Postgres + backend Django + SPA Vite
 - carregar `seed_pilot_minimo`
-- rodar Playwright
+- rodar Playwright real serializado (`workers: 1`, Chromium, `trace: on-first-retry`)
+- publicar `frontend/playwright-report/` e traces quando falhar/cancelar
