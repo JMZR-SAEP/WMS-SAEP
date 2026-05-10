@@ -22,6 +22,11 @@ import {
   type RequisicaoListItem,
   type RequisicaoStatus,
 } from "../features/requisitions/requisitions";
+import {
+  ResponsiveWorklistFrame,
+  WorklistEmptyState,
+  WorklistErrorState,
+} from "../shared/ui/worklist";
 
 const DEFAULT_PAGE_SIZE = 20;
 
@@ -57,11 +62,55 @@ function IdentifierCell({ requisicao }: { requisicao: RequisicaoListItem }) {
 
 function EmptyState() {
   return (
-    <div className="empty-state">
-      <p className="eyebrow">Sem resultados</p>
-      <h2>Nenhuma requisição encontrada</h2>
-      <p>Ajuste busca ou status para voltar à lista operacional.</p>
-    </div>
+    <WorklistEmptyState
+      description="Ajuste busca ou status para voltar à lista operacional."
+      eyebrow="Sem resultados"
+      title="Nenhuma requisição encontrada"
+    />
+  );
+}
+
+function MinhasRequisicoesCard({ requisicao }: { requisicao: RequisicaoListItem }) {
+  const thirdParty = isThirdPartyBeneficiary(requisicao);
+
+  return (
+    <article className="worklist-card">
+      <div className="worklist-card-main">
+        <div>
+          <IdentifierCell requisicao={requisicao} />
+          <p className="mt-2 text-xs font-bold uppercase text-[var(--ink-muted)]">
+            {requisicao.total_itens} {requisicao.total_itens === 1 ? "item" : "itens"}
+          </p>
+        </div>
+        <StatusBadge status={requisicao.status} />
+      </div>
+
+      <dl className="worklist-card-details">
+        <div>
+          <dt>Beneficiário</dt>
+          <dd>{requisicao.beneficiario.nome_completo}</dd>
+        </div>
+        <div>
+          <dt>Setor</dt>
+          <dd>{requisicao.setor_beneficiario.nome}</dd>
+        </div>
+        <div>
+          <dt>Atualização</dt>
+          <dd>{contextualDateLabel(requisicao)}</dd>
+        </div>
+      </dl>
+
+      <div className="worklist-card-footer">
+        {thirdParty ? <span className="third-party-badge">Beneficiário terceiro</span> : null}
+        <Link
+          className="action-link compact-action"
+          params={{ id: String(requisicao.id) }}
+          to="/requisicoes/$id"
+        >
+          Abrir
+        </Link>
+      </div>
+    </article>
   );
 }
 
@@ -267,18 +316,14 @@ function MinhasRequisicoesPage() {
       </form>
 
       {listQuery.isError && !authError ? (
-        <div className="error-panel">
+        <WorklistErrorState>
           {queryErrorMessage(listQuery.error, "Não foi possível carregar os dados.")}
-        </div>
+        </WorklistErrorState>
       ) : null}
 
       {!listQuery.isError || authError ? (
-        <div className="table-frame">
-          {listQuery.isPending ? (
-            <div className="loading-state">Carregando requisições...</div>
-          ) : rows.length === 0 ? (
-            <EmptyState />
-          ) : (
+        <ResponsiveWorklistFrame
+          desktop={
             <table className="operational-table">
               <thead>
                 {table.getHeaderGroups().map((headerGroup) => (
@@ -303,8 +348,19 @@ function MinhasRequisicoesPage() {
                 ))}
               </tbody>
             </table>
-          )}
-        </div>
+          }
+          empty={<EmptyState />}
+          isEmpty={rows.length === 0}
+          isPending={listQuery.isPending}
+          mobile={
+            <div aria-label="Cards de minhas requisições" className="worklist-card-list">
+              {rows.map((requisicao) => (
+                <MinhasRequisicoesCard key={requisicao.id} requisicao={requisicao} />
+              ))}
+            </div>
+          }
+          skeletonLabel="Carregando requisições"
+        />
       ) : null}
 
       <div className="pagination-bar">
