@@ -211,29 +211,72 @@ function safeRemoveStorage(key: string) {
   }
 }
 
-function normalizeSnapshot(values: DraftFormValues): DraftFormValues {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function readString(value: unknown) {
+  return typeof value === "string" ? value : "";
+}
+
+function readNullableNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function normalizeSnapshot(values: unknown): DraftFormValues {
+  const snapshot = isRecord(values) ? values : {};
+
   return {
-    beneficiaryMode: values.beneficiaryMode === "third_party" ? "third_party" : "self",
-    beneficiaryId: values.beneficiaryId ?? "",
-    beneficiaryLabel: values.beneficiaryLabel ?? "",
+    beneficiaryMode: snapshot.beneficiaryMode === "third_party" ? "third_party" : "self",
+    beneficiaryId: readString(snapshot.beneficiaryId),
+    beneficiaryLabel: readString(snapshot.beneficiaryLabel),
     beneficiarySearch: "",
     materialSearch: "",
-    observacao: values.observacao ?? "",
-    itens: Array.isArray(values.itens)
-      ? values.itens.map((item) => ({
-          materialId: item.materialId ?? "",
-          materialLabel: item.materialLabel ?? "",
-          materialCode: item.materialCode ?? "",
-          unidadeMedida: item.unidadeMedida ?? "",
-          saldoDisponivel: item.saldoDisponivel ?? null,
-          quantidadeSolicitada: item.quantidadeSolicitada ?? "",
-          observacao: item.observacao ?? "",
+    observacao: readString(snapshot.observacao),
+    itens: Array.isArray(snapshot.itens)
+      ? snapshot.itens.filter(isRecord).map((item) => ({
+          materialId: readString(item.materialId),
+          materialLabel: readString(item.materialLabel),
+          materialCode: readString(item.materialCode),
+          unidadeMedida: readString(item.unidadeMedida),
+          saldoDisponivel: readNullableNumber(item.saldoDisponivel),
+          quantidadeSolicitada: readString(item.quantidadeSolicitada),
+          observacao: readString(item.observacao),
         }))
       : [],
   };
 }
 
-function sameDraftValues(first: DraftFormValues, second: DraftFormValues) {
+function normalizeRecentMaterials(values: unknown): MaterialListItem[] {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+
+  return values
+    .filter(isRecord)
+    .map((item) => {
+      const id = typeof item.id === "number" && Number.isFinite(item.id) ? item.id : null;
+      const codigoCompleto = readString(item.codigo_completo);
+      const nome = readString(item.nome);
+      const unidadeMedida = readString(item.unidade_medida);
+
+      if (id === null || !codigoCompleto || !nome || !unidadeMedida) {
+        return null;
+      }
+
+      return {
+        id,
+        codigo_completo: codigoCompleto,
+        nome,
+        descricao: readString(item.descricao),
+        unidade_medida: unidadeMedida,
+        saldo_disponivel: readNullableNumber(item.saldo_disponivel),
+      };
+    })
+    .filter((item): item is MaterialListItem => item !== null);
+}
+
+function sameDraftValues(first: unknown, second: unknown) {
   return JSON.stringify(normalizeSnapshot(first)) === JSON.stringify(normalizeSnapshot(second));
 }
 
@@ -314,7 +357,7 @@ export function DraftRequisitionEditor({
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
   const [localStep, setLocalStep] = useState<DraftStep>(activeStepProp);
   const [recentMaterials, setRecentMaterials] = useState<MaterialListItem[]>(() =>
-    safeReadJson<MaterialListItem[]>(recentMaterialsStorageKey(session.id)) ?? [],
+    normalizeRecentMaterials(safeReadJson<unknown>(recentMaterialsStorageKey(session.id))),
   );
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const cancelConfirmationButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -326,7 +369,7 @@ export function DraftRequisitionEditor({
     [initialRequisition, session],
   );
   const recoveredValues = useMemo(
-    () => safeReadJson<DraftFormValues>(storageKey),
+    () => safeReadJson<unknown>(storageKey),
     [storageKey],
   );
   const hasRecoveredSnapshot = Boolean(recoveredValues && !sameDraftValues(recoveredValues, baseValues));
@@ -503,6 +546,7 @@ export function DraftRequisitionEditor({
     },
     onSuccess: async (requisition) => {
       setFormError(null);
+      suppressNextPersistRef.current = true;
       clearDraftStorage();
       if (initialRequisition) {
         queryClient.removeQueries({

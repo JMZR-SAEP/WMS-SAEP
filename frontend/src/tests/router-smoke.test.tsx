@@ -2935,10 +2935,17 @@ describe("frontend pilot router", () => {
       throw new Error(`Unexpected request: ${requestUrl(request)}`);
     });
     vi.stubGlobal("fetch", fetchMock);
+    window.sessionStorage.setItem(
+      "wms-saep:draft:v1:user:10:draft:101",
+      JSON.stringify({ observacao: "Rascunho a descartar" }),
+    );
 
     const { container } = renderRoute("/requisicoes/101");
 
     expect(await screen.findByRole("heading", { name: "Editar rascunho" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Observação geral"), {
+      target: { value: "Rascunho sujo" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Descartar rascunho" }));
     expect(await screen.findByRole("dialog")).toHaveTextContent("Descartar rascunho?");
     fireEvent.click(screen.getByRole("button", { name: "Confirmar descarte" }));
@@ -2947,6 +2954,7 @@ describe("frontend pilot router", () => {
       expect(discardCalled).toBe(true);
       expect(container.ownerDocument.location.pathname).toBe("/minhas-requisicoes");
     });
+    expect(window.sessionStorage.getItem("wms-saep:draft:v1:user:10:draft:101")).toBeNull();
   });
 
   it("cancels a numbered draft instead of discarding it", async () => {
@@ -2974,10 +2982,17 @@ describe("frontend pilot router", () => {
       throw new Error(`Unexpected request: ${requestUrl(request)}`);
     });
     vi.stubGlobal("fetch", fetchMock);
+    window.sessionStorage.setItem(
+      "wms-saep:draft:v1:user:10:draft:101",
+      JSON.stringify({ observacao: "Rascunho numerado" }),
+    );
 
     const { container } = renderRoute("/requisicoes/101");
 
     expect(await screen.findByRole("heading", { name: "Editar rascunho" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Observação geral"), {
+      target: { value: "Cancelamento sujo" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "Cancelar requisição" }));
     expect(await screen.findByRole("dialog")).toHaveTextContent("Cancelar requisição?");
     fireEvent.click(screen.getByRole("button", { name: "Confirmar cancelamento" }));
@@ -2986,6 +3001,7 @@ describe("frontend pilot router", () => {
       expect(cancelPayload).toEqual({ motivo_cancelamento: "" });
       expect(container.ownerDocument.location.pathname).toBe("/minhas-requisicoes");
     });
+    expect(window.sessionStorage.getItem("wms-saep:draft:v1:user:10:draft:101")).toBeNull();
   });
 
   it("shows material stock and blocks adding material without positive stock", async () => {
@@ -3074,6 +3090,42 @@ describe("frontend pilot router", () => {
     expect(screen.getByText("Materiais recentes")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Adicionar Papel sulfite A4" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Adicionar Caneta azul" })).toBeInTheDocument();
+  });
+
+  it("ignores malformed draft and recent-material snapshots from session storage", async () => {
+    window.sessionStorage.setItem(
+      "wms-saep:draft:v1:user:10:new",
+      JSON.stringify({
+        beneficiaryMode: "third_party",
+        beneficiaryId: 123,
+        beneficiaryLabel: ["invalido"],
+        observacao: null,
+        itens: [null, "quebrado", { materialId: 301, saldoDisponivel: "12" }],
+      }),
+    );
+    window.sessionStorage.setItem(
+      "wms-saep:recent-materials:v1:user:10",
+      JSON.stringify([null, "quebrado", { id: 301, nome: "Sem codigo" }]),
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((request: Request) => {
+        if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+          return sessionResponse();
+        }
+
+        const notificationsResponse = maybeNotificationsRequest(request);
+        if (notificationsResponse) return notificationsResponse;
+        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+      }),
+    );
+
+    renderRoute("/requisicoes/nova");
+
+    expect(await screen.findByRole("heading", { name: "Nova requisição" })).toBeInTheDocument();
+    expect(screen.getByText("Rascunho local recuperado")).toBeInTheDocument();
+    expect(screen.getByText("Selecionado:")).toBeInTheDocument();
+    expect(screen.queryByText("Sem codigo")).not.toBeInTheDocument();
   });
 
   it("renders notifications counter and collective badge in app shell", async () => {

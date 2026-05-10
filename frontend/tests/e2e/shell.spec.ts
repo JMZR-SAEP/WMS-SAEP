@@ -92,7 +92,7 @@ test("creates draft and submits to authorization using seed scenario", async ({ 
   await page.getByLabel("Quantidade solicitada").fill("2");
 
   await page.getByRole("button", { name: "Salvar rascunho" }).click();
-  await expect(page).toHaveURL(/\/requisicoes\/\d+$/);
+  await expect(page).toHaveURL(/\/requisicoes\/\d+\?etapa=itens$/);
   await expect(page.getByRole("heading", { name: "Editar rascunho" })).toBeVisible();
 
   await page.getByRole("button", { name: "Enviar para autorização" }).click();
