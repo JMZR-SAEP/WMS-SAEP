@@ -19,9 +19,9 @@ type NavigationItem = {
 export const navigationItems: NavigationItem[] = [
   {
     to: "/",
-    label: "Mapa da fundação",
+    label: "Início",
     hint: "shell",
-    tag: "Scaffold",
+    tag: "Principal",
     matches: (pathname: string) => pathname === "/",
   },
   {

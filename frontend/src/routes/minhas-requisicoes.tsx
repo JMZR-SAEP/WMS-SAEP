@@ -102,7 +102,7 @@ function MinhasRequisicoesPage() {
         cell: ({ row }) => (
           <div className="min-w-[11rem]">
             <IdentifierCell requisicao={row.original} />
-            <p className="mt-2 text-xs uppercase tracking-[0.18em] text-[var(--ink-muted)]">
+            <p className="mt-2 text-xs font-bold uppercase text-[var(--ink-muted)]">
               {row.original.total_itens} {row.original.total_itens === 1 ? "item" : "itens"}
             </p>
           </div>
@@ -136,7 +136,7 @@ function MinhasRequisicoesPage() {
         cell: ({ row }) => (
           <div className="text-sm text-[var(--ink-soft)]">
             <p>{contextualDateLabel(row.original)}</p>
-            <p className="mt-1 text-xs uppercase tracking-[0.16em] text-[var(--ink-muted)]">
+            <p className="mt-1 text-xs font-bold uppercase text-[var(--ink-muted)]">
               criada em {formatDateTime(row.original.data_criacao)}
             </p>
           </div>

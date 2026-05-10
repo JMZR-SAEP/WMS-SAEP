@@ -593,7 +593,16 @@ function mockCurrentSession(papel = "solicitante") {
   );
 }
 
-describe("frontend scaffold router", () => {
+describe("frontend pilot router", () => {
+  it("renders login with SAEP identity and no scaffold copy", async () => {
+    renderRoute("/login");
+
+    expect(await screen.findAllByRole("img", { name: "SAEP" })).toHaveLength(1);
+    expect(screen.getByRole("heading", { name: "Entrar no piloto" })).toBeInTheDocument();
+    expect(screen.queryByText(/scaffold/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/próxima slice/i)).not.toBeInTheDocument();
+  });
+
   it("resolves root to home by operational papel", async () => {
     mockCurrentSession("chefe_setor");
 
@@ -615,6 +624,33 @@ describe("frontend scaffold router", () => {
     expect(
       await screen.findByRole("heading", { name: "Papel operacional não mapeado" }),
     ).toBeInTheDocument();
+  });
+
+  it("renders authenticated shell with operational SAEP copy", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((request: Request) => {
+        if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+          return sessionResponse();
+        }
+
+        if (requestUrl(request).includes("/api/v1/requisitions/mine/")) {
+          return requisitionListResponse();
+        }
+
+        const notificationsResponse = maybeNotificationsRequest(request);
+        if (notificationsResponse) return notificationsResponse;
+        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+      }),
+    );
+
+    renderRoute("/minhas-requisicoes");
+
+    expect(await screen.findByRole("img", { name: "SAEP" })).toBeInTheDocument();
+    expect(screen.getByText("WMS-SAEP")).toBeInTheDocument();
+    expect(screen.getByText("Requisições de materiais")).toBeInTheDocument();
+    expect(screen.queryByText(/scaffold/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/fundação/i)).not.toBeInTheDocument();
   });
 
   it("logs in with matricula and sends chefe de setor to authorization queue", async () => {

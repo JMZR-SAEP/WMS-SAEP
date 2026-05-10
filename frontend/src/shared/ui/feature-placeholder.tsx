@@ -25,7 +25,7 @@ export function FeaturePlaceholder({
       <div className="space-y-5">
         <div>
           <p className="eyebrow">{kicker}</p>
-          <h3 className="mt-3 font-title text-4xl leading-none tracking-[-0.04em]">{title}</h3>
+          <h3 className="mt-3 text-3xl font-bold leading-tight">{title}</h3>
           <p className="mt-4 max-w-[58ch] text-base leading-7 text-[var(--ink-soft)]">
             {summary}
           </p>
@@ -34,7 +34,7 @@ export function FeaturePlaceholder({
         <div className="glass-inset p-5">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="eyebrow">Próxima slice</p>
+              <p className="eyebrow">Fluxo operacional</p>
               <p className="mt-2 text-lg font-semibold text-[var(--ink-strong)]">{nextSlice}</p>
             </div>
             <Link to="/" className="action-link">
@@ -69,7 +69,7 @@ export function FeaturePlaceholder({
       </div>
 
       <aside className="glass-inset overflow-hidden p-5">
-        <p className="eyebrow">Preview scaffold</p>
+        <p className="eyebrow">Ação principal</p>
         <div className="mt-4">{preview}</div>
       </aside>
     </section>
