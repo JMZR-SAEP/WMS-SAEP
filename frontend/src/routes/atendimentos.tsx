@@ -18,6 +18,11 @@ import {
   statusLabel,
   type RequisicaoPendingFulfillmentItem,
 } from "../features/requisitions/requisitions";
+import {
+  ResponsiveWorklistFrame,
+  WorklistEmptyState,
+  WorklistErrorState,
+} from "../shared/ui/worklist";
 
 const DEFAULT_PAGE_SIZE = 20;
 
@@ -38,11 +43,67 @@ export const Route = createFileRoute("/atendimentos")({
 
 function EmptyState() {
   return (
-    <div className="empty-state">
-      <p className="eyebrow">Sem pendências</p>
-      <h2>Nenhum atendimento pendente</h2>
-      <p>A fila mostra requisições autorizadas aguardando retirada pelo Almoxarifado.</p>
-    </div>
+    <WorklistEmptyState
+      description="A fila mostra requisições autorizadas aguardando retirada pelo Almoxarifado."
+      eyebrow="Sem pendências"
+      title="Nenhum atendimento pendente"
+    />
+  );
+}
+
+function AtendimentoCard({
+  currentPage,
+  requisicao,
+}: {
+  currentPage: number;
+  requisicao: RequisicaoPendingFulfillmentItem;
+}) {
+  return (
+    <article className="worklist-card">
+      <div className="worklist-card-main">
+        <div>
+          <span className="font-semibold text-[var(--ink-strong)]">
+            {requisicao.numero_publico ?? `#${requisicao.id}`}
+          </span>
+          <p className="mt-2 text-xs font-bold uppercase text-[var(--ink-muted)]">
+            {requisicao.total_itens} {requisicao.total_itens === 1 ? "item" : "itens"}
+          </p>
+        </div>
+        <span className={`req-status req-status-${requisicao.status}`}>
+          {statusLabel(requisicao.status)}
+        </span>
+      </div>
+
+      <dl className="worklist-card-details">
+        <div>
+          <dt>Beneficiário</dt>
+          <dd>{requisicao.beneficiario.nome_completo}</dd>
+        </div>
+        <div>
+          <dt>Setor</dt>
+          <dd>{requisicao.setor_beneficiario.nome}</dd>
+        </div>
+        <div>
+          <dt>Autorizador</dt>
+          <dd>{requisicao.chefe_autorizador.nome_completo}</dd>
+        </div>
+        <div>
+          <dt>Autorização</dt>
+          <dd>{formatDateTime(requisicao.data_autorizacao_ou_recusa)}</dd>
+        </div>
+      </dl>
+
+      <div className="worklist-card-footer">
+        <Link
+          className="action-link compact-action"
+          params={{ id: String(requisicao.id) }}
+          search={{ contexto: "atendimento", page: currentPage === 1 ? undefined : currentPage }}
+          to="/requisicoes/$id"
+        >
+          Abrir
+        </Link>
+      </div>
+    </article>
   );
 }
 
@@ -211,18 +272,14 @@ function AtendimentosPage() {
       </div>
 
       {listQuery.isError ? (
-        <div className="error-panel">
+        <WorklistErrorState>
           {queryErrorMessage(listQuery.error, "Não foi possível carregar atendimentos pendentes.")}
-        </div>
+        </WorklistErrorState>
       ) : null}
 
       {!listQuery.isError ? (
-        <div className="table-frame">
-          {listQuery.isPending ? (
-            <div className="loading-state">Carregando atendimentos...</div>
-          ) : rows.length === 0 ? (
-            <EmptyState />
-          ) : (
+        <ResponsiveWorklistFrame
+          desktop={
             <table className="operational-table">
               <thead>
                 {table.getHeaderGroups().map((headerGroup) => (
@@ -247,8 +304,23 @@ function AtendimentosPage() {
                 ))}
               </tbody>
             </table>
-          )}
-        </div>
+          }
+          empty={<EmptyState />}
+          isEmpty={rows.length === 0}
+          isPending={listQuery.isPending}
+          mobile={
+            <div aria-label="Cards da fila de atendimento" className="worklist-card-list">
+              {rows.map((requisicao) => (
+                <AtendimentoCard
+                  currentPage={currentPage}
+                  key={requisicao.id}
+                  requisicao={requisicao}
+                />
+              ))}
+            </div>
+          }
+          skeletonLabel="Carregando atendimentos"
+        />
       ) : null}
 
       <div className="pagination-bar">

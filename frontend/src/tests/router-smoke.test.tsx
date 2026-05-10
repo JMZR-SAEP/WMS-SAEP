@@ -33,6 +33,22 @@ function requestSearchParam(request: Request, name: string) {
   return new URL(requestUrl(request)).searchParams.get(name);
 }
 
+function mockWorklistViewport(isMobile: boolean) {
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn((query: string) => ({
+      matches: isMobile && query === "(max-width: 860px)",
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  );
+}
+
 function authSession(papel = "solicitante") {
   return {
     id: 10,
@@ -903,6 +919,84 @@ describe("frontend pilot router", () => {
     expect(screen.getByText("Beneficiário terceiro")).toBeInTheDocument();
   });
 
+  it("renders minhas requisicoes as mobile cards without table", async () => {
+    mockWorklistViewport(true);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((request: Request) => {
+        if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+          return sessionResponse();
+        }
+
+        if (requestUrl(request).includes("/api/v1/requisitions/mine/")) {
+          return requisitionListResponse();
+        }
+
+        const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
+      }),
+    );
+
+    renderRoute("/minhas-requisicoes");
+
+    expect(await screen.findByLabelText("Cards de minhas requisições")).toBeInTheDocument();
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Abrir" })).toHaveAttribute(
+      "href",
+      "/requisicoes/101",
+    );
+  });
+
+  it("keeps minhas requisicoes as a desktop table", async () => {
+    mockWorklistViewport(false);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((request: Request) => {
+        if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+          return sessionResponse();
+        }
+
+        if (requestUrl(request).includes("/api/v1/requisitions/mine/")) {
+          return requisitionListResponse();
+        }
+
+        const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
+      }),
+    );
+
+    renderRoute("/minhas-requisicoes");
+
+    expect(await screen.findByRole("table")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Cards de minhas requisições")).not.toBeInTheDocument();
+  });
+
+  it("shows a screen skeleton while minhas requisicoes loads", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((request: Request) => {
+        if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+          return sessionResponse();
+        }
+
+        if (requestUrl(request).includes("/api/v1/requisitions/mine/")) {
+          return new Promise<Response>(() => {});
+        }
+
+        const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
+      }),
+    );
+
+    renderRoute("/minhas-requisicoes");
+
+    expect(await screen.findByRole("status", { name: "Carregando requisições" })).toBeInTheDocument();
+    expect(screen.queryByText("Carregando requisições...")).not.toBeInTheDocument();
+  });
+
   it("does not show third-party badge when creator and beneficiary are the same", async () => {
     vi.stubGlobal(
       "fetch",
@@ -1100,6 +1194,35 @@ describe("frontend pilot router", () => {
     expect(screen.getByText("1 registro")).toBeInTheDocument();
   });
 
+  it("renders authorization queue as mobile cards without table", async () => {
+    mockWorklistViewport(true);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((request: Request) => {
+        if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+          return sessionResponse(chefeSession());
+        }
+
+        if (requestUrl(request).includes("/api/v1/requisitions/pending-approvals/")) {
+          return pendingApprovalListResponse();
+        }
+
+        const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
+      }),
+    );
+
+    renderRoute("/autorizacoes?page=2");
+
+    expect(await screen.findByLabelText("Cards da fila de autorizações")).toBeInTheDocument();
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Abrir" })).toHaveAttribute(
+      "href",
+      "/requisicoes/101?contexto=autorizacao&page=2",
+    );
+  });
+
   it("redirects solicitante away from authorization queue", async () => {
     vi.stubGlobal(
       "fetch",
@@ -1236,6 +1359,35 @@ describe("frontend pilot router", () => {
     expect(screen.getByText("Chefe Piloto")).toBeInTheDocument();
     expect(screen.getByText(formatDateTime("2026-05-01T12:00:00Z"))).toBeInTheDocument();
     expect(screen.getByText("1 registro")).toBeInTheDocument();
+  });
+
+  it("renders fulfillment queue as mobile cards without table", async () => {
+    mockWorklistViewport(true);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((request: Request) => {
+        if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+          return sessionResponse(warehouseSession());
+        }
+
+        if (requestUrl(request).includes("/api/v1/requisitions/pending-fulfillments/")) {
+          return pendingFulfillmentListResponse();
+        }
+
+        const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
+      throw new Error(`Unexpected request: ${requestUrl(request)}`);
+      }),
+    );
+
+    renderRoute("/atendimentos?page=2");
+
+    expect(await screen.findByLabelText("Cards da fila de atendimento")).toBeInTheDocument();
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Abrir" })).toHaveAttribute(
+      "href",
+      "/requisicoes/101?contexto=atendimento&page=2",
+    );
   });
 
   it("opens canonical requisition detail from fulfillment queue with context", async () => {
