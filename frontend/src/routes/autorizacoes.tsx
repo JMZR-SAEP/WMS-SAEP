@@ -297,8 +297,15 @@ function AutorizacoesPage() {
         cell: ({ row }) => {
           const slaStatus = calcSlaStatus(row.original.data_envio_autorizacao);
           const isBeingAuthorized = quickAuthorizing && quickAuthorizingId === row.original.id;
+          const rowError =
+            quickAuthorizeIsError && quickAuthorizingId === row.original.id
+              ? queryErrorMessage(quickAuthorizeErrorObj, "Não foi possível autorizar.")
+              : null;
           return (
             <div className="flex items-center gap-2">
+              {rowError ? (
+                <div className="error-panel compact-error">{rowError}</div>
+              ) : null}
               {!isSlaAlerted(slaStatus) ? (
                 <button
                   className="action-link compact-action"
@@ -322,7 +329,7 @@ function AutorizacoesPage() {
         },
       },
     ],
-    [currentPage, handleQuickAuthorize, quickAuthorizing, quickAuthorizingId],
+    [currentPage, handleQuickAuthorize, quickAuthorizeErrorObj, quickAuthorizeIsError, quickAuthorizing, quickAuthorizingId],
   );
   // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
