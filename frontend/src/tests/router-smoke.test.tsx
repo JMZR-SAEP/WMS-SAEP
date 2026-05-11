@@ -22,6 +22,7 @@ function renderRoute(pathname: string, queryClient = createAppQueryClient()) {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   window.sessionStorage.clear();
   if (originalClipboardDescriptor) {
@@ -3652,6 +3653,7 @@ describe("frontend pilot router", () => {
     });
 
     it("oculta botão 'Autorizar tudo' e exibe badge 'Atenção' quando SLA em atenção", async () => {
+      vi.setSystemTime(new Date("2026-05-11T12:00:00Z"));
       const twoHoursAgo = new Date(Date.now() - 120 * 60 * 1000).toISOString();
       mockAutorizacoesRoute(twoHoursAgo);
       renderRoute("/autorizacoes");
@@ -3660,6 +3662,7 @@ describe("frontend pilot router", () => {
     });
 
     it("oculta botão 'Autorizar tudo' e exibe badge 'Atrasada' quando SLA ultrapassado", async () => {
+      vi.setSystemTime(new Date("2026-05-11T12:00:00Z"));
       const fiveHoursAgo = new Date(Date.now() - 300 * 60 * 1000).toISOString();
       mockAutorizacoesRoute(fiveHoursAgo);
       renderRoute("/autorizacoes");
