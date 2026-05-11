@@ -267,3 +267,43 @@ class TestNotificacoesAPI:
 
         assert response.status_code == 404
         assert response.data["error"]["code"] == "not_found"
+
+    def test_push_config_retorna_chave_publica_quando_configurado(self, settings):
+        settings.WEB_PUSH_VAPID_PUBLIC_KEY = "BPublicKey"
+
+        usuario = self._criar_usuario("41016", "Usuario Push Config")
+        client = APIClient()
+        client.force_authenticate(user=usuario)
+
+        response = client.get(reverse("notification-push-config"))
+
+        assert response.status_code == 200
+        assert response.data == {
+            "enabled": True,
+            "vapid_public_key": "BPublicKey",
+        }
+
+    def test_push_subscriptions_registra_assinatura_do_usuario_autenticado(self, settings):
+        settings.WEB_PUSH_VAPID_PUBLIC_KEY = "BPublicKey"
+
+        usuario = self._criar_usuario("41017", "Usuario Push Subscription")
+        client = APIClient()
+        client.force_authenticate(user=usuario)
+
+        response = client.post(
+            reverse("notification-push-subscriptions"),
+            data={
+                "endpoint": "https://push.example.test/subscription/abc",
+                "keys": {
+                    "p256dh": "p256dh-key",
+                    "auth": "auth-key",
+                },
+            },
+            format="json",
+        )
+
+        assert response.status_code == 200
+        assert response.data == {
+            "endpoint": "https://push.example.test/subscription/abc",
+            "active": True,
+        }

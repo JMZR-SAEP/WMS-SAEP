@@ -1,0 +1,24 @@
+{
+  "name": "WMS-SAEP Piloto",
+  "short_name": "WMS-SAEP",
+  "description": "Almoxarifado do piloto SAEP para requisicoes, autorizacoes e atendimento.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f6f8f7",
+  "theme_color": "#f6f8f7",
+  "icons": [
+    {
+      "src": "/saep-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/saep-logo.webp",
+      "sizes": "1057x236",
+      "type": "image/webp",
+      "purpose": "any"
+    }
+  ]
+}

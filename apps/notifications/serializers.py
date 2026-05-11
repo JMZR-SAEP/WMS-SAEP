@@ -1,7 +1,7 @@
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from apps.notifications.models import Notificacao
+from apps.notifications.models import Notificacao, PushSubscription
 
 REQUISICAO_APP_LABEL = "requisitions"
 REQUISICAO_MODEL = "requisicao"
@@ -97,3 +97,29 @@ class NotificacaoListPaginatedSerializer(serializers.Serializer):
 
 class NotificacaoUnreadCountOutputSerializer(serializers.Serializer):
     unread_count = serializers.IntegerField(read_only=True)
+
+
+class PushConfigOutputSerializer(serializers.Serializer):
+    enabled = serializers.BooleanField(read_only=True)
+    vapid_public_key = serializers.CharField(allow_blank=True, read_only=True)
+
+
+class PushSubscriptionKeysInputSerializer(serializers.Serializer):
+    p256dh = serializers.CharField()
+    auth = serializers.CharField()
+
+
+class PushSubscriptionInputSerializer(serializers.Serializer):
+    endpoint = serializers.URLField(max_length=500)
+    keys = PushSubscriptionKeysInputSerializer()
+
+
+class PushSubscriptionOutputSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PushSubscription
+        fields = ["endpoint", "active"]
+        read_only_fields = fields
+
+
+class PushSubscriptionDeactivateInputSerializer(serializers.Serializer):
+    endpoint = serializers.URLField(max_length=500)

@@ -1,10 +1,11 @@
+import json
 from decimal import Decimal
 
 import pytest
 from rest_framework.exceptions import PermissionDenied
 
 from apps.materials.models import GrupoMaterial, Material, SubgrupoMaterial
-from apps.notifications.models import Notificacao, TipoNotificacao
+from apps.notifications.models import Notificacao, PushSubscription, TipoNotificacao
 from apps.notifications.services import (
     criar_notificacao_papel,
     criar_notificacao_usuario,
@@ -161,6 +162,107 @@ class TestNotificacoes:
             tipo=TipoNotificacao.REQUISICAO_ENVIADA_AUTORIZACAO,
         )
         assert notificacao.objeto_relacionado.status == StatusRequisicao.AGUARDANDO_AUTORIZACAO
+
+    def test_envio_para_autorizacao_dispara_push_para_chefe_do_setor(
+        self,
+        monkeypatch,
+        settings,
+    ):
+        settings.WEB_PUSH_VAPID_PRIVATE_KEY = "private-key"
+        settings.WEB_PUSH_VAPID_SUBJECT = "mailto:suporte@saep.test"
+        chamadas = []
+
+        def fake_webpush(**kwargs):
+            chamadas.append(kwargs)
+
+        monkeypatch.setattr("apps.notifications.services._webpush", fake_webpush)
+
+        setor = self._criar_setor("Push Envio", "30016")
+        PushSubscription.objects.create(
+            usuario=setor.chefe_responsavel,
+            endpoint="https://push.example.test/subscription/chefe",
+            p256dh="p256dh-key",
+            auth="auth-key",
+        )
+        solicitante = self._criar_usuario("30017", "Solicitante Push", setor=setor)
+        material = self._criar_material_com_estoque("001.001.306", Decimal("5"))
+        requisicao = criar_rascunho_requisicao(
+            criador=solicitante,
+            beneficiario=solicitante,
+            observacao="",
+            itens=[
+                ItemRascunhoData(
+                    material_id=material.id,
+                    quantidade_solicitada=Decimal("2"),
+                )
+            ],
+        )
+
+        enviada = enviar_para_autorizacao(requisicao=requisicao, ator=solicitante)
+
+        assert len(chamadas) == 1
+        chamada = chamadas[0]
+        assert chamada["subscription_info"] == {
+            "endpoint": "https://push.example.test/subscription/chefe",
+            "keys": {
+                "p256dh": "p256dh-key",
+                "auth": "auth-key",
+            },
+        }
+        assert chamada["vapid_private_key"] == "private-key"
+        assert chamada["vapid_claims"] == {"sub": "mailto:suporte@saep.test"}
+        payload = json.loads(chamada["data"])
+        assert payload["url"] == f"/requisicoes/{enviada.id}?contexto=autorizacao"
+        assert "Solicitante Push" in payload["body"]
+        assert "Material" not in payload["body"]
+        assert "Push Envio" not in payload["body"]
+
+    def test_falha_410_de_push_desativa_assinatura_sem_bloquear_requisicao(
+        self,
+        monkeypatch,
+        settings,
+    ):
+        settings.WEB_PUSH_VAPID_PRIVATE_KEY = "private-key"
+        settings.WEB_PUSH_VAPID_SUBJECT = "mailto:suporte@saep.test"
+
+        class FakeResponse:
+            status_code = 410
+
+        class FakePushError(Exception):
+            response = FakeResponse()
+
+        def fake_webpush(**kwargs):
+            raise FakePushError("push gone")
+
+        monkeypatch.setattr("apps.notifications.services._webpush", fake_webpush)
+
+        setor = self._criar_setor("Push Falha", "30018")
+        subscription = PushSubscription.objects.create(
+            usuario=setor.chefe_responsavel,
+            endpoint="https://push.example.test/subscription/gone",
+            p256dh="p256dh-key",
+            auth="auth-key",
+        )
+        solicitante = self._criar_usuario("30019", "Solicitante Push Falha", setor=setor)
+        material = self._criar_material_com_estoque("001.001.307", Decimal("5"))
+        requisicao = criar_rascunho_requisicao(
+            criador=solicitante,
+            beneficiario=solicitante,
+            observacao="",
+            itens=[
+                ItemRascunhoData(
+                    material_id=material.id,
+                    quantidade_solicitada=Decimal("2"),
+                )
+            ],
+        )
+
+        enviada = enviar_para_autorizacao(requisicao=requisicao, ator=solicitante)
+
+        assert enviada.status == StatusRequisicao.AGUARDANDO_AUTORIZACAO
+        subscription.refresh_from_db()
+        assert subscription.active is False
+        assert subscription.last_failure_status == 410
 
     def test_autorizacao_notifica_solicitante_e_almoxarifado(self):
         setor = self._criar_setor("Notificacao Autorizacao", "30004")

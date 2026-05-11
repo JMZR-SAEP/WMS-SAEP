@@ -1,10 +1,12 @@
+import json
 from collections.abc import Iterable
 
+from django.conf import settings
 from django.contrib.contenttypes.models import ContentType
 from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied
 
-from apps.notifications.models import Notificacao, TipoNotificacao
+from apps.notifications.models import Notificacao, PushSubscription, TipoNotificacao
 from apps.users.models import PapelChoices, User
 
 
@@ -96,3 +98,110 @@ def marcar_notificacao_como_lida(*, notificacao: Notificacao, usuario: User) -> 
 
 def contar_notificacoes_individuais_nao_lidas(*, usuario: User) -> int:
     return Notificacao.objects.filter(destinatario=usuario, lida=False).count()
+
+
+def registrar_push_subscription(
+    *,
+    usuario: User,
+    endpoint: str,
+    p256dh: str,
+    auth: str,
+) -> PushSubscription:
+    subscription, _ = PushSubscription.objects.update_or_create(
+        endpoint=endpoint,
+        defaults={
+            "usuario": usuario,
+            "p256dh": p256dh,
+            "auth": auth,
+            "active": True,
+            "last_failure_status": None,
+            "last_failure_reason": "",
+        },
+    )
+    return subscription
+
+
+def desativar_push_subscription(*, usuario: User, endpoint: str) -> None:
+    PushSubscription.objects.filter(usuario=usuario, endpoint=endpoint).update(active=False)
+
+
+def _webpush(**kwargs):
+    from pywebpush import webpush
+
+    return webpush(**kwargs)
+
+
+def _status_from_push_exception(exc: Exception) -> int | None:
+    response = getattr(exc, "response", None)
+    status_code = getattr(response, "status_code", None)
+    if isinstance(status_code, int):
+        return status_code
+    return None
+
+
+def _record_push_failure(subscription: PushSubscription, exc: Exception) -> None:
+    status_code = _status_from_push_exception(exc)
+    subscription.active = status_code not in (404, 410)
+    subscription.last_failure_at = timezone.now()
+    subscription.last_failure_status = status_code
+    subscription.last_failure_reason = str(exc)[:200]
+    subscription.save(
+        update_fields=[
+            "active",
+            "last_failure_at",
+            "last_failure_status",
+            "last_failure_reason",
+            "updated_at",
+        ]
+    )
+
+
+def enviar_push_requisicao_aguardando_autorizacao(*, requisicao) -> None:
+    private_key = getattr(settings, "WEB_PUSH_VAPID_PRIVATE_KEY", "")
+    subject = getattr(settings, "WEB_PUSH_VAPID_SUBJECT", "")
+    if not private_key or not subject:
+        return
+
+    chefe = requisicao.setor_beneficiario.chefe_responsavel
+    subscriptions = PushSubscription.objects.filter(usuario=chefe, active=True)
+    if not subscriptions.exists():
+        return
+
+    payload = {
+        "title": "Requisição aguardando autorização",
+        "body": f"Beneficiário: {requisicao.beneficiario.nome_completo}",
+        "url": f"/requisicoes/{requisicao.pk}?contexto=autorizacao",
+        "tag": f"requisicao-autorizacao-{requisicao.pk}",
+    }
+
+    for subscription in subscriptions:
+        try:
+            _webpush(
+                subscription_info={
+                    "endpoint": subscription.endpoint,
+                    "keys": {
+                        "p256dh": subscription.p256dh,
+                        "auth": subscription.auth,
+                    },
+                },
+                data=json.dumps(payload),
+                vapid_private_key=private_key,
+                vapid_claims={"sub": subject},
+                ttl=3600,
+                timeout=10,
+            )
+        except Exception as exc:
+            _record_push_failure(subscription, exc)
+            continue
+
+        subscription.last_success_at = timezone.now()
+        subscription.last_failure_status = None
+        subscription.last_failure_reason = ""
+        subscription.save(
+            update_fields=[
+                "last_success_at",
+                "last_failure_status",
+                "last_failure_reason",
+                "updated_at",
+            ]
+        )

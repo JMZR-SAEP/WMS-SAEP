@@ -135,6 +135,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/notifications/push/config/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Retorna configuração pública de Web Push para o usuário autenticado. */
+        get: operations["notifications_push_config"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/push/subscriptions/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Registra ou atualiza a assinatura Web Push do usuário autenticado. */
+        post: operations["notifications_push_subscriptions"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/push/subscriptions/deactivate/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Desativa uma assinatura Web Push do usuário autenticado pelo endpoint. */
+        post: operations["notifications_push_subscriptions_deactivate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/notifications/unread-count/": {
         parameters: {
             query?: never;
@@ -535,6 +586,31 @@ export interface components {
         NotificacaoOutputTipoEnum: "requisicao_enviada_autorizacao" | "requisicao_autorizada" | "requisicao_recusada" | "requisicao_cancelada" | "requisicao_atendida";
         NotificacaoUnreadCountOutput: {
             readonly unread_count: number;
+        };
+        PushConfigOutput: {
+            readonly enabled: boolean;
+            readonly vapid_public_key: string;
+        };
+        PushSubscriptionDeactivateInput: {
+            /** Format: uri */
+            endpoint: string;
+        };
+        PushSubscriptionInput: {
+            /** Format: uri */
+            endpoint: string;
+            keys: components["schemas"]["PushSubscriptionKeysInput"];
+        };
+        PushSubscriptionKeysInput: {
+            p256dh: string;
+            auth: string;
+        };
+        PushSubscriptionOutput: {
+            /**
+             * Format: uri
+             * @description Endpoint retornado pelo PushManager do navegador.
+             */
+            readonly endpoint: string;
+            readonly active: boolean;
         };
         RequisicaoActionOutput: {
             readonly id: number;
@@ -1121,6 +1197,114 @@ export interface operations {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    notifications_push_config: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PushConfigOutput"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    notifications_push_subscriptions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PushSubscriptionInput"];
+                "application/x-www-form-urlencoded": components["schemas"]["PushSubscriptionInput"];
+                "multipart/form-data": components["schemas"]["PushSubscriptionInput"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PushSubscriptionOutput"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    notifications_push_subscriptions_deactivate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PushSubscriptionDeactivateInput"];
+                "application/x-www-form-urlencoded": components["schemas"]["PushSubscriptionDeactivateInput"];
+                "multipart/form-data": components["schemas"]["PushSubscriptionDeactivateInput"];
+            };
+        };
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

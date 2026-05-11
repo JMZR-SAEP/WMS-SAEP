@@ -96,3 +96,37 @@ class Notificacao(models.Model):
     def __str__(self):
         destino = self.destinatario_id or self.papel_destinatario
         return f"{self.tipo} -> {destino}"
+
+
+class PushSubscription(models.Model):
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="push_subscriptions",
+        help_text="Usuário autenticado dono da assinatura Web Push.",
+    )
+    endpoint = models.URLField(
+        max_length=500,
+        unique=True,
+        help_text="Endpoint retornado pelo PushManager do navegador.",
+    )
+    p256dh = models.TextField(help_text="Chave pública p256dh da assinatura.")
+    auth = models.TextField(help_text="Segredo auth da assinatura.")
+    active = models.BooleanField(default=True, db_index=True)
+    last_success_at = models.DateTimeField(null=True, blank=True)
+    last_failure_at = models.DateTimeField(null=True, blank=True)
+    last_failure_status = models.PositiveSmallIntegerField(null=True, blank=True)
+    last_failure_reason = models.CharField(max_length=200, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Assinatura push"
+        verbose_name_plural = "Assinaturas push"
+        ordering = ["-updated_at", "-id"]
+        indexes = [
+            models.Index(fields=["usuario", "active", "-updated_at"]),
+        ]
+
+    def __str__(self):
+        return f"push:{self.usuario_id}:{self.endpoint}"

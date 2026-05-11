@@ -5,12 +5,21 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { AppProviders } from "../app/providers";
 import { createAppQueryClient } from "../app/query-client";
 import { buildRouter } from "../app/router";
+import { markPushOnboardingSeen, resetPushOnboardingStateForTests } from "../features/pwa/push";
 import { formatDateTime, requisitionsQueryKeys } from "../features/requisitions/requisitions";
 
 const originalClipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+const originalServiceWorkerDescriptor = Object.getOwnPropertyDescriptor(navigator, "serviceWorker");
 
-function renderRoute(pathname: string, queryClient = createAppQueryClient()) {
+function renderRoute(
+  pathname: string,
+  queryClient = createAppQueryClient(),
+  options: { pushOnboardingSeen?: boolean } = {},
+) {
   window.history.replaceState({}, "", pathname);
+  if (options.pushOnboardingSeen !== false) {
+    markPushOnboardingSeen({ id: 20 });
+  }
   const router = buildRouter({ queryClient });
 
   return render(
@@ -25,10 +34,16 @@ afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
   window.sessionStorage.clear();
+  resetPushOnboardingStateForTests();
   if (originalClipboardDescriptor) {
     Object.defineProperty(navigator, "clipboard", originalClipboardDescriptor);
   } else {
     Reflect.deleteProperty(navigator, "clipboard");
+  }
+  if (originalServiceWorkerDescriptor) {
+    Object.defineProperty(navigator, "serviceWorker", originalServiceWorkerDescriptor);
+  } else {
+    Reflect.deleteProperty(navigator, "serviceWorker");
   }
 });
 
@@ -277,7 +292,25 @@ function notificationUnreadCountResponse(unreadCount = 0) {
   );
 }
 
+function pushConfigResponse(overrides = {}) {
+  return new Response(
+    JSON.stringify({
+      enabled: true,
+      vapid_public_key: "AQID",
+      ...overrides,
+    }),
+    { status: 200, headers: jsonHeaders },
+  );
+}
+
 function maybeNotificationsRequest(request: Request) {
+  if (
+    requestUrl(request).includes("/api/v1/notifications/push/config/") &&
+    request.method === "GET"
+  ) {
+    return pushConfigResponse();
+  }
+
   if (
     requestUrl(request).includes("/api/v1/notifications/") &&
     request.method === "GET" &&
@@ -3502,6 +3535,131 @@ describe("frontend pilot router", () => {
     const link = await screen.findByRole("link", { name: "Abrir requisição" });
     expect(link).toHaveAttribute("href", "/requisicoes/101?contexto=autorizacao");
     expect(screen.getByText("Fila de autorizações", { selector: ".notification-context" })).toBeInTheDocument();
+  });
+
+  it("renders dedicated push onboarding for sector chiefs", async () => {
+    vi.stubGlobal("fetch", (request: Request) => {
+      if (requestUrl(request).includes("/api/v1/auth/me/")) {
+        return Promise.resolve(sessionResponse(chefeSession()));
+      }
+
+      const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return Promise.resolve(notificationsResponse);
+
+      return Promise.resolve(new Response("Not found", { status: 404 }));
+    });
+
+    renderRoute("/alertas");
+
+    expect(await screen.findByRole("heading", { name: "Alertas de autorização" })).toBeInTheDocument();
+    expect(await screen.findByText("Push disponível")).toBeInTheDocument();
+  });
+
+  it("leva chefe ao onboarding de alertas no primeiro acesso aplicavel", async () => {
+    vi.stubGlobal("fetch", (request: Request) => {
+      if (requestUrl(request).includes("/api/v1/auth/me/")) {
+        return Promise.resolve(sessionResponse(chefeSession()));
+      }
+
+      if (requestUrl(request).includes("/api/v1/requisitions/pending-approvals/")) {
+        return Promise.resolve(pendingApprovalListResponse());
+      }
+
+      const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return Promise.resolve(notificationsResponse);
+
+      return Promise.resolve(new Response("Not found", { status: 404 }));
+    });
+
+    const { container } = renderRoute("/autorizacoes", createAppQueryClient(), {
+      pushOnboardingSeen: false,
+    });
+
+    await waitFor(() => expect(container.ownerDocument.location.pathname).toBe("/alertas"));
+    expect(await screen.findByRole("heading", { name: "Alertas de autorização" })).toBeInTheDocument();
+  });
+
+  it("registers push subscription from onboarding action", async () => {
+    const subscribe = vi.fn().mockResolvedValue({
+      toJSON: () => ({
+        endpoint: "https://push.example.test/subscription/browser",
+        keys: {
+          p256dh: "p256dh-browser",
+          auth: "auth-browser",
+        },
+      }),
+    });
+    const postedBodies: unknown[] = [];
+
+    vi.stubGlobal("Notification", {
+      requestPermission: vi.fn().mockResolvedValue("granted"),
+    });
+    vi.stubGlobal("PushManager", function PushManager() {});
+    Object.defineProperty(navigator, "serviceWorker", {
+      configurable: true,
+      value: {
+        ready: Promise.resolve({
+          pushManager: {
+            subscribe,
+          },
+        }),
+      },
+    });
+
+    vi.stubGlobal("fetch", async (request: Request) => {
+      if (requestUrl(request).includes("/api/v1/auth/me/")) {
+        return sessionResponse(chefeSession());
+      }
+
+      if (requestUrl(request).includes("/api/v1/auth/csrf/")) {
+        return new Response(JSON.stringify({ csrf_token: "token" }), {
+          status: 200,
+          headers: jsonHeaders,
+        });
+      }
+
+      if (
+        requestUrl(request).includes("/api/v1/notifications/push/subscriptions/") &&
+        request.method === "POST"
+      ) {
+        postedBodies.push(await request.json());
+        return new Response(
+          JSON.stringify({
+            endpoint: "https://push.example.test/subscription/browser",
+            active: true,
+          }),
+          { status: 200, headers: jsonHeaders },
+        );
+      }
+
+      const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
+
+      return new Response("Not found", { status: 404 });
+    });
+
+    renderRoute("/alertas");
+
+    const activateButton = await screen.findByRole("button", {
+      name: "Ativar alertas neste navegador",
+    });
+    await waitFor(() => expect(activateButton).not.toBeDisabled());
+    fireEvent.click(activateButton);
+
+    expect(await screen.findByText("Alertas ativos neste navegador.")).toBeInTheDocument();
+    expect(subscribe).toHaveBeenCalledWith({
+      userVisibleOnly: true,
+      applicationServerKey: expect.any(Uint8Array),
+    });
+    expect(postedBodies).toEqual([
+      {
+        endpoint: "https://push.example.test/subscription/browser",
+        keys: {
+          p256dh: "p256dh-browser",
+          auth: "auth-browser",
+        },
+      },
+    ]);
   });
 
   it("logs out from authenticated shell and returns to login", async () => {
