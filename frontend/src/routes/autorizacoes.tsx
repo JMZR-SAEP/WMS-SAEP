@@ -126,7 +126,7 @@ function AutorizacaoCard({
       ) : null}
 
       <div className="worklist-card-footer">
-        {!isSlaAlerted(slaStatus) ? (
+        {slaStatus === "normal" ? (
           <button
             className="action-link compact-action"
             disabled={anyMutationPending}
@@ -306,7 +306,7 @@ function AutorizacoesPage() {
               {rowError ? (
                 <div className="error-panel compact-error">{rowError}</div>
               ) : null}
-              {!isSlaAlerted(slaStatus) ? (
+              {slaStatus === "normal" ? (
                 <button
                   className="action-link compact-action"
                   disabled={quickAuthorizing}

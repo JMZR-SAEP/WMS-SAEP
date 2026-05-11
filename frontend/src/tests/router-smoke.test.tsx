@@ -3745,5 +3745,66 @@ describe("frontend pilot router", () => {
         expect(container.ownerDocument.location.pathname).toBe("/login");
       });
     });
+
+    it("desktop: exibe badge SLA e botão 'Autorizar tudo' conforme SLA", async () => {
+      mockAutorizacoesRoute(new Date().toISOString());
+      mockWorklistViewport(false);
+      renderRoute("/autorizacoes");
+      expect(await screen.findByText(/No prazo/)).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Autorizar tudo" })).toBeInTheDocument();
+    });
+
+    it("desktop: oculta botão 'Autorizar tudo' quando SLA em atenção", async () => {
+      const twoHoursAgo = new Date(Date.now() - 120 * 60 * 1000).toISOString();
+      mockAutorizacoesRoute(twoHoursAgo);
+      mockWorklistViewport(false);
+      renderRoute("/autorizacoes");
+      expect(await screen.findByText(/Atenção/)).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Autorizar tudo" })).not.toBeInTheDocument();
+    });
+
+    it("desktop: exibe erro inline na coluna actions quando authorize falha com erro de domínio", async () => {
+      const fetchMock = vi.fn((request: Request) => {
+        if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+          return sessionResponse(chefeSession());
+        }
+
+        if (requestUrl(request).includes("/api/v1/requisitions/pending-approvals/")) {
+          return pendingApprovalListResponse([
+            pendingApprovalListItem({ data_envio_autorizacao: new Date().toISOString() }),
+          ]);
+        }
+
+        if (requestUrl(request).endsWith("/api/v1/requisitions/101/")) {
+          return pendingApprovalDetailResponse();
+        }
+
+        if (requestUrl(request).endsWith("/api/v1/requisitions/101/authorize/")) {
+          return new Response(
+            JSON.stringify({
+              error: {
+                code: "domain_conflict",
+                message: "Saldo insuficiente.",
+                details: {},
+                trace_id: "trace-sla-desktop",
+              },
+            }),
+            { status: 409, headers: jsonHeaders },
+          );
+        }
+
+        const notificationsResponse = maybeNotificationsRequest(request);
+        if (notificationsResponse) return notificationsResponse;
+        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      mockWorklistViewport(false);
+
+      renderRoute("/autorizacoes");
+
+      fireEvent.click(await screen.findByRole("button", { name: "Autorizar tudo" }));
+
+      expect(await screen.findByText("Saldo insuficiente.")).toBeInTheDocument();
+    });
   });
 });
