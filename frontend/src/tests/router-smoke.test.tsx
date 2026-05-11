@@ -22,6 +22,7 @@ function renderRoute(pathname: string) {
 }
 
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   window.sessionStorage.clear();
   if (originalClipboardDescriptor) {
@@ -2306,6 +2307,62 @@ describe("frontend pilot router", () => {
     });
     expect(await screen.findByText("Detalhes copiados.")).toBeInTheDocument();
     expect(container.ownerDocument.location.pathname).toBe("/requisicoes/101");
+  });
+
+  it("handles clipboard rejection when copying support details", async () => {
+    const clipboardError = new Error("clipboard blocked");
+    const writeText = vi.fn(() => Promise.reject(clipboardError));
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((request: Request) => {
+        if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+          return sessionResponse(chefeSession());
+        }
+
+        if (requestUrl(request).endsWith("/api/v1/requisitions/101/")) {
+          return pendingApprovalDetailResponse();
+        }
+
+        if (requestUrl(request).endsWith("/api/v1/requisitions/101/authorize/")) {
+          return new Response(
+            JSON.stringify({
+              error: {
+                code: "domain_conflict",
+                message: "Saldo atual insuficiente.",
+                details: {},
+                trace_id: "trace-domain",
+              },
+            }),
+            { status: 409, headers: jsonHeaders },
+          );
+        }
+
+        const notificationsResponse = maybeNotificationsRequest(request);
+        if (notificationsResponse) return notificationsResponse;
+        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+      }),
+    );
+
+    renderRoute("/requisicoes/101?contexto=autorizacao");
+
+    expect(await screen.findByRole("heading", { name: "REQ-2026-000101" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Autorizar tudo como solicitado" }));
+
+    expect(await screen.findByText("Saldo atual insuficiente.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Copiar detalhes para suporte" }));
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith("trace_id: trace-domain");
+      expect(consoleError).toHaveBeenCalledWith(
+        "Não foi possível copiar detalhes para suporte.",
+        clipboardError,
+      );
+    });
+    expect(await screen.findByText("Não foi possível copiar.")).toBeInTheDocument();
   });
 
   it("redirects to login when authorize returns unauthenticated error", async () => {

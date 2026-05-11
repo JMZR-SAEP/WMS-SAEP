@@ -176,8 +176,13 @@ function SupportErrorPanel({
       return;
     }
 
-    await navigator.clipboard.writeText(supportDetails);
-    setCopyFeedback("Detalhes copiados.");
+    try {
+      await navigator.clipboard.writeText(supportDetails);
+      setCopyFeedback("Detalhes copiados.");
+    } catch (copyError) {
+      console.error("Não foi possível copiar detalhes para suporte.", copyError);
+      setCopyFeedback("Não foi possível copiar.");
+    }
   }
 
   return (
