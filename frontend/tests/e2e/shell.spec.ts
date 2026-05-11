@@ -84,13 +84,15 @@ test("creates draft and submits to authorization using seed scenario", async ({ 
   await page.getByLabel("Para terceiro").click();
   await page.getByLabel("Buscar beneficiário").fill("Ped");
   await page.getByRole("button", { name: /Pedro Nunes/i }).click();
+  await page.getByRole("button", { name: "Próximo: itens" }).click();
+  await expect(page.getByRole("heading", { name: "Itens", exact: true })).toBeVisible();
 
   await page.getByLabel("Buscar material").fill("Papel sulfite");
   await page.getByRole("button", { name: /Adicionar Papel sulfite A4/i }).click();
   await page.getByLabel("Quantidade solicitada").fill("2");
 
   await page.getByRole("button", { name: "Salvar rascunho" }).click();
-  await expect(page).toHaveURL(/\/requisicoes\/\d+$/);
+  await expect(page).toHaveURL(/\/requisicoes\/\d+\?etapa=itens$/);
   await expect(page.getByRole("heading", { name: "Editar rascunho" })).toBeVisible();
 
   await page.getByRole("button", { name: "Enviar para autorização" }).click();
@@ -98,6 +100,20 @@ test("creates draft and submits to authorization using seed scenario", async ({ 
 
   await expect(page.getByRole("heading", { name: /REQ-\d{4}-\d+/ })).toBeVisible();
   await expect(page.getByText("Aguardando autorização")).toBeVisible();
+});
+
+test("draft wizard fits mobile viewport with sticky actions", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await loginAs(page, "91002", /\/minhas-requisicoes(?:\?.*)?$/);
+
+  await page.goto("/requisicoes/nova?etapa=beneficiario");
+  await expect(page.getByRole("heading", { name: "Nova requisição" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Próximo: itens" })).toBeVisible();
+
+  const hasHorizontalOverflow = await page.evaluate(
+    () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+  );
+  expect(hasHorizontalOverflow).toBe(false);
 });
 
 test("authorizes pending requisition from worklist", async ({ page }) => {

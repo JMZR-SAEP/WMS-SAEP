@@ -1,9 +1,17 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
-import { useFieldArray, useForm, useWatch } from "react-hook-form";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+} from "react";
+import { useFieldArray, useForm, useWatch, type FieldPath } from "react-hook-form";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 
 import { authQueryKeys, isAuthError, type AuthSession } from "../auth/session";
+import type { DraftStep } from "./draftSteps";
 import {
   cancelDraftRequisition,
   createDraftRequisition,
@@ -45,9 +53,17 @@ type DraftFormValues = {
 };
 
 const EMPTY_DRAFT_ITEMS: DraftItemForm[] = [];
+const DRAFT_STEPS: Array<{ key: DraftStep; label: string }> = [
+  { key: "beneficiario", label: "Beneficiário" },
+  { key: "itens", label: "Itens" },
+  { key: "revisao", label: "Revisão" },
+  { key: "envio", label: "Envio" },
+];
 
 type DraftRequisitionEditorProps = {
+  activeStep?: DraftStep;
   initialRequisition?: RequisicaoDetail;
+  onStepChange?: (step: DraftStep) => void;
   session: AuthSession;
 };
 
@@ -69,7 +85,9 @@ function currentUserBeneficiary(session: AuthSession) {
   };
 }
 
-function beneficiaryLabel(beneficiary: Pick<BeneficiaryLookupItem, "matricula_funcional" | "nome_completo">) {
+function beneficiaryLabel(
+  beneficiary: Pick<BeneficiaryLookupItem, "matricula_funcional" | "nome_completo">,
+) {
   return `${beneficiary.nome_completo} (${beneficiary.matricula_funcional})`;
 }
 
@@ -158,43 +176,210 @@ function mutationErrorMessage(error: unknown) {
   return queryErrorMessage(error, "Não foi possível concluir a ação.");
 }
 
-export function DraftRequisitionEditor({ initialRequisition, session }: DraftRequisitionEditorProps) {
+function draftStorageKey(sessionId: number, draftId: number | undefined) {
+  return draftId
+    ? `wms-saep:draft:v1:user:${sessionId}:draft:${draftId}`
+    : `wms-saep:draft:v1:user:${sessionId}:new`;
+}
+
+function recentMaterialsStorageKey(sessionId: number) {
+  return `wms-saep:recent-materials:v1:user:${sessionId}`;
+}
+
+function safeReadJson<T>(key: string): T | null {
+  try {
+    const rawValue = window.sessionStorage.getItem(key);
+    return rawValue ? (JSON.parse(rawValue) as T) : null;
+  } catch {
+    return null;
+  }
+}
+
+function safeWriteJson(key: string, value: unknown) {
+  try {
+    window.sessionStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Draft recovery is best-effort and must never block editing.
+  }
+}
+
+function safeRemoveStorage(key: string) {
+  try {
+    window.sessionStorage.removeItem(key);
+  } catch {
+    // Ignore unavailable storage.
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function readString(value: unknown) {
+  return typeof value === "string" ? value : "";
+}
+
+function readNullableNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function normalizeSnapshot(values: unknown): DraftFormValues {
+  const snapshot = isRecord(values) ? values : {};
+
+  return {
+    beneficiaryMode: snapshot.beneficiaryMode === "third_party" ? "third_party" : "self",
+    beneficiaryId: readString(snapshot.beneficiaryId),
+    beneficiaryLabel: readString(snapshot.beneficiaryLabel),
+    beneficiarySearch: "",
+    materialSearch: "",
+    observacao: readString(snapshot.observacao),
+    itens: Array.isArray(snapshot.itens)
+      ? snapshot.itens.filter(isRecord).map((item) => ({
+          materialId: readString(item.materialId),
+          materialLabel: readString(item.materialLabel),
+          materialCode: readString(item.materialCode),
+          unidadeMedida: readString(item.unidadeMedida),
+          saldoDisponivel: readNullableNumber(item.saldoDisponivel),
+          quantidadeSolicitada: readString(item.quantidadeSolicitada),
+          observacao: readString(item.observacao),
+        }))
+      : [],
+  };
+}
+
+function normalizeRecentMaterials(values: unknown): MaterialListItem[] {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+
+  return values
+    .filter(isRecord)
+    .map((item) => {
+      const id = typeof item.id === "number" && Number.isFinite(item.id) ? item.id : null;
+      const codigoCompleto = readString(item.codigo_completo);
+      const nome = readString(item.nome);
+      const unidadeMedida = readString(item.unidade_medida);
+
+      if (id === null || !codigoCompleto || !nome || !unidadeMedida) {
+        return null;
+      }
+
+      return {
+        id,
+        codigo_completo: codigoCompleto,
+        nome,
+        descricao: readString(item.descricao),
+        unidade_medida: unidadeMedida,
+        saldo_disponivel: readNullableNumber(item.saldo_disponivel),
+      };
+    })
+    .filter((item): item is MaterialListItem => item !== null);
+}
+
+function sameDraftValues(first: unknown, second: unknown) {
+  return JSON.stringify(normalizeSnapshot(first)) === JSON.stringify(normalizeSnapshot(second));
+}
+
+function quantityErrorMessage(itemLabel: string | number) {
+  return `Quantidade inválida no item ${itemLabel}: use um número válido maior que zero.`;
+}
+
+function quantityFieldName(index: number): `itens.${number}.quantidadeSolicitada` {
+  return `itens.${index}.quantidadeSolicitada`;
+}
+
+function draftFieldError(
+  values: DraftFormValues,
+  session: AuthSession,
+): { name: FieldPath<DraftFormValues>; message: string } | null {
+  const selectedBeneficiaryId = Number.parseInt(values.beneficiaryId, 10);
+  if (
+    !values.beneficiaryId ||
+    !Number.isFinite(selectedBeneficiaryId) ||
+    selectedBeneficiaryId <= 0 ||
+    (values.beneficiaryMode === "third_party" && selectedBeneficiaryId === session.id)
+  ) {
+    return { name: "beneficiaryId", message: "Informe beneficiário." };
+  }
+  if (values.itens.length === 0) {
+    return { name: "itens", message: "Adicione ao menos um item." };
+  }
+  const invalidItemIndex = values.itens.findIndex(
+    (item) => !isPositiveQuantity(item.quantidadeSolicitada),
+  );
+  if (invalidItemIndex >= 0) {
+    const item = values.itens[invalidItemIndex];
+    return {
+      name: `itens.${invalidItemIndex}.quantidadeSolicitada`,
+      message: quantityErrorMessage(item.materialLabel || invalidItemIndex + 1),
+    };
+  }
+  return null;
+}
+
+function stepIndex(step: DraftStep) {
+  return DRAFT_STEPS.findIndex((candidate) => candidate.key === step);
+}
+
+function nextStep(step: DraftStep) {
+  return DRAFT_STEPS[Math.min(stepIndex(step) + 1, DRAFT_STEPS.length - 1)].key;
+}
+
+function previousStep(step: DraftStep) {
+  return DRAFT_STEPS[Math.max(stepIndex(step) - 1, 0)].key;
+}
+
+function StepSection({
+  activeStep,
+  children,
+  step,
+}: {
+  activeStep: DraftStep;
+  children: ReactNode;
+  step: DraftStep;
+}) {
+  return (
+    <section className="draft-step-panel" hidden={activeStep !== step}>
+      {children}
+    </section>
+  );
+}
+
+export function DraftRequisitionEditor({
+  activeStep: activeStepProp = "beneficiario",
+  initialRequisition,
+  onStepChange,
+  session,
+}: DraftRequisitionEditorProps) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [formError, setFormError] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
+  const [localStep, setLocalStep] = useState<DraftStep>(activeStepProp);
+  const [recentMaterials, setRecentMaterials] = useState<MaterialListItem[]>(() =>
+    normalizeRecentMaterials(safeReadJson<unknown>(recentMaterialsStorageKey(session.id))),
+  );
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const cancelConfirmationButtonRef = useRef<HTMLButtonElement | null>(null);
   const pendingRef = useRef(false);
-  const sessionSetorId = session.setor?.id ?? null;
-  const sessionSetorNome = session.setor?.nome ?? null;
-  const stableSession = useMemo(
-    () =>
-      ({
-        id: session.id,
-        matricula_funcional: session.matricula_funcional,
-        nome_completo: session.nome_completo,
-        papel: session.papel,
-        setor: sessionSetorId !== null && sessionSetorNome !== null
-          ? {
-              id: sessionSetorId,
-              nome: sessionSetorNome,
-            }
-          : null,
-        is_authenticated: session.is_authenticated,
-      }) satisfies AuthSession,
-    [
-      session.id,
-      session.is_authenticated,
-      session.matricula_funcional,
-      session.nome_completo,
-      session.papel,
-      sessionSetorId,
-      sessionSetorNome,
-    ],
+  const suppressNextPersistRef = useRef(false);
+  const storageKey = draftStorageKey(session.id, initialRequisition?.id);
+  const baseValues = useMemo(
+    () => formValuesFromRequisition(initialRequisition, session),
+    [initialRequisition, session],
   );
+  const recoveredValues = useMemo(
+    () => safeReadJson<unknown>(storageKey),
+    [storageKey],
+  );
+  const hasRecoveredSnapshot = Boolean(recoveredValues && !sameDraftValues(recoveredValues, baseValues));
+  const [showRecoveredDraft, setShowRecoveredDraft] = useState(hasRecoveredSnapshot);
+  const [hasDraftSnapshot, setHasDraftSnapshot] = useState(hasRecoveredSnapshot);
   const form = useForm<DraftFormValues>({
-    defaultValues: formValuesFromRequisition(initialRequisition, stableSession),
+    defaultValues:
+      recoveredValues && !sameDraftValues(recoveredValues, baseValues)
+        ? normalizeSnapshot(recoveredValues)
+        : baseValues,
   });
   const { fields, append, remove } = useFieldArray({
     control: form.control,
@@ -207,6 +392,9 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
     useWatch({ control: form.control, name: "beneficiarySearch" })?.trim() ?? "";
   const materialSearch = useWatch({ control: form.control, name: "materialSearch" })?.trim() ?? "";
   const selectedItems = useWatch({ control: form.control, name: "itens" }) ?? EMPTY_DRAFT_ITEMS;
+  const watchedValues = useWatch({ control: form.control });
+  const isDraftDirty = form.formState.isDirty;
+  const activeStep = onStepChange ? activeStepProp : localStep;
   const isEdit = Boolean(initialRequisition);
   const title = isEdit ? "Editar rascunho" : "Nova requisição";
   const identifier = initialRequisition
@@ -216,23 +404,24 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
     ...draftBeneficiariesQueryOptions(beneficiarySearch),
     enabled:
       beneficiaryMode === "third_party" &&
-      canRequestForThirdParty(stableSession) &&
+      canRequestForThirdParty(session) &&
       beneficiarySearch.length >= 3,
   });
   const materialsQuery = useQuery({
     ...draftMaterialsQueryOptions(materialSearch),
     enabled: materialSearch.length >= 2,
   });
-  const resetIdentity = `${initialRequisition?.id ?? "new"}:${stableSession.id}`;
-  const resetIdentityRef = useRef(resetIdentity);
-
   useEffect(() => {
-    if (resetIdentityRef.current === resetIdentity) {
+    if (suppressNextPersistRef.current) {
+      suppressNextPersistRef.current = false;
       return;
     }
-    resetIdentityRef.current = resetIdentity;
-    form.reset(formValuesFromRequisition(initialRequisition, stableSession));
-  }, [form, initialRequisition, resetIdentity, stableSession]);
+    if (isDraftDirty || hasDraftSnapshot) {
+      safeWriteJson(storageKey, normalizeSnapshot(form.getValues()));
+      return;
+    }
+    safeRemoveStorage(storageKey);
+  }, [form, hasDraftSnapshot, isDraftDirty, storageKey, watchedValues]);
 
   useEffect(() => {
     if (!confirmAction) {
@@ -259,7 +448,7 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
 
   useEffect(() => {
     if (beneficiaryMode === "self") {
-      const self = currentUserBeneficiary(stableSession);
+      const self = currentUserBeneficiary(session);
       form.setValue("beneficiaryId", String(self.id));
       form.setValue("beneficiaryLabel", beneficiaryLabel(self));
     } else if (previousBeneficiaryModeRef.current === "self") {
@@ -267,11 +456,18 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
       form.setValue("beneficiaryLabel", "");
     }
     previousBeneficiaryModeRef.current = beneficiaryMode;
-  }, [beneficiaryMode, form, stableSession]);
+  }, [beneficiaryMode, form, session]);
+
+  function clearDraftStorage() {
+    safeRemoveStorage(storageKey);
+    setShowRecoveredDraft(false);
+    setHasDraftSnapshot(false);
+  }
 
   function afterMutationSuccess(requisition: RequisicaoDetail) {
+    suppressNextPersistRef.current = true;
+    clearDraftStorage();
     queryClient.setQueryData(requisitionsQueryKeys.detail(requisition.id), requisition);
-    // Editor routes do not keep worklists mounted; inactive refetch avoids overwriting this detail cache.
     void queryClient.invalidateQueries({
       queryKey: requisitionsQueryKeys.all,
       refetchType: "inactive",
@@ -303,7 +499,7 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
       afterMutationSuccess(requisition);
       if (initialRequisition) {
         const currentItems = form.getValues("itens");
-        const nextValues = formValuesFromRequisition(requisition, stableSession);
+        const nextValues = formValuesFromRequisition(requisition, session);
         nextValues.itens = nextValues.itens.map((item) => ({
           ...item,
           saldoDisponivel:
@@ -313,14 +509,17 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
         form.reset(nextValues);
       }
       if (!initialRequisition) {
-        await navigate({ to: "/requisicoes/$id", params: { id: String(requisition.id) } });
+        await navigate({
+          to: "/requisicoes/$id",
+          params: { id: String(requisition.id) },
+          search: { etapa: activeStep },
+        });
       }
     },
     onError: handleMutationError,
   });
   const submitMutation = useMutation({
     mutationFn: async (input: RequisicaoDraftInput) => {
-      // Submit requires the latest draft persisted first; if submit fails, the saved draft remains retryable.
       const draft = initialRequisition
         ? await updateDraftRequisition(initialRequisition.id, input)
         : await createDraftRequisition(input);
@@ -347,6 +546,8 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
     },
     onSuccess: async (requisition) => {
       setFormError(null);
+      suppressNextPersistRef.current = true;
+      clearDraftStorage();
       if (initialRequisition) {
         queryClient.removeQueries({
           queryKey: requisitionsQueryKeys.detail(initialRequisition.id),
@@ -362,6 +563,7 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
   });
   const pending = saveMutation.isPending || submitMutation.isPending || discardMutation.isPending;
   const materials = materialsQuery.data?.results ?? [];
+  const displayedMaterials = materialSearch ? materials : recentMaterials.length >= 2 ? recentMaterials : [];
   const beneficiaries = beneficiaryQuery.data ?? [];
   const missingStockSignature = selectedItems
     .filter((item) => item.saldoDisponivel === null)
@@ -415,6 +617,23 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
     [selectedItems],
   );
 
+  function goToStep(step: DraftStep) {
+    if (onStepChange) {
+      onStepChange(step);
+      return;
+    }
+    setLocalStep(step);
+  }
+
+  function storeRecentMaterial(material: MaterialListItem) {
+    const nextMaterials = [
+      material,
+      ...recentMaterials.filter((candidate) => candidate.id !== material.id),
+    ].slice(0, 5);
+    setRecentMaterials(nextMaterials);
+    safeWriteJson(recentMaterialsStorageKey(session.id), nextMaterials);
+  }
+
   function addMaterial(material: MaterialListItem) {
     if (pending || !hasPositiveStock(material) || selectedMaterialIds.has(material.id)) {
       return;
@@ -428,6 +647,9 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
       quantidadeSolicitada: "1",
       observacao: "",
     });
+    form.clearErrors("itens");
+    setFormError(null);
+    storeRecentMaterial(material);
     form.setValue("materialSearch", "");
   }
 
@@ -435,9 +657,11 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
     if (pending) {
       return;
     }
-    form.setValue("beneficiaryId", String(beneficiary.id));
-    form.setValue("beneficiaryLabel", beneficiaryLabel(beneficiary));
+    form.setValue("beneficiaryId", String(beneficiary.id), { shouldDirty: true });
+    form.setValue("beneficiaryLabel", beneficiaryLabel(beneficiary), { shouldDirty: true });
     form.setValue("beneficiarySearch", "");
+    form.clearErrors("beneficiaryId");
+    setFormError(null);
   }
 
   function chooseBeneficiaryMode(mode: DraftFormValues["beneficiaryMode"]) {
@@ -446,10 +670,12 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
     }
     form.setValue("beneficiaryMode", mode, { shouldDirty: true });
     if (mode === "self") {
-      const self = currentUserBeneficiary(stableSession);
+      const self = currentUserBeneficiary(session);
       form.setValue("beneficiaryId", String(self.id), { shouldDirty: true });
       form.setValue("beneficiaryLabel", beneficiaryLabel(self), { shouldDirty: true });
       form.setValue("beneficiarySearch", "");
+      form.clearErrors("beneficiaryId");
+      setFormError(null);
       return;
     }
     form.setValue("beneficiaryId", "", { shouldDirty: true });
@@ -469,42 +695,82 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
     }
   }
 
-  function validationErrorMessage(values: DraftFormValues) {
-    const selectedBeneficiaryId = Number.parseInt(values.beneficiaryId, 10);
-    if (
-      !values.beneficiaryId ||
-      !Number.isFinite(selectedBeneficiaryId) ||
-      selectedBeneficiaryId <= 0 ||
-      (values.beneficiaryMode === "third_party" && selectedBeneficiaryId === stableSession.id)
-    ) {
-      return "Informe beneficiário.";
+  async function validateDraft({ focus = true }: { focus?: boolean } = {}) {
+    form.clearErrors();
+    const values = form.getValues();
+    const validationError = draftFieldError(values, session);
+    if (validationError) {
+      form.setError(validationError.name, { type: "manual", message: validationError.message }, {
+        shouldFocus: focus,
+      });
+      setFormError(validationError.message);
+      return false;
     }
-    if (values.itens.length === 0) {
-      return "Adicione ao menos um item.";
+    const fieldNames = values.itens.map((_item, index) => quantityFieldName(index));
+    const valid = await form.trigger(fieldNames, { shouldFocus: focus });
+    if (!valid) {
+      return false;
     }
-    const invalidItemIndex = values.itens.findIndex(
-      (item) => !isPositiveQuantity(item.quantidadeSolicitada),
-    );
-    if (invalidItemIndex >= 0) {
-      const item = values.itens[invalidItemIndex];
-      return `Quantidade inválida no item ${item.materialLabel || invalidItemIndex + 1}: use um número válido maior que zero.`;
-    }
-    return null;
+    setFormError(null);
+    return true;
   }
 
-  function saveDraft(valuesToSave: DraftFormValues) {
-    const validationError = validationErrorMessage(valuesToSave);
-    if (validationError) {
-      setFormError(validationError);
+  async function advanceStep() {
+    if (activeStep === "beneficiario") {
+      const validBeneficiary = await validateDraftStep("beneficiario");
+      if (!validBeneficiary) {
+        return;
+      }
+    }
+    if (activeStep === "itens") {
+      const validItems = await validateDraftStep("itens");
+      if (!validItems) {
+        return;
+      }
+    }
+    goToStep(nextStep(activeStep));
+  }
+
+  async function validateDraftStep(step: DraftStep) {
+    form.clearErrors();
+    const values = form.getValues();
+    if (step === "beneficiario") {
+      const selectedBeneficiaryId = Number.parseInt(values.beneficiaryId, 10);
+      if (
+        !values.beneficiaryId ||
+        !Number.isFinite(selectedBeneficiaryId) ||
+        selectedBeneficiaryId <= 0 ||
+        (values.beneficiaryMode === "third_party" && selectedBeneficiaryId === session.id)
+      ) {
+        form.setError("beneficiaryId", { type: "manual", message: "Informe beneficiário." }, {
+          shouldFocus: true,
+        });
+        setFormError("Informe beneficiário.");
+        return false;
+      }
+      setFormError(null);
+      return true;
+    }
+    if (step === "itens") {
+      if (values.itens.length === 0) {
+        form.setError("itens", { type: "manual", message: "Adicione ao menos um item." });
+        setFormError("Adicione ao menos um item.");
+        return false;
+      }
+      return validateDraft();
+    }
+    return true;
+  }
+
+  async function saveDraft(valuesToSave: DraftFormValues) {
+    if (!(await validateDraft())) {
       return;
     }
     saveMutation.mutate(payloadFromValues(valuesToSave));
   }
 
-  function requestSubmitDraft(valuesToSubmit: DraftFormValues) {
-    const validationError = validationErrorMessage(valuesToSubmit);
-    if (validationError) {
-      setFormError(validationError);
+  async function requestSubmitDraft(valuesToSubmit: DraftFormValues) {
+    if (!(await validateDraft())) {
       return;
     }
     setConfirmAction({ type: "submit", values: valuesToSubmit });
@@ -512,6 +778,11 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
 
   function requestDiscardOrCancel() {
     setConfirmAction({ type: initialRequisition?.numero_publico ? "cancel" : "discard" });
+  }
+
+  function discardLocalCopy() {
+    clearDraftStorage();
+    form.reset(baseValues);
   }
 
   function confirmSelectedAction() {
@@ -575,6 +846,8 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
   }
 
   const confirmation = confirmationContent();
+  const itemError = form.formState.errors.itens?.message;
+  const showRecentMaterials = !materialSearch && recentMaterials.length >= 2;
 
   return (
     <section className="space-y-6">
@@ -589,6 +862,42 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
         </Link>
       </div>
 
+      <div className="draft-stepper" aria-label="Etapas do rascunho">
+        {DRAFT_STEPS.map((step) => (
+          <button
+            aria-current={activeStep === step.key ? "step" : undefined}
+            className={activeStep === step.key ? "draft-step active" : "draft-step"}
+            disabled={pending}
+            key={step.key}
+            onClick={() => goToStep(step.key)}
+            type="button"
+          >
+            {step.label}
+          </button>
+        ))}
+      </div>
+
+      {showRecoveredDraft ? (
+        <div className="draft-recovery-banner">
+          <div>
+            <strong>Rascunho local recuperado</strong>
+            <p>Encontramos dados salvos nesta aba. Continue ou descarte a cópia local.</p>
+          </div>
+          <div className="draft-recovery-actions">
+            <button
+              className="preview-button draft-primary"
+              onClick={() => setShowRecoveredDraft(false)}
+              type="button"
+            >
+              Continuar
+            </button>
+            <button className="action-link compact-action" onClick={discardLocalCopy} type="button">
+              Descartar cópia local
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       {formError ? <div className="error-panel">{formError}</div> : null}
 
       <form
@@ -597,179 +906,266 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
           void form.handleSubmit(saveDraft)(event);
         }}
       >
-        <section className="detail-panel draft-section">
-          <p className="eyebrow">Beneficiário</p>
-          <input type="hidden" {...form.register("beneficiaryMode")} />
-          <input type="hidden" {...form.register("beneficiaryId")} />
-          <input type="hidden" {...form.register("beneficiaryLabel")} />
-          <div className="draft-choice-grid">
-            <label className="draft-choice">
-              <input
-                checked={beneficiaryMode === "self"}
-                disabled={pending}
-                name="beneficiaryModeChoice"
-                onChange={() => chooseBeneficiaryMode("self")}
-                type="radio"
-                value="self"
-              />
-              Para mim
-            </label>
-            {canRequestForThirdParty(stableSession) ? (
+        <StepSection activeStep={activeStep} step="beneficiario">
+          <section className="detail-panel draft-section">
+            <h2>Beneficiário</h2>
+            <input type="hidden" {...form.register("beneficiaryMode")} />
+            <input type="hidden" {...form.register("beneficiaryId")} />
+            <input type="hidden" {...form.register("beneficiaryLabel")} />
+            <div className="draft-choice-grid">
               <label className="draft-choice">
                 <input
-                  checked={beneficiaryMode === "third_party"}
+                  checked={beneficiaryMode === "self"}
                   disabled={pending}
                   name="beneficiaryModeChoice"
-                  onChange={() => chooseBeneficiaryMode("third_party")}
+                  onChange={() => chooseBeneficiaryMode("self")}
                   type="radio"
-                  value="third_party"
+                  value="self"
                 />
-                Para terceiro
+                Para mim
               </label>
-            ) : null}
-          </div>
-          <p className="selected-summary">Selecionado: {beneficiaryLabelValue}</p>
-          {beneficiaryMode === "third_party" && canRequestForThirdParty(stableSession) ? (
-            <div className="draft-lookup">
-              <label className="preview-label">
-                Buscar beneficiário
-                <input
-                  className="preview-input"
-                  disabled={pending}
-                  placeholder="Nome com ao menos 3 letras"
-                  {...form.register("beneficiarySearch")}
-                />
-              </label>
-              {beneficiarySearch.length > 0 && beneficiarySearch.length < 3 ? (
-                <p className="helper-text">Digite ao menos 3 caracteres.</p>
-              ) : null}
-              <div className="lookup-results">
-                {beneficiaries.map((beneficiary) => (
-                  <button
-                    className="lookup-result"
+              {canRequestForThirdParty(session) ? (
+                <label className="draft-choice">
+                  <input
+                    checked={beneficiaryMode === "third_party"}
                     disabled={pending}
-                    key={beneficiary.id}
-                    onClick={() => chooseBeneficiary(beneficiary)}
+                    name="beneficiaryModeChoice"
+                    onChange={() => chooseBeneficiaryMode("third_party")}
+                    type="radio"
+                    value="third_party"
+                  />
+                  Para terceiro
+                </label>
+              ) : null}
+            </div>
+            <p className="selected-summary">Selecionado: {beneficiaryLabelValue}</p>
+            {form.formState.errors.beneficiaryId?.message ? (
+              <p className="field-error">{form.formState.errors.beneficiaryId.message}</p>
+            ) : null}
+            {beneficiaryMode === "third_party" && canRequestForThirdParty(session) ? (
+              <div className="draft-lookup">
+                <label className="preview-label">
+                  Buscar beneficiário
+                  <input
+                    className="preview-input"
+                    disabled={pending}
+                    placeholder="Nome com ao menos 3 letras"
+                    {...form.register("beneficiarySearch")}
+                  />
+                </label>
+                {beneficiarySearch.length > 0 && beneficiarySearch.length < 3 ? (
+                  <p className="helper-text">Digite ao menos 3 caracteres.</p>
+                ) : null}
+                <div className="lookup-results">
+                  {beneficiaries.map((beneficiary) => (
+                    <button
+                      className="lookup-result"
+                      disabled={pending}
+                      key={beneficiary.id}
+                      onClick={() => chooseBeneficiary(beneficiary)}
+                      type="button"
+                    >
+                      <strong>{beneficiary.nome_completo}</strong>
+                      <span>
+                        {beneficiary.matricula_funcional} - {beneficiary.setor.nome}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </section>
+        </StepSection>
+
+        <StepSection activeStep={activeStep} step="itens">
+          <section className="detail-panel draft-section">
+            <h2>Itens</h2>
+            <label className="preview-label">
+              Buscar material
+              <input
+                className="preview-input"
+                disabled={pending}
+                placeholder="Código, nome ou descrição"
+                {...form.register("materialSearch")}
+              />
+            </label>
+            {materialsQuery.isLoading ? (
+              <div className="worklist-skeleton" aria-label="Carregando materiais">
+                <span className="worklist-skeleton-line wide" />
+                <span className="worklist-skeleton-line medium" />
+              </div>
+            ) : null}
+            {materialsQuery.isError ? (
+              <p className="helper-text">{queryErrorMessage(materialsQuery.error, "Erro na busca.")}</p>
+            ) : null}
+            {showRecentMaterials ? <p className="eyebrow">Materiais recentes</p> : null}
+            <div className="lookup-results">
+              {displayedMaterials.map((material) => {
+                const disabled = pending || !hasPositiveStock(material) || selectedMaterialIds.has(material.id);
+                return (
+                  <button
+                    aria-label={`Adicionar ${material.nome}`}
+                    className="lookup-result"
+                    disabled={disabled}
+                    key={material.id}
+                    onClick={() => addMaterial(material)}
                     type="button"
                   >
-                    <strong>{beneficiary.nome_completo}</strong>
+                    <strong>{material.nome}</strong>
                     <span>
-                      {beneficiary.matricula_funcional} - {beneficiary.setor.nome}
+                      {material.codigo_completo} - saldo{" "}
+                      {material.saldo_disponivel === null
+                        ? "indisponível"
+                        : formatQuantity(String(material.saldo_disponivel))}{" "}
+                      {material.unidade_medida}
                     </span>
                   </button>
-                ))}
-              </div>
-            </div>
-          ) : null}
-        </section>
-
-        <section className="detail-panel draft-section">
-          <p className="eyebrow">Observação</p>
-          <label className="preview-label">
-            Observação geral
-            <textarea
-              className="preview-input draft-textarea"
-              disabled={pending}
-              rows={3}
-              {...form.register("observacao")}
-            />
-          </label>
-        </section>
-
-        <section className="detail-panel draft-section">
-          <p className="eyebrow">Materiais</p>
-          <label className="preview-label">
-            Buscar material
-            <input
-              className="preview-input"
-              disabled={pending}
-              placeholder="Código, nome ou descrição"
-              {...form.register("materialSearch")}
-            />
-          </label>
-          {materialsQuery.isError ? (
-            <p className="helper-text">{queryErrorMessage(materialsQuery.error, "Erro na busca.")}</p>
-          ) : null}
-          <div className="lookup-results">
-            {materials.map((material) => {
-              const disabled = pending || !hasPositiveStock(material) || selectedMaterialIds.has(material.id);
-              return (
-                <button
-                  aria-label={`Adicionar ${material.nome}`}
-                  className="lookup-result"
-                  disabled={disabled}
-                  key={material.id}
-                  onClick={() => addMaterial(material)}
-                  type="button"
-                >
-                  <strong>{material.nome}</strong>
-                  <span>
-                    {material.codigo_completo} - saldo{" "}
-                    {material.saldo_disponivel === null
-                      ? "indisponível"
-                      : formatQuantity(String(material.saldo_disponivel))}{" "}
-                    {material.unidade_medida}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </section>
-
-        <section className="detail-panel draft-section">
-          <p className="eyebrow">Itens solicitados</p>
-          {fields.length === 0 ? (
-            <p className="helper-text">Nenhum material adicionado.</p>
-          ) : (
-            <div className="draft-items">
-              {fields.map((field, index) => {
-                const item = selectedItems[index] ?? field;
-                return (
-                  <article className="draft-item-card" key={field.id}>
-                    <div>
-                      <h2>{field.materialLabel}</h2>
-                      <p>
-                        {item.saldoDisponivel === null
-                          ? "Saldo carregando..."
-                          : `Saldo ${formatQuantity(String(item.saldoDisponivel))} ${field.unidadeMedida}`}
-                      </p>
-                    </div>
-                    <div className="draft-item-fields">
-                      <label className="preview-label">
-                        Quantidade solicitada
-                        <input
-                          className="preview-input"
-                          disabled={pending}
-                          inputMode="decimal"
-                          {...form.register(`itens.${index}.quantidadeSolicitada`)}
-                        />
-                      </label>
-                      <label className="preview-label">
-                        Observação do item
-                        <input
-                          className="preview-input"
-                          disabled={pending}
-                          {...form.register(`itens.${index}.observacao`)}
-                        />
-                      </label>
-                      <button
-                        aria-label={`Remover ${field.materialLabel}`}
-                        className="action-link compact-action"
-                        disabled={pending}
-                        onClick={() => removeMaterial(index)}
-                        type="button"
-                      >
-                        Remover
-                      </button>
-                    </div>
-                  </article>
                 );
               })}
             </div>
-          )}
-        </section>
+          </section>
 
-        <div className="draft-actions">
+          <section className="detail-panel draft-section">
+            <h2>Itens solicitados</h2>
+            {itemError ? <p className="field-error">{itemError}</p> : null}
+            {fields.length === 0 ? (
+              <p className="helper-text">Nenhum material adicionado.</p>
+            ) : (
+              <div className="draft-items">
+                {fields.map((field, index) => {
+                  const item = selectedItems[index] ?? field;
+                  return (
+                    <article className="draft-item-card" key={field.id}>
+                      <div>
+                        <h3>{field.materialLabel}</h3>
+                        <p>
+                          {item.saldoDisponivel === null
+                            ? "Saldo carregando..."
+                            : `Saldo ${formatQuantity(String(item.saldoDisponivel))} ${field.unidadeMedida}`}
+                        </p>
+                      </div>
+                      <div className="draft-item-fields">
+                        <label className="preview-label">
+                          Quantidade solicitada
+                          <input
+                            className="preview-input"
+                            disabled={pending}
+                            inputMode="decimal"
+                            {...form.register(`itens.${index}.quantidadeSolicitada`, {
+                              validate: (value) =>
+                                isPositiveQuantity(value) ||
+                                quantityErrorMessage(field.materialLabel),
+                            })}
+                          />
+                        </label>
+                        {form.formState.errors.itens?.[index]?.quantidadeSolicitada?.message ? (
+                          <p className="field-error">
+                            {form.formState.errors.itens[index]?.quantidadeSolicitada?.message}
+                          </p>
+                        ) : null}
+                        <label className="preview-label">
+                          Observação do item
+                          <input
+                            className="preview-input"
+                            disabled={pending}
+                            {...form.register(`itens.${index}.observacao`)}
+                          />
+                        </label>
+                        <button
+                          aria-label={`Remover ${field.materialLabel}`}
+                          className="action-link compact-action"
+                          disabled={pending}
+                          onClick={() => removeMaterial(index)}
+                          type="button"
+                        >
+                          Remover
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        </StepSection>
+
+        <StepSection activeStep={activeStep} step="revisao">
+          <section className="detail-panel draft-section">
+            <h2>Revisão</h2>
+            <dl className="info-list">
+              <div>
+                <dt>Beneficiário</dt>
+                <dd>{beneficiaryLabelValue}</dd>
+              </div>
+              <div>
+                <dt>Total de itens</dt>
+                <dd>{selectedItems.length}</dd>
+              </div>
+            </dl>
+            <label className="preview-label">
+              Observação geral
+              <textarea
+                className="preview-input draft-textarea"
+                disabled={pending}
+                rows={3}
+                {...form.register("observacao")}
+              />
+            </label>
+          </section>
+
+          <section className="detail-panel draft-section">
+            <h2>Resumo dos itens</h2>
+            {selectedItems.length === 0 ? (
+              <p className="helper-text">Nenhum material adicionado.</p>
+            ) : (
+              <div className="draft-review-list">
+                {selectedItems.map((item) => (
+                  <article className="draft-review-item" key={item.materialId}>
+                    <div>
+                      <strong>{item.materialLabel}</strong>
+                      {item.observacao ? <p>{item.observacao}</p> : null}
+                    </div>
+                    <span>
+                      {item.quantidadeSolicitada} {item.unidadeMedida}
+                    </span>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+        </StepSection>
+
+        <StepSection activeStep={activeStep} step="envio">
+          <section className="detail-panel draft-section">
+            <h2>Envio</h2>
+            <p className="helper-text">
+              Salvar mantém o rascunho editável. Enviar confirma o rascunho no backend e encaminha
+              para autorização.
+            </p>
+            <dl className="info-list">
+              <div>
+                <dt>Beneficiário</dt>
+                <dd>{beneficiaryLabelValue}</dd>
+              </div>
+              <div>
+                <dt>Itens</dt>
+                <dd>{selectedItems.length}</dd>
+              </div>
+            </dl>
+          </section>
+        </StepSection>
+
+        <div className="draft-actions draft-sticky-actions">
+          {activeStep !== "beneficiario" ? (
+            <button
+              className="action-link compact-action"
+              disabled={pending}
+              onClick={() => goToStep(previousStep(activeStep))}
+              type="button"
+            >
+              Voltar etapa
+            </button>
+          ) : null}
           {initialRequisition ? (
             <button
               className="action-link compact-action danger-action"
@@ -778,6 +1174,20 @@ export function DraftRequisitionEditor({ initialRequisition, session }: DraftReq
               type="button"
             >
               {initialRequisition.numero_publico ? "Cancelar requisição" : "Descartar rascunho"}
+            </button>
+          ) : null}
+          {activeStep !== "envio" ? (
+            <button
+              className="preview-button draft-primary"
+              disabled={pending}
+              onClick={() => void advanceStep()}
+              type="button"
+            >
+              {activeStep === "beneficiario"
+                ? "Próximo: itens"
+                : activeStep === "itens"
+                  ? "Próximo: revisão"
+                  : "Próximo: envio"}
             </button>
           ) : null}
           <button className="preview-button draft-primary" disabled={pending} type="submit">
