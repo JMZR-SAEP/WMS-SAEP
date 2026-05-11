@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
   flexRender,
@@ -12,12 +12,16 @@ import { z } from "zod";
 import { requireOperationalPapel } from "../features/auth/guards";
 import { authQueryKeys, isUnauthenticatedError } from "../features/auth/session";
 import {
+  authorizeRequisition,
   formatDateTime,
   pendingApprovalsQueryOptions,
   queryErrorMessage,
+  requisitionDetailQueryOptions,
+  requisitionsQueryKeys,
   statusLabel,
   type RequisicaoPendingApprovalItem,
 } from "../features/requisitions/requisitions";
+import { calcSlaStatus, slaLabel, type SlaStatus } from "../features/requisitions/sla";
 import {
   ResponsiveWorklistFrame,
   WorklistEmptyState,
@@ -51,13 +55,33 @@ function EmptyState() {
   );
 }
 
+function SlaBadge({ status }: { status: SlaStatus | null }) {
+  if (!status) return null;
+  const label = slaLabel(status);
+  const icon = status === "atrasada" ? "⚠" : status === "atencao" ? "◉" : "●";
+  return (
+    <span aria-label={`SLA: ${label}`} className={`sla-badge sla-badge-${status}`}>
+      {icon} {label}
+    </span>
+  );
+}
+
 function AutorizacaoCard({
   currentPage,
+  isQuickAuthorizingThis,
+  onQuickAuthorize,
+  quickAuthorizeError,
   requisicao,
 }: {
   currentPage: number;
+  isQuickAuthorizingThis: boolean;
+  onQuickAuthorize: (id: number) => void;
+  quickAuthorizeError: string | null;
   requisicao: RequisicaoPendingApprovalItem;
 }) {
+  const slaStatus = calcSlaStatus(requisicao.data_envio_autorizacao);
+  const hasAlert = slaStatus !== null && slaStatus !== "normal";
+
   return (
     <article className="worklist-card">
       <div className="worklist-card-main">
@@ -69,9 +93,12 @@ function AutorizacaoCard({
             {requisicao.total_itens} {requisicao.total_itens === 1 ? "item" : "itens"}
           </p>
         </div>
-        <span className={`req-status req-status-${requisicao.status}`}>
-          {statusLabel(requisicao.status)}
-        </span>
+        <div className="flex flex-col items-end gap-1">
+          <span className={`req-status req-status-${requisicao.status}`}>
+            {statusLabel(requisicao.status)}
+          </span>
+          <SlaBadge status={slaStatus} />
+        </div>
       </div>
 
       <dl className="worklist-card-details">
@@ -93,7 +120,21 @@ function AutorizacaoCard({
         </div>
       </dl>
 
+      {quickAuthorizeError ? (
+        <div className="error-panel compact-error">{quickAuthorizeError}</div>
+      ) : null}
+
       <div className="worklist-card-footer">
+        {!hasAlert ? (
+          <button
+            className="action-link compact-action"
+            disabled={isQuickAuthorizingThis}
+            onClick={() => onQuickAuthorize(requisicao.id)}
+            type="button"
+          >
+            {isQuickAuthorizingThis ? "Autorizando..." : "Autorizar tudo"}
+          </button>
+        ) : null}
         <Link
           className="action-link compact-action"
           params={{ id: String(requisicao.id) }}
@@ -149,6 +190,35 @@ function AutorizacoesPage() {
     hasError: listQuery.isError && !listQuery.data,
     isLoading: listQuery.isLoading,
   });
+
+  const quickAuthorizeMutation = useMutation({
+    mutationFn: async (id: number) => {
+      const detail = await queryClient.fetchQuery(requisitionDetailQueryOptions(id));
+      return authorizeRequisition(id, {
+        itens: detail.itens.map((item) => ({
+          item_id: item.id,
+          quantidade_autorizada: item.quantidade_solicitada,
+          justificativa_autorizacao_parcial: "",
+        })),
+      });
+    },
+    onSuccess: async (_data, id) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: requisitionsQueryKeys.pendingApprovalsAll }),
+        queryClient.invalidateQueries({ queryKey: requisitionsQueryKeys.detail(id) }),
+      ]);
+    },
+    onError: (error) => {
+      if (isUnauthenticatedError(error)) {
+        queryClient.removeQueries({ queryKey: authQueryKeys.me });
+        void navigate({
+          to: "/login",
+          search: { redirect: currentPage === 1 ? "/autorizacoes" : `/autorizacoes?page=${currentPage}` },
+        });
+      }
+    },
+  });
+
   const columns = useMemo<ColumnDef<RequisicaoPendingApprovalItem>[]>(
     () => [
       {
@@ -201,21 +271,47 @@ function AutorizacoesPage() {
         ),
       },
       {
-        id: "actions",
-        header: "",
+        id: "sla",
+        header: "SLA",
         cell: ({ row }) => (
-          <Link
-            className="action-link compact-action"
-            params={{ id: String(row.original.id) }}
-            search={{ contexto: "autorizacao", page: currentPage === 1 ? undefined : currentPage }}
-            to="/requisicoes/$id"
-          >
-            Abrir
-          </Link>
+          <SlaBadge status={calcSlaStatus(row.original.data_envio_autorizacao)} />
         ),
       },
+      {
+        id: "actions",
+        header: "",
+        cell: ({ row }) => {
+          const slaStatus = calcSlaStatus(row.original.data_envio_autorizacao);
+          const hasAlert = slaStatus !== null && slaStatus !== "normal";
+          const isAuthorizingThis =
+            quickAuthorizeMutation.isPending &&
+            quickAuthorizeMutation.variables === row.original.id;
+          return (
+            <div className="flex items-center gap-2">
+              {!hasAlert ? (
+                <button
+                  className="action-link compact-action"
+                  disabled={isAuthorizingThis}
+                  onClick={() => quickAuthorizeMutation.mutate(row.original.id)}
+                  type="button"
+                >
+                  {isAuthorizingThis ? "Autorizando..." : "Autorizar tudo"}
+                </button>
+              ) : null}
+              <Link
+                className="action-link compact-action"
+                params={{ id: String(row.original.id) }}
+                search={{ contexto: "autorizacao", page: currentPage === 1 ? undefined : currentPage }}
+                to="/requisicoes/$id"
+              >
+                Abrir
+              </Link>
+            </div>
+          );
+        },
+      },
     ],
-    [currentPage],
+    [currentPage, quickAuthorizeMutation],
   );
   // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
@@ -313,7 +409,21 @@ function AutorizacoesPage() {
               {rows.map((requisicao) => (
                 <AutorizacaoCard
                   currentPage={currentPage}
+                  isQuickAuthorizingThis={
+                    quickAuthorizeMutation.isPending &&
+                    quickAuthorizeMutation.variables === requisicao.id
+                  }
                   key={requisicao.id}
+                  onQuickAuthorize={(id) => quickAuthorizeMutation.mutate(id)}
+                  quickAuthorizeError={
+                    quickAuthorizeMutation.isError &&
+                    quickAuthorizeMutation.variables === requisicao.id
+                      ? queryErrorMessage(
+                          quickAuthorizeMutation.error,
+                          "Não foi possível autorizar.",
+                        )
+                      : null
+                  }
                   requisicao={requisicao}
                 />
               ))}
