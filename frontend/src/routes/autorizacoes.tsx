@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
@@ -21,7 +21,7 @@ import {
   statusLabel,
   type RequisicaoPendingApprovalItem,
 } from "../features/requisitions/requisitions";
-import { calcSlaStatus, slaLabel, type SlaStatus } from "../features/requisitions/sla";
+import { calcSlaStatus, isSlaAlerted, slaLabel, type SlaStatus } from "../features/requisitions/sla";
 import {
   ResponsiveWorklistFrame,
   WorklistEmptyState,
@@ -67,20 +67,21 @@ function SlaBadge({ status }: { status: SlaStatus | null }) {
 }
 
 function AutorizacaoCard({
+  anyMutationPending,
   currentPage,
-  isQuickAuthorizingThis,
+  isBeingAuthorized,
   onQuickAuthorize,
   quickAuthorizeError,
   requisicao,
 }: {
+  anyMutationPending: boolean;
   currentPage: number;
-  isQuickAuthorizingThis: boolean;
+  isBeingAuthorized: boolean;
   onQuickAuthorize: (id: number) => void;
   quickAuthorizeError: string | null;
   requisicao: RequisicaoPendingApprovalItem;
 }) {
   const slaStatus = calcSlaStatus(requisicao.data_envio_autorizacao);
-  const hasAlert = slaStatus !== null && slaStatus !== "normal";
 
   return (
     <article className="worklist-card">
@@ -125,14 +126,14 @@ function AutorizacaoCard({
       ) : null}
 
       <div className="worklist-card-footer">
-        {!hasAlert ? (
+        {!isSlaAlerted(slaStatus) ? (
           <button
             className="action-link compact-action"
-            disabled={isQuickAuthorizingThis}
+            disabled={anyMutationPending}
             onClick={() => onQuickAuthorize(requisicao.id)}
             type="button"
           >
-            {isQuickAuthorizingThis ? "Autorizando..." : "Autorizar tudo"}
+            {isBeingAuthorized ? "Autorizando..." : "Autorizar tudo"}
           </button>
         ) : null}
         <Link
@@ -219,6 +220,19 @@ function AutorizacoesPage() {
     },
   });
 
+  const {
+    error: quickAuthorizeErrorObj,
+    isError: quickAuthorizeIsError,
+    isPending: quickAuthorizing,
+    mutate: quickAuthorize,
+    variables: quickAuthorizingId,
+  } = quickAuthorizeMutation;
+
+  const handleQuickAuthorize = useCallback(
+    (id: number) => quickAuthorize(id),
+    [quickAuthorize],
+  );
+
   const columns = useMemo<ColumnDef<RequisicaoPendingApprovalItem>[]>(
     () => [
       {
@@ -282,20 +296,17 @@ function AutorizacoesPage() {
         header: "",
         cell: ({ row }) => {
           const slaStatus = calcSlaStatus(row.original.data_envio_autorizacao);
-          const hasAlert = slaStatus !== null && slaStatus !== "normal";
-          const isAuthorizingThis =
-            quickAuthorizeMutation.isPending &&
-            quickAuthorizeMutation.variables === row.original.id;
+          const isBeingAuthorized = quickAuthorizing && quickAuthorizingId === row.original.id;
           return (
             <div className="flex items-center gap-2">
-              {!hasAlert ? (
+              {!isSlaAlerted(slaStatus) ? (
                 <button
                   className="action-link compact-action"
-                  disabled={isAuthorizingThis}
-                  onClick={() => quickAuthorizeMutation.mutate(row.original.id)}
+                  disabled={quickAuthorizing}
+                  onClick={() => handleQuickAuthorize(row.original.id)}
                   type="button"
                 >
-                  {isAuthorizingThis ? "Autorizando..." : "Autorizar tudo"}
+                  {isBeingAuthorized ? "Autorizando..." : "Autorizar tudo"}
                 </button>
               ) : null}
               <Link
@@ -311,7 +322,7 @@ function AutorizacoesPage() {
         },
       },
     ],
-    [currentPage, quickAuthorizeMutation],
+    [currentPage, handleQuickAuthorize, quickAuthorizing, quickAuthorizingId],
   );
   // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
@@ -408,20 +419,14 @@ function AutorizacoesPage() {
             <div aria-label="Cards da fila de autorizações" className="worklist-card-list">
               {rows.map((requisicao) => (
                 <AutorizacaoCard
+                  anyMutationPending={quickAuthorizing}
                   currentPage={currentPage}
-                  isQuickAuthorizingThis={
-                    quickAuthorizeMutation.isPending &&
-                    quickAuthorizeMutation.variables === requisicao.id
-                  }
+                  isBeingAuthorized={quickAuthorizing && quickAuthorizingId === requisicao.id}
                   key={requisicao.id}
-                  onQuickAuthorize={(id) => quickAuthorizeMutation.mutate(id)}
+                  onQuickAuthorize={handleQuickAuthorize}
                   quickAuthorizeError={
-                    quickAuthorizeMutation.isError &&
-                    quickAuthorizeMutation.variables === requisicao.id
-                      ? queryErrorMessage(
-                          quickAuthorizeMutation.error,
-                          "Não foi possível autorizar.",
-                        )
+                    quickAuthorizeIsError && quickAuthorizingId === requisicao.id
+                      ? queryErrorMessage(quickAuthorizeErrorObj, "Não foi possível autorizar.")
                       : null
                   }
                   requisicao={requisicao}
