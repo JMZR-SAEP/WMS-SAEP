@@ -194,6 +194,7 @@ function AutorizacoesPage() {
 
   const quickAuthorizeMutation = useMutation({
     mutationFn: async (id: number) => {
+      await queryClient.invalidateQueries({ queryKey: requisitionsQueryKeys.detail(id) });
       const detail = await queryClient.fetchQuery(requisitionDetailQueryOptions(id));
       return authorizeRequisition(id, {
         itens: detail.itens.map((item) => ({
@@ -331,6 +332,7 @@ function AutorizacoesPage() {
     ],
     [currentPage, handleQuickAuthorize, quickAuthorizeErrorObj, quickAuthorizeIsError, quickAuthorizing, quickAuthorizingId],
   );
+  // Safe false positive: useReactTable is a hook-compatible external API; recheck when the lint rule changes.
   // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     columns,

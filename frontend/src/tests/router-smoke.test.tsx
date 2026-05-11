@@ -5,13 +5,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { AppProviders } from "../app/providers";
 import { createAppQueryClient } from "../app/query-client";
 import { buildRouter } from "../app/router";
-import { formatDateTime } from "../features/requisitions/requisitions";
+import { formatDateTime, requisitionsQueryKeys } from "../features/requisitions/requisitions";
 
 const originalClipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, "clipboard");
 
-function renderRoute(pathname: string) {
+function renderRoute(pathname: string, queryClient = createAppQueryClient()) {
   window.history.replaceState({}, "", pathname);
-  const queryClient = createAppQueryClient();
   const router = buildRouter({ queryClient });
 
   return render(
@@ -3705,6 +3704,56 @@ describe("frontend pilot router", () => {
 
       expect(await screen.findByText("Nenhuma autorização pendente")).toBeInTheDocument();
       expect(authorizeCalled).toBe(true);
+    });
+
+    it("busca detalhe fresco antes de autorizar via ação rápida", async () => {
+      const queryClient = createAppQueryClient();
+      queryClient.setQueryData(requisitionsQueryKeys.detail(101), {
+        itens: [{ id: 501, quantidade_solicitada: "9.000" }],
+      });
+      let authorizePayload: unknown = null;
+      const fetchMock = vi.fn(async (request: Request) => {
+        if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+          return sessionResponse(chefeSession());
+        }
+
+        if (requestUrl(request).includes("/api/v1/requisitions/pending-approvals/")) {
+          return pendingApprovalListResponse([
+            pendingApprovalListItem({ data_envio_autorizacao: new Date().toISOString() }),
+          ]);
+        }
+
+        if (requestUrl(request).endsWith("/api/v1/requisitions/101/")) {
+          return pendingApprovalDetailResponse({ quantidade_solicitada: "3.000" });
+        }
+
+        if (requestUrl(request).endsWith("/api/v1/requisitions/101/authorize/")) {
+          authorizePayload = await request.json();
+          return pendingApprovalDetailResponse();
+        }
+
+        const notificationsResponse = maybeNotificationsRequest(request);
+        if (notificationsResponse) return notificationsResponse;
+        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      mockWorklistViewport(true);
+
+      renderRoute("/autorizacoes", queryClient);
+
+      fireEvent.click(await screen.findByRole("button", { name: "Autorizar tudo" }));
+
+      await waitFor(() => {
+        expect(authorizePayload).toEqual({
+          itens: [
+            {
+              item_id: 501,
+              quantidade_autorizada: "3.000",
+              justificativa_autorizacao_parcial: "",
+            },
+          ],
+        });
+      });
     });
 
     it("redireciona para login quando ação rápida recebe 401", async () => {
