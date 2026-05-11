@@ -3616,4 +3616,56 @@ describe("frontend pilot router", () => {
     expect(logoutCalled).toBe(false);
     expect(container.ownerDocument.location.pathname).toBe("/minhas-requisicoes");
   });
+
+  describe("fila de autorizações — SLA e ação rápida", () => {
+    function mockAutorizacoesRoute(dataEnvioAutorizacao: string) {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn((request: Request) => {
+          if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+            return sessionResponse(chefeSession());
+          }
+
+          if (requestUrl(request).includes("/api/v1/requisitions/pending-approvals/")) {
+            return pendingApprovalListResponse([
+              pendingApprovalListItem({ data_envio_autorizacao: dataEnvioAutorizacao }),
+            ]);
+          }
+
+          const notificationsResponse = maybeNotificationsRequest(request);
+          if (notificationsResponse) return notificationsResponse;
+          throw new Error(`Unexpected request: ${requestUrl(request)}`);
+        }),
+      );
+      mockWorklistViewport(true);
+    }
+
+    it("exibe badge SLA 'No prazo' para requisição recém enviada", async () => {
+      mockAutorizacoesRoute(new Date().toISOString());
+      renderRoute("/autorizacoes");
+      expect(await screen.findByText(/No prazo/)).toBeInTheDocument();
+    });
+
+    it("exibe botão 'Autorizar tudo' quando SLA está normal", async () => {
+      mockAutorizacoesRoute(new Date().toISOString());
+      renderRoute("/autorizacoes");
+      expect(await screen.findByRole("button", { name: "Autorizar tudo" })).toBeInTheDocument();
+    });
+
+    it("oculta botão 'Autorizar tudo' e exibe badge 'Atenção' quando SLA em atenção", async () => {
+      const twoHoursAgo = new Date(Date.now() - 120 * 60 * 1000).toISOString();
+      mockAutorizacoesRoute(twoHoursAgo);
+      renderRoute("/autorizacoes");
+      expect(await screen.findByText(/Atenção/)).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Autorizar tudo" })).not.toBeInTheDocument();
+    });
+
+    it("oculta botão 'Autorizar tudo' e exibe badge 'Atrasada' quando SLA ultrapassado", async () => {
+      const fiveHoursAgo = new Date(Date.now() - 300 * 60 * 1000).toISOString();
+      mockAutorizacoesRoute(fiveHoursAgo);
+      renderRoute("/autorizacoes");
+      expect(await screen.findByText(/Atrasada/)).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Autorizar tudo" })).not.toBeInTheDocument();
+    });
+  });
 });
