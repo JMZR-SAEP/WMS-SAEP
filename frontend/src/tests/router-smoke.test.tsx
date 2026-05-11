@@ -5,13 +5,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { AppProviders } from "../app/providers";
 import { createAppQueryClient } from "../app/query-client";
 import { buildRouter } from "../app/router";
-import { formatDateTime } from "../features/requisitions/requisitions";
+import { formatDateTime, requisitionsQueryKeys } from "../features/requisitions/requisitions";
 
 const originalClipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, "clipboard");
 
-function renderRoute(pathname: string) {
+function renderRoute(pathname: string, queryClient = createAppQueryClient()) {
   window.history.replaceState({}, "", pathname);
-  const queryClient = createAppQueryClient();
   const router = buildRouter({ queryClient });
 
   return render(
@@ -23,6 +22,7 @@ function renderRoute(pathname: string) {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   window.sessionStorage.clear();
   if (originalClipboardDescriptor) {
@@ -3615,5 +3615,249 @@ describe("frontend pilot router", () => {
     expect(await screen.findByText("CSRF indisponível.")).toBeInTheDocument();
     expect(logoutCalled).toBe(false);
     expect(container.ownerDocument.location.pathname).toBe("/minhas-requisicoes");
+  });
+
+  describe("fila de autorizações — SLA e ação rápida", () => {
+    function mockAutorizacoesRoute(dataEnvioAutorizacao: string) {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn((request: Request) => {
+          if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+            return sessionResponse(chefeSession());
+          }
+
+          if (requestUrl(request).includes("/api/v1/requisitions/pending-approvals/")) {
+            return pendingApprovalListResponse([
+              pendingApprovalListItem({ data_envio_autorizacao: dataEnvioAutorizacao }),
+            ]);
+          }
+
+          const notificationsResponse = maybeNotificationsRequest(request);
+          if (notificationsResponse) return notificationsResponse;
+          throw new Error(`Unexpected request: ${requestUrl(request)}`);
+        }),
+      );
+      mockWorklistViewport(true);
+    }
+
+    it("exibe badge SLA 'No prazo' para requisição recém enviada", async () => {
+      mockAutorizacoesRoute(new Date().toISOString());
+      renderRoute("/autorizacoes");
+      expect(await screen.findByText(/No prazo/)).toBeInTheDocument();
+    });
+
+    it("exibe botão 'Autorizar tudo' quando SLA está normal", async () => {
+      mockAutorizacoesRoute(new Date().toISOString());
+      renderRoute("/autorizacoes");
+      expect(await screen.findByRole("button", { name: "Autorizar tudo" })).toBeInTheDocument();
+    });
+
+    it("oculta botão 'Autorizar tudo' e exibe badge 'Atenção' quando SLA em atenção", async () => {
+      vi.setSystemTime(new Date("2026-05-11T12:00:00Z"));
+      const twoHoursAgo = new Date(Date.now() - 120 * 60 * 1000).toISOString();
+      mockAutorizacoesRoute(twoHoursAgo);
+      renderRoute("/autorizacoes");
+      expect(await screen.findByText(/Atenção/)).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Autorizar tudo" })).not.toBeInTheDocument();
+    });
+
+    it("oculta botão 'Autorizar tudo' e exibe badge 'Atrasada' quando SLA ultrapassado", async () => {
+      vi.setSystemTime(new Date("2026-05-11T12:00:00Z"));
+      const fiveHoursAgo = new Date(Date.now() - 300 * 60 * 1000).toISOString();
+      mockAutorizacoesRoute(fiveHoursAgo);
+      renderRoute("/autorizacoes");
+      expect(await screen.findByText(/Atrasada/)).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Autorizar tudo" })).not.toBeInTheDocument();
+    });
+
+    it("autoriza requisição via ação rápida e atualiza lista", async () => {
+      let authorizeCalled = false;
+      const fetchMock = vi.fn((request: Request) => {
+        if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+          return sessionResponse(chefeSession());
+        }
+
+        if (requestUrl(request).includes("/api/v1/requisitions/pending-approvals/")) {
+          return pendingApprovalListResponse(
+            authorizeCalled
+              ? []
+              : [pendingApprovalListItem({ data_envio_autorizacao: new Date().toISOString() })],
+          );
+        }
+
+        if (requestUrl(request).endsWith("/api/v1/requisitions/101/")) {
+          return pendingApprovalDetailResponse();
+        }
+
+        if (requestUrl(request).endsWith("/api/v1/requisitions/101/authorize/")) {
+          authorizeCalled = true;
+          return pendingApprovalDetailResponse();
+        }
+
+        const notificationsResponse = maybeNotificationsRequest(request);
+        if (notificationsResponse) return notificationsResponse;
+        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      mockWorklistViewport(true);
+
+      renderRoute("/autorizacoes");
+
+      fireEvent.click(await screen.findByRole("button", { name: "Autorizar tudo" }));
+
+      expect(await screen.findByText("Nenhuma autorização pendente")).toBeInTheDocument();
+      expect(authorizeCalled).toBe(true);
+    });
+
+    it("busca detalhe fresco antes de autorizar via ação rápida", async () => {
+      const queryClient = createAppQueryClient();
+      queryClient.setQueryData(requisitionsQueryKeys.detail(101), {
+        itens: [{ id: 501, quantidade_solicitada: "9.000" }],
+      });
+      let authorizePayload: unknown = null;
+      const fetchMock = vi.fn(async (request: Request) => {
+        if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+          return sessionResponse(chefeSession());
+        }
+
+        if (requestUrl(request).includes("/api/v1/requisitions/pending-approvals/")) {
+          return pendingApprovalListResponse([
+            pendingApprovalListItem({ data_envio_autorizacao: new Date().toISOString() }),
+          ]);
+        }
+
+        if (requestUrl(request).endsWith("/api/v1/requisitions/101/")) {
+          return pendingApprovalDetailResponse({ quantidade_solicitada: "3.000" });
+        }
+
+        if (requestUrl(request).endsWith("/api/v1/requisitions/101/authorize/")) {
+          authorizePayload = await request.json();
+          return pendingApprovalDetailResponse();
+        }
+
+        const notificationsResponse = maybeNotificationsRequest(request);
+        if (notificationsResponse) return notificationsResponse;
+        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      mockWorklistViewport(true);
+
+      renderRoute("/autorizacoes", queryClient);
+
+      fireEvent.click(await screen.findByRole("button", { name: "Autorizar tudo" }));
+
+      await waitFor(() => {
+        expect(authorizePayload).toEqual({
+          itens: [
+            {
+              item_id: 501,
+              quantidade_autorizada: "3.000",
+              justificativa_autorizacao_parcial: "",
+            },
+          ],
+        });
+      });
+    });
+
+    it("redireciona para login quando ação rápida recebe 401", async () => {
+      const fetchMock = vi.fn((request: Request) => {
+        if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+          return sessionResponse(chefeSession());
+        }
+
+        if (requestUrl(request).includes("/api/v1/requisitions/pending-approvals/")) {
+          return pendingApprovalListResponse([
+            pendingApprovalListItem({ data_envio_autorizacao: new Date().toISOString() }),
+          ]);
+        }
+
+        if (requestUrl(request).endsWith("/api/v1/requisitions/101/")) {
+          return pendingApprovalDetailResponse();
+        }
+
+        if (requestUrl(request).endsWith("/api/v1/requisitions/101/authorize/")) {
+          return new Response(
+            JSON.stringify({ detail: "Autenticação necessária." }),
+            { status: 401, headers: jsonHeaders },
+          );
+        }
+
+        const notificationsResponse = maybeNotificationsRequest(request);
+        if (notificationsResponse) return notificationsResponse;
+        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      mockWorklistViewport(true);
+
+      const { container } = renderRoute("/autorizacoes");
+
+      fireEvent.click(await screen.findByRole("button", { name: "Autorizar tudo" }));
+
+      await waitFor(() => {
+        expect(container.ownerDocument.location.pathname).toBe("/login");
+      });
+    });
+
+    it("desktop: exibe badge SLA e botão 'Autorizar tudo' conforme SLA", async () => {
+      mockAutorizacoesRoute(new Date().toISOString());
+      mockWorklistViewport(false);
+      renderRoute("/autorizacoes");
+      expect(await screen.findByText(/No prazo/)).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Autorizar tudo" })).toBeInTheDocument();
+    });
+
+    it("desktop: oculta botão 'Autorizar tudo' quando SLA em atenção", async () => {
+      vi.setSystemTime(new Date("2026-05-11T12:00:00Z"));
+      const twoHoursAgo = new Date(Date.now() - 120 * 60 * 1000).toISOString();
+      mockAutorizacoesRoute(twoHoursAgo);
+      mockWorklistViewport(false);
+      renderRoute("/autorizacoes");
+      expect(await screen.findByText(/Atenção/)).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Autorizar tudo" })).not.toBeInTheDocument();
+    });
+
+    it("desktop: exibe erro inline na coluna actions quando authorize falha com erro de domínio", async () => {
+      const fetchMock = vi.fn((request: Request) => {
+        if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+          return sessionResponse(chefeSession());
+        }
+
+        if (requestUrl(request).includes("/api/v1/requisitions/pending-approvals/")) {
+          return pendingApprovalListResponse([
+            pendingApprovalListItem({ data_envio_autorizacao: new Date().toISOString() }),
+          ]);
+        }
+
+        if (requestUrl(request).endsWith("/api/v1/requisitions/101/")) {
+          return pendingApprovalDetailResponse();
+        }
+
+        if (requestUrl(request).endsWith("/api/v1/requisitions/101/authorize/")) {
+          return new Response(
+            JSON.stringify({
+              error: {
+                code: "domain_conflict",
+                message: "Saldo insuficiente.",
+                details: {},
+                trace_id: "trace-sla-desktop",
+              },
+            }),
+            { status: 409, headers: jsonHeaders },
+          );
+        }
+
+        const notificationsResponse = maybeNotificationsRequest(request);
+        if (notificationsResponse) return notificationsResponse;
+        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      mockWorklistViewport(false);
+
+      renderRoute("/autorizacoes");
+
+      fireEvent.click(await screen.findByRole("button", { name: "Autorizar tudo" }));
+
+      expect(await screen.findByText("Saldo insuficiente.")).toBeInTheDocument();
+    });
   });
 });
