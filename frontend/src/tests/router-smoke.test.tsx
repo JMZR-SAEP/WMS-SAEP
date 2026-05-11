@@ -7,6 +7,8 @@ import { createAppQueryClient } from "../app/query-client";
 import { buildRouter } from "../app/router";
 import { formatDateTime } from "../features/requisitions/requisitions";
 
+const originalClipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+
 function renderRoute(pathname: string) {
   window.history.replaceState({}, "", pathname);
   const queryClient = createAppQueryClient();
@@ -22,6 +24,11 @@ function renderRoute(pathname: string) {
 afterEach(() => {
   vi.unstubAllGlobals();
   window.sessionStorage.clear();
+  if (originalClipboardDescriptor) {
+    Object.defineProperty(navigator, "clipboard", originalClipboardDescriptor);
+  } else {
+    Reflect.deleteProperty(navigator, "clipboard");
+  }
 });
 
 const jsonHeaders = { "Content-Type": "application/json" };
@@ -2933,6 +2940,33 @@ describe("frontend pilot router", () => {
       });
     });
     expect(container.ownerDocument.location.pathname).toBe("/requisicoes/101");
+  });
+
+  it("redirects draft detail to login when session refresh expires", async () => {
+    let sessionRequests = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((request: Request) => {
+        if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+          sessionRequests += 1;
+          return sessionRequests === 1 ? sessionResponse() : unauthenticatedResponse();
+        }
+
+        if (requestUrl(request).endsWith("/api/v1/requisitions/101/")) {
+          return draftRequisitionDetailResponse();
+        }
+
+        const notificationsResponse = maybeNotificationsRequest(request);
+        if (notificationsResponse) return notificationsResponse;
+        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+      }),
+    );
+
+    const { container } = renderRoute("/requisicoes/101?etapa=itens");
+
+    expect(await screen.findByRole("heading", { name: "Entrar no piloto" })).toBeInTheDocument();
+    expect(container.ownerDocument.location.pathname).toBe("/login");
+    expect(container.ownerDocument.location.search).toBe("?redirect=%2Frequisicoes%2F101");
   });
 
   it("confirms and submits a draft to authorization", async () => {

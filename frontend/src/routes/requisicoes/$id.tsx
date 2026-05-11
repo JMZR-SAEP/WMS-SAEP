@@ -595,6 +595,7 @@ function AuthorizationDecisionPanel({
       return;
     }
 
+    setConfirmRefusal(false);
     refuseMutation.mutate({ motivo_recusa: trimmedReason });
   }
 
@@ -869,6 +870,7 @@ function FulfillmentDecisionPanel({
       return;
     }
 
+    setConfirmCancellation(false);
     cancelMutation.mutate({ motivo_cancelamento: trimmedReason });
   }
 
@@ -1252,6 +1254,7 @@ function DetalheRequisicaoPage() {
     enabled: detailQuery.data?.status === "rascunho",
   });
   const authError = detailQuery.isError && isUnauthenticatedError(detailQuery.error);
+  const sessionAuthError = sessionQuery.isError && isUnauthenticatedError(sessionQuery.error);
 
   function handleDraftStepChange(step: DraftStep) {
     void navigate({
@@ -1262,7 +1265,7 @@ function DetalheRequisicaoPage() {
   }
 
   useEffect(() => {
-    if (!authError) {
+    if (!authError && !sessionAuthError) {
       return;
     }
     queryClient.removeQueries({ queryKey: authQueryKeys.me });
@@ -1272,7 +1275,7 @@ function DetalheRequisicaoPage() {
         redirect: buildRequisicaoRedirect({ id, contexto, sourcePage }),
       },
     });
-  }, [authError, contexto, id, navigate, queryClient, sourcePage]);
+  }, [authError, contexto, id, navigate, queryClient, sessionAuthError, sourcePage]);
 
   if (!Number.isInteger(requisicaoId) || requisicaoId <= 0) {
     return <div className="error-panel">Identificador de requisição inválido.</div>;
@@ -1300,6 +1303,9 @@ function DetalheRequisicaoPage() {
   if (requisicao.status === "rascunho") {
     if (sessionQuery.isLoading) {
       return <div className="loading-state">Carregando sessão...</div>;
+    }
+    if (sessionAuthError) {
+      return null;
     }
     if (sessionQuery.isError) {
       return (
