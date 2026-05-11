@@ -277,14 +277,22 @@ function CriticalActionDialog({
 }) {
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const cancelButtonRef = useRef<HTMLButtonElement | null>(null);
+  const isMountedRef = useRef(true);
 
   useEffect(() => {
     cancelButtonRef.current?.focus();
   }, []);
 
   useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape" && !pending) {
+      if (event.key === "Escape" && isMountedRef.current && !pending) {
         event.preventDefault();
         onClose();
       }
