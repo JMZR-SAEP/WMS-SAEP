@@ -170,9 +170,15 @@ function SupportErrorPanel({
 }) {
   const [copyFeedback, setCopyFeedback] = useState("");
   const supportDetails = supportDetailsFromError(error);
+  const canCopySupportDetails = Boolean(
+    supportDetails &&
+      navigator.clipboard &&
+      typeof navigator.clipboard.writeText === "function",
+  );
 
   async function copySupportDetails() {
-    if (!supportDetails || !navigator.clipboard) {
+    if (!supportDetails || !canCopySupportDetails) {
+      setCopyFeedback("Copie os detalhes manualmente.");
       return;
     }
 
@@ -194,7 +200,7 @@ function SupportErrorPanel({
             {retryLabel ?? "Tentar novamente"}
           </button>
         ) : null}
-        {supportDetails ? (
+        {canCopySupportDetails ? (
           <button
             className="action-link compact-action"
             onClick={() => void copySupportDetails()}
@@ -204,6 +210,11 @@ function SupportErrorPanel({
           </button>
         ) : null}
       </div>
+      {supportDetails && !canCopySupportDetails ? (
+        <p className="helper-text">
+          Copie estes detalhes para suporte: <code>{supportDetails}</code>
+        </p>
+      ) : null}
       {copyFeedback ? <p className="helper-text">{copyFeedback}</p> : null}
     </div>
   );
@@ -390,23 +401,27 @@ function normalizeQuantityInput(value: string) {
 function buildRequisicaoRedirect({
   sourcePage,
   contexto,
+  etapa,
   id,
 }: {
   sourcePage: number | undefined;
   contexto: "autorizacao" | "atendimento" | undefined;
+  etapa?: DraftStep;
   id: string;
 }) {
-  const pageSearch = sourcePage && sourcePage > 1 ? `&page=${sourcePage}` : "";
-
-  if (contexto === "autorizacao") {
-    return `/requisicoes/${id}?contexto=autorizacao${pageSearch}`;
+  const search = new URLSearchParams();
+  if (contexto) {
+    search.set("contexto", contexto);
+  }
+  if (sourcePage && sourcePage > 1) {
+    search.set("page", String(sourcePage));
+  }
+  if (etapa) {
+    search.set("etapa", etapa);
   }
 
-  if (contexto === "atendimento") {
-    return `/requisicoes/${id}?contexto=atendimento${pageSearch}`;
-  }
-
-  return `/requisicoes/${id}`;
+  const query = search.toString();
+  return query ? `/requisicoes/${id}?${query}` : `/requisicoes/${id}`;
 }
 
 function authorizationItemLabel(item: RequisicaoActionItem) {
@@ -1277,10 +1292,10 @@ function DetalheRequisicaoPage() {
     void navigate({
       to: "/login",
       search: {
-        redirect: buildRequisicaoRedirect({ id, contexto, sourcePage }),
+        redirect: buildRequisicaoRedirect({ id, contexto, etapa, sourcePage }),
       },
     });
-  }, [authError, contexto, id, navigate, queryClient, sessionAuthError, sourcePage]);
+  }, [authError, contexto, etapa, id, navigate, queryClient, sessionAuthError, sourcePage]);
 
   if (!Number.isInteger(requisicaoId) || requisicaoId <= 0) {
     return <div className="error-panel">Identificador de requisição inválido.</div>;

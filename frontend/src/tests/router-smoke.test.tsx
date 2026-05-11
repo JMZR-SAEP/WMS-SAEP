@@ -2365,6 +2365,53 @@ describe("frontend pilot router", () => {
     expect(await screen.findByText("Não foi possível copiar.")).toBeInTheDocument();
   });
 
+  it("shows support details when clipboard is unavailable", async () => {
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: undefined,
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((request: Request) => {
+        if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+          return sessionResponse(chefeSession());
+        }
+
+        if (requestUrl(request).endsWith("/api/v1/requisitions/101/")) {
+          return pendingApprovalDetailResponse();
+        }
+
+        if (requestUrl(request).endsWith("/api/v1/requisitions/101/authorize/")) {
+          return new Response(
+            JSON.stringify({
+              error: {
+                code: "domain_conflict",
+                message: "Saldo atual insuficiente.",
+                details: {},
+                trace_id: "trace-domain",
+              },
+            }),
+            { status: 409, headers: jsonHeaders },
+          );
+        }
+
+        const notificationsResponse = maybeNotificationsRequest(request);
+        if (notificationsResponse) return notificationsResponse;
+        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+      }),
+    );
+
+    renderRoute("/requisicoes/101?contexto=autorizacao");
+
+    expect(await screen.findByRole("heading", { name: "REQ-2026-000101" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Autorizar tudo como solicitado" }));
+
+    expect(await screen.findByText("Saldo atual insuficiente.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Copiar detalhes para suporte" })).not.toBeInTheDocument();
+    expect(screen.getByText(/Copie estes detalhes para suporte:/)).toBeInTheDocument();
+    expect(screen.getByText("trace_id: trace-domain")).toBeInTheDocument();
+  });
+
   it("redirects to login when authorize returns unauthenticated error", async () => {
     vi.stubGlobal(
       "fetch",
@@ -3023,7 +3070,9 @@ describe("frontend pilot router", () => {
 
     expect(await screen.findByRole("heading", { name: "Entrar no piloto" })).toBeInTheDocument();
     expect(container.ownerDocument.location.pathname).toBe("/login");
-    expect(container.ownerDocument.location.search).toBe("?redirect=%2Frequisicoes%2F101");
+    expect(container.ownerDocument.location.search).toBe(
+      "?redirect=%2Frequisicoes%2F101%3Fetapa%3Ditens",
+    );
   });
 
   it("confirms and submits a draft to authorization", async () => {
