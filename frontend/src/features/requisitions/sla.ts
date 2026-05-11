@@ -18,3 +18,7 @@ export function slaLabel(status: SlaStatus): string {
   if (status === "atencao") return "Atenção";
   return "Atrasada";
 }
+
+export function isSlaAlerted(status: SlaStatus | null): boolean {
+  return status !== null && status !== "normal";
+}
