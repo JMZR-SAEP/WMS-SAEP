@@ -7,6 +7,8 @@ import { createAppQueryClient } from "../app/query-client";
 import { buildRouter } from "../app/router";
 import { formatDateTime } from "../features/requisitions/requisitions";
 
+const originalClipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+
 function renderRoute(pathname: string) {
   window.history.replaceState({}, "", pathname);
   const queryClient = createAppQueryClient();
@@ -20,8 +22,14 @@ function renderRoute(pathname: string) {
 }
 
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   window.sessionStorage.clear();
+  if (originalClipboardDescriptor) {
+    Object.defineProperty(navigator, "clipboard", originalClipboardDescriptor);
+  } else {
+    Reflect.deleteProperty(navigator, "clipboard");
+  }
 });
 
 const jsonHeaders = { "Content-Type": "application/json" };
@@ -1471,6 +1479,30 @@ describe("frontend pilot router", () => {
     });
   });
 
+  it("shows a detail skeleton while requisition detail loads", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((request: Request) => {
+        if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+          return sessionResponse();
+        }
+
+        if (requestUrl(request).endsWith("/api/v1/requisitions/101/")) {
+          return new Promise<Response>(() => {});
+        }
+
+        const notificationsResponse = maybeNotificationsRequest(request);
+        if (notificationsResponse) return notificationsResponse;
+        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+      }),
+    );
+
+    renderRoute("/requisicoes/101");
+
+    expect(await screen.findByRole("status", { name: "Carregando requisição" })).toBeInTheDocument();
+    expect(screen.queryByText("Carregando requisição...")).not.toBeInTheDocument();
+  });
+
   it("returns from requisition detail to authorization queue when opened with authorization context", async () => {
     vi.stubGlobal(
       "fetch",
@@ -1594,8 +1626,41 @@ describe("frontend pilot router", () => {
     renderRoute("/requisicoes/101?contexto=autorizacao");
 
     expect(await screen.findByRole("heading", { name: "REQ-2026-000101" })).toBeInTheDocument();
+    expect(screen.getByText("Ação bloqueada neste estado")).toBeInTheDocument();
+    expect(
+      screen.getByText("Requisição autorizada; volte para a fila de autorizações."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Ação indisponível" })).toBeDisabled();
     expect(screen.queryByRole("heading", { name: "Autorizar ou recusar requisição" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Autorizar tudo como solicitado" })).not.toBeInTheDocument();
+  });
+
+  it("shows blocked reason outside authorized fulfillment status", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((request: Request) => {
+        if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+          return sessionResponse(warehouseSession());
+        }
+
+        if (requestUrl(request).endsWith("/api/v1/requisitions/101/")) {
+          return pendingApprovalDetailResponse();
+        }
+
+        const notificationsResponse = maybeNotificationsRequest(request);
+        if (notificationsResponse) return notificationsResponse;
+        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+      }),
+    );
+
+    renderRoute("/requisicoes/101?contexto=atendimento");
+
+    expect(await screen.findByRole("heading", { name: "REQ-2026-000101" })).toBeInTheDocument();
+    expect(
+      screen.getByText("Requisição aguardando autorização; volte para a fila de atendimento."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Ação indisponível" })).toBeDisabled();
+    expect(screen.queryByRole("heading", { name: "Registrar atendimento" })).not.toBeInTheDocument();
   });
 
   it("formats requisition quantities with pt-BR decimal rendering", async () => {
@@ -1657,7 +1722,9 @@ describe("frontend pilot router", () => {
     const { container } = renderRoute("/requisicoes/101?contexto=autorizacao");
 
     expect(await screen.findByRole("heading", { name: "REQ-2026-000101" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Autorizar tudo como solicitado" }));
+    const primaryAction = screen.getByRole("button", { name: "Autorizar tudo como solicitado" });
+    expect(primaryAction.closest(".detail-primary-action")).not.toBeNull();
+    fireEvent.click(primaryAction);
 
     await waitFor(() => {
       expect(authorizePayload).toEqual({
@@ -1713,7 +1780,9 @@ describe("frontend pilot router", () => {
       target: { value: "Retirada no balcão" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Preencher entrega completa" }));
-    fireEvent.click(screen.getByRole("button", { name: "Registrar atendimento" }));
+    const primaryAction = screen.getByRole("button", { name: "Registrar atendimento" });
+    expect(primaryAction.closest(".detail-primary-action")).not.toBeNull();
+    fireEvent.click(primaryAction);
 
     await waitFor(() => {
       expect(fulfillPayload).toEqual({
@@ -1910,6 +1979,8 @@ describe("frontend pilot router", () => {
       target: { value: "Material indisponível no balcão" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Cancelar requisição autorizada" }));
+    expect(await screen.findByRole("dialog")).toHaveTextContent("Cancelar requisição autorizada?");
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar cancelamento" }));
 
     await waitFor(() => {
       expect(cancelPayload).toEqual({
@@ -1949,6 +2020,8 @@ describe("frontend pilot router", () => {
         target: { value: "Material indisponível no balcão" },
       });
       fireEvent.click(screen.getByRole("button", { name: "Cancelar requisição autorizada" }));
+      expect(await screen.findByRole("dialog")).toHaveTextContent("Cancelar requisição autorizada?");
+      fireEvent.click(screen.getByRole("button", { name: "Confirmar cancelamento" }));
 
       expect(await screen.findByRole("heading", { name: "Entrar no piloto" })).toBeInTheDocument();
       expect(container.ownerDocument.location.pathname).toBe("/login");
@@ -2174,6 +2247,8 @@ describe("frontend pilot router", () => {
       target: { value: "Pedido fora do escopo do setor" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Recusar requisição" }));
+    expect(await screen.findByRole("dialog")).toHaveTextContent("Recusar requisição?");
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar recusa" }));
 
     await waitFor(() => {
       expect(refusePayload).toEqual({
@@ -2184,6 +2259,11 @@ describe("frontend pilot router", () => {
   });
 
   it("keeps user on detail when authorization action returns domain error", async () => {
+    const writeText = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
     vi.stubGlobal(
       "fetch",
       vi.fn((request: Request) => {
@@ -2221,7 +2301,115 @@ describe("frontend pilot router", () => {
     fireEvent.click(screen.getByRole("button", { name: "Autorizar tudo como solicitado" }));
 
     expect(await screen.findByText("Saldo atual insuficiente.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Copiar detalhes para suporte" }));
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith("trace_id: trace-domain");
+    });
+    expect(await screen.findByText("Detalhes copiados.")).toBeInTheDocument();
     expect(container.ownerDocument.location.pathname).toBe("/requisicoes/101");
+  });
+
+  it("handles clipboard rejection when copying support details", async () => {
+    const clipboardError = new Error("clipboard blocked");
+    const writeText = vi.fn(() => Promise.reject(clipboardError));
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((request: Request) => {
+        if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+          return sessionResponse(chefeSession());
+        }
+
+        if (requestUrl(request).endsWith("/api/v1/requisitions/101/")) {
+          return pendingApprovalDetailResponse();
+        }
+
+        if (requestUrl(request).endsWith("/api/v1/requisitions/101/authorize/")) {
+          return new Response(
+            JSON.stringify({
+              error: {
+                code: "domain_conflict",
+                message: "Saldo atual insuficiente.",
+                details: {},
+                trace_id: "trace-domain",
+              },
+            }),
+            { status: 409, headers: jsonHeaders },
+          );
+        }
+
+        const notificationsResponse = maybeNotificationsRequest(request);
+        if (notificationsResponse) return notificationsResponse;
+        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+      }),
+    );
+
+    renderRoute("/requisicoes/101?contexto=autorizacao");
+
+    expect(await screen.findByRole("heading", { name: "REQ-2026-000101" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Autorizar tudo como solicitado" }));
+
+    expect(await screen.findByText("Saldo atual insuficiente.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Copiar detalhes para suporte" }));
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith("trace_id: trace-domain");
+      expect(consoleError).toHaveBeenCalledWith(
+        "Não foi possível copiar detalhes para suporte.",
+        clipboardError,
+      );
+    });
+    expect(await screen.findByText("Não foi possível copiar.")).toBeInTheDocument();
+  });
+
+  it("shows support details when clipboard is unavailable", async () => {
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: undefined,
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((request: Request) => {
+        if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+          return sessionResponse(chefeSession());
+        }
+
+        if (requestUrl(request).endsWith("/api/v1/requisitions/101/")) {
+          return pendingApprovalDetailResponse();
+        }
+
+        if (requestUrl(request).endsWith("/api/v1/requisitions/101/authorize/")) {
+          return new Response(
+            JSON.stringify({
+              error: {
+                code: "domain_conflict",
+                message: "Saldo atual insuficiente.",
+                details: {},
+                trace_id: "trace-domain",
+              },
+            }),
+            { status: 409, headers: jsonHeaders },
+          );
+        }
+
+        const notificationsResponse = maybeNotificationsRequest(request);
+        if (notificationsResponse) return notificationsResponse;
+        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+      }),
+    );
+
+    renderRoute("/requisicoes/101?contexto=autorizacao");
+
+    expect(await screen.findByRole("heading", { name: "REQ-2026-000101" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Autorizar tudo como solicitado" }));
+
+    expect(await screen.findByText("Saldo atual insuficiente.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Copiar detalhes para suporte" })).not.toBeInTheDocument();
+    expect(screen.getByText(/Copie estes detalhes para suporte:/)).toBeInTheDocument();
+    expect(screen.getByText("trace_id: trace-domain")).toBeInTheDocument();
   });
 
   it("redirects to login when authorize returns unauthenticated error", async () => {
@@ -2287,6 +2475,8 @@ describe("frontend pilot router", () => {
       target: { value: "Sessão expirou antes da decisão" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Recusar requisição" }));
+    expect(await screen.findByRole("dialog")).toHaveTextContent("Recusar requisição?");
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar recusa" }));
 
     expect(await screen.findByRole("heading", { name: "Entrar no piloto" })).toBeInTheDocument();
     expect(container.ownerDocument.location.pathname).toBe("/login");
@@ -2854,6 +3044,35 @@ describe("frontend pilot router", () => {
       });
     });
     expect(container.ownerDocument.location.pathname).toBe("/requisicoes/101");
+  });
+
+  it("redirects draft detail to login when session refresh expires", async () => {
+    let sessionRequests = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((request: Request) => {
+        if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+          sessionRequests += 1;
+          return sessionRequests === 1 ? sessionResponse() : unauthenticatedResponse();
+        }
+
+        if (requestUrl(request).endsWith("/api/v1/requisitions/101/")) {
+          return draftRequisitionDetailResponse();
+        }
+
+        const notificationsResponse = maybeNotificationsRequest(request);
+        if (notificationsResponse) return notificationsResponse;
+        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+      }),
+    );
+
+    const { container } = renderRoute("/requisicoes/101?etapa=itens");
+
+    expect(await screen.findByRole("heading", { name: "Entrar no piloto" })).toBeInTheDocument();
+    expect(container.ownerDocument.location.pathname).toBe("/login");
+    expect(container.ownerDocument.location.search).toBe(
+      "?redirect=%2Frequisicoes%2F101%3Fetapa%3Ditens",
+    );
   });
 
   it("confirms and submits a draft to authorization", async () => {

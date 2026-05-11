@@ -552,6 +552,17 @@ button:disabled {
   color: var(--danger);
 }
 
+.detail-error-state {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.detail-error-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
 .worklist-card-list {
   display: grid;
   gap: 0.75rem;
@@ -656,6 +667,11 @@ button:disabled {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 0.75rem;
+}
+
+.detail-skeleton {
+  display: grid;
+  gap: 1rem;
 }
 
 .context-chip {
@@ -794,6 +810,20 @@ button:disabled {
 
 .compact-error {
   padding: 1rem;
+}
+
+.blocked-action-panel {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.blocked-action-panel h2 {
+  color: var(--ink-strong);
+  font-size: 1.25rem;
+}
+
+.blocked-action-panel p {
+  color: var(--ink-soft);
 }
 
 .timeline-list {
@@ -995,6 +1025,15 @@ button:disabled {
   color: var(--danger);
 }
 
+.preview-button.danger-action {
+  background: var(--danger);
+  color: #ffffff;
+}
+
+.preview-button.danger-action:hover:not(:disabled) {
+  background: #7d1f1f;
+}
+
 .draft-confirmation-backdrop {
   position: fixed;
   inset: 0;
@@ -1072,6 +1111,17 @@ button:disabled {
     margin-left: -1rem;
     border-top: 1px solid var(--line-soft);
     background: rgba(246, 249, 246, 0.96);
+    padding: 0.9rem 1rem max(0.9rem, env(safe-area-inset-bottom));
+  }
+
+  .detail-primary-action {
+    position: sticky;
+    bottom: 0;
+    z-index: 8;
+    margin-right: -1rem;
+    margin-left: -1rem;
+    border-top: 1px solid var(--line-soft);
+    background: rgba(248, 250, 252, 0.98);
     padding: 0.9rem 1rem max(0.9rem, env(safe-area-inset-bottom));
   }
 
