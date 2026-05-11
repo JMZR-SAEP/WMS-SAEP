@@ -3807,6 +3807,7 @@ describe("frontend pilot router", () => {
     });
 
     it("desktop: oculta botão 'Autorizar tudo' quando SLA em atenção", async () => {
+      vi.setSystemTime(new Date("2026-05-11T12:00:00Z"));
       const twoHoursAgo = new Date(Date.now() - 120 * 60 * 1000).toISOString();
       mockAutorizacoesRoute(twoHoursAgo);
       mockWorklistViewport(false);
