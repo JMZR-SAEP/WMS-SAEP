@@ -21,7 +21,7 @@ import {
   statusLabel,
   type RequisicaoPendingApprovalItem,
 } from "../features/requisitions/requisitions";
-import { calcSlaStatus, isSlaAlerted, slaLabel, type SlaStatus } from "../features/requisitions/sla";
+import { calcSlaStatus, slaLabel, type SlaStatus } from "../features/requisitions/sla";
 import {
   ResponsiveWorklistFrame,
   WorklistEmptyState,
