@@ -3,10 +3,12 @@ from collections.abc import Iterable
 
 from django.conf import settings
 from django.contrib.contenttypes.models import ContentType
+from django.db import transaction
 from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied
 
 from apps.notifications.models import Notificacao, PushSubscription, TipoNotificacao
+from apps.notifications.policies import pode_gerenciar_push_subscription
 from apps.users.models import PapelChoices, User
 
 
@@ -107,29 +109,47 @@ def registrar_push_subscription(
     p256dh: str,
     auth: str,
 ) -> PushSubscription:
-    existing = PushSubscription.objects.filter(endpoint=endpoint).first()
-    if existing is not None and existing.usuario_id != usuario.pk:
-        raise PermissionDenied("Endpoint de push já vinculado a outro usuário.")
+    _validar_usuario_push(usuario)
 
-    subscription, _ = PushSubscription.objects.update_or_create(
-        endpoint=endpoint,
-        defaults={
-            "usuario": usuario,
-            "p256dh": p256dh,
-            "auth": auth,
-            "active": True,
-            "last_failure_status": None,
-            "last_failure_reason": "",
-        },
-    )
-    return subscription
+    with transaction.atomic():
+        _validar_usuario_push(usuario)
+        existing = PushSubscription.objects.select_for_update().filter(endpoint=endpoint).first()
+        if existing is not None and existing.usuario_id != usuario.pk:
+            raise PermissionDenied("Endpoint de push já vinculado a outro usuário.")
+
+        subscription, _ = PushSubscription.objects.update_or_create(
+            endpoint=endpoint,
+            defaults={
+                "usuario": usuario,
+                "p256dh": p256dh,
+                "auth": auth,
+                "active": True,
+                "last_failure_status": None,
+                "last_failure_reason": "",
+            },
+        )
+        return subscription
 
 
 def desativar_push_subscription(*, usuario: User, endpoint: str) -> None:
-    subscription = PushSubscription.objects.filter(endpoint=endpoint).first()
-    if subscription is not None and subscription.usuario_id != usuario.pk:
-        raise PermissionDenied("Endpoint de push já vinculado a outro usuário.")
-    PushSubscription.objects.filter(usuario=usuario, endpoint=endpoint).update(active=False)
+    _validar_usuario_push(usuario)
+
+    with transaction.atomic():
+        _validar_usuario_push(usuario)
+        subscription = (
+            PushSubscription.objects.select_for_update().filter(endpoint=endpoint).first()
+        )
+        if subscription is None:
+            return
+        if subscription.usuario_id != usuario.pk:
+            raise PermissionDenied("Endpoint de push já vinculado a outro usuário.")
+        subscription.active = False
+        subscription.save(update_fields=["active", "updated_at"])
+
+
+def _validar_usuario_push(usuario: User) -> None:
+    if not pode_gerenciar_push_subscription(usuario):
+        raise PermissionDenied("Usuário não pode gerenciar alertas push.")
 
 
 def _webpush(**kwargs):

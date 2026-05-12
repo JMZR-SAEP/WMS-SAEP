@@ -40,7 +40,11 @@ export function pushOnboardingStorageKey(session: Pick<AuthSession, "id">) {
 
 export function hasSeenPushOnboarding(session: Pick<AuthSession, "id">) {
   const key = pushOnboardingStorageKey(session);
-  return getLocalStorage()?.getItem(key) === "seen" || fallbackOnboardingState.has(key);
+  try {
+    return getLocalStorage()?.getItem(key) === "seen" || fallbackOnboardingState.has(key);
+  } catch {
+    return fallbackOnboardingState.has(key);
+  }
 }
 
 export function markPushOnboardingSeen(session: Pick<AuthSession, "id">) {
@@ -48,8 +52,13 @@ export function markPushOnboardingSeen(session: Pick<AuthSession, "id">) {
   const storage = getLocalStorage();
 
   if (storage) {
-    storage.setItem(key, "seen");
-    return;
+    try {
+      storage.setItem(key, "seen");
+      return;
+    } catch {
+      fallbackOnboardingState.add(key);
+      return;
+    }
   }
 
   fallbackOnboardingState.add(key);

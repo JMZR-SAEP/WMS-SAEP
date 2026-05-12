@@ -5,13 +5,17 @@ from drf_spectacular.openapi import OpenApiParameter
 from drf_spectacular.utils import extend_schema
 from rest_framework import mixins, status
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 
 from apps.core.api.serializers import ErrorResponseSerializer
 from apps.notifications.models import Notificacao
-from apps.notifications.policies import queryset_notificacoes_visiveis
+from apps.notifications.policies import (
+    pode_gerenciar_push_subscription,
+    queryset_notificacoes_visiveis,
+)
 from apps.notifications.serializers import (
     NotificacaoListPaginatedSerializer,
     NotificacaoOutputSerializer,
@@ -122,6 +126,9 @@ class NotificacaoViewSet(mixins.ListModelMixin, GenericViewSet):
     )
     @action(detail=False, methods=["get"], url_path="push/config")
     def push_config(self, request):
+        if not pode_gerenciar_push_subscription(request.user):
+            raise PermissionDenied("Usuário não pode gerenciar alertas push.")
+
         public_key = getattr(settings, "WEB_PUSH_VAPID_PUBLIC_KEY", "")
         return Response(
             {

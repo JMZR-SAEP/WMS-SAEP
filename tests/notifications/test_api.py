@@ -2,7 +2,7 @@ import pytest
 from django.urls import reverse
 from rest_framework.test import APIClient
 
-from apps.notifications.models import TipoNotificacao
+from apps.notifications.models import PushSubscription, TipoNotificacao
 from apps.notifications.services import (
     criar_notificacao_papel,
     criar_notificacao_usuario,
@@ -271,7 +271,8 @@ class TestNotificacoesAPI:
     def test_push_config_retorna_chave_publica_quando_configurado(self, settings):
         settings.WEB_PUSH_VAPID_PUBLIC_KEY = "BPublicKey"
 
-        usuario = self._criar_usuario("41016", "Usuario Push Config")
+        setor = self._criar_setor("Push Config", "41016")
+        usuario = setor.chefe_responsavel
         client = APIClient()
         client.force_authenticate(user=usuario)
 
@@ -283,10 +284,29 @@ class TestNotificacoesAPI:
             "vapid_public_key": "BPublicKey",
         }
 
+    def test_push_config_exige_autenticacao(self):
+        client = APIClient()
+
+        response = client.get(reverse("notification-push-config"))
+
+        assert response.status_code == 403
+        assert response.data["error"]["code"] == "not_authenticated"
+
+    def test_push_config_rejeita_usuario_sem_permissao(self):
+        usuario = self._criar_usuario("41017", "Usuario Push Sem Permissao")
+        client = APIClient()
+        client.force_authenticate(user=usuario)
+
+        response = client.get(reverse("notification-push-config"))
+
+        assert response.status_code == 403
+        assert response.data["error"]["code"] == "permission_denied"
+
     def test_push_subscriptions_registra_assinatura_do_usuario_autenticado(self, settings):
         settings.WEB_PUSH_VAPID_PUBLIC_KEY = "BPublicKey"
 
-        usuario = self._criar_usuario("41017", "Usuario Push Subscription")
+        setor = self._criar_setor("Push Subscription", "41018")
+        usuario = setor.chefe_responsavel
         client = APIClient()
         client.force_authenticate(user=usuario)
 
@@ -307,3 +327,86 @@ class TestNotificacoesAPI:
             "endpoint": "https://push.example.test/subscription/abc",
             "active": True,
         }
+
+    def test_push_subscriptions_exige_autenticacao(self):
+        client = APIClient()
+
+        response = client.post(
+            reverse("notification-push-subscriptions"),
+            data={},
+            format="json",
+        )
+
+        assert response.status_code == 403
+        assert response.data["error"]["code"] == "not_authenticated"
+
+    def test_push_subscriptions_rejeita_usuario_sem_permissao(self):
+        usuario = self._criar_usuario("41019", "Usuario Push Sem Permissao")
+        client = APIClient()
+        client.force_authenticate(user=usuario)
+
+        response = client.post(
+            reverse("notification-push-subscriptions"),
+            data={
+                "endpoint": "https://push.example.test/subscription/sem-permissao",
+                "keys": {
+                    "p256dh": "cDI1NmRoLWtleQ",
+                    "auth": "YXV0aC1rZXk",
+                },
+            },
+            format="json",
+        )
+
+        assert response.status_code == 403
+        assert response.data["error"]["code"] == "permission_denied"
+
+    def test_push_subscriptions_rejeita_payload_invalido_com_envelope(self):
+        setor = self._criar_setor("Push Payload Invalido", "41020")
+        usuario = setor.chefe_responsavel
+        client = APIClient()
+        client.force_authenticate(user=usuario)
+
+        response = client.post(
+            reverse("notification-push-subscriptions"),
+            data={
+                "keys": {
+                    "p256dh": "cDI1NmRoLWtleQ",
+                    "auth": "$valor-invalido",
+                },
+            },
+            format="json",
+        )
+
+        assert response.status_code == 400
+        assert response.data["error"]["code"] == "validation_error"
+        assert response.data["error"]["details"]["endpoint"][0].code == "required"
+        assert response.data["error"]["details"]["keys"]["auth"][0].code == "invalid"
+
+    def test_push_subscriptions_rejeita_endpoint_de_outro_usuario(self):
+        setor_original = self._criar_setor("Push Dono Original", "41021")
+        setor_outro = self._criar_setor("Push Outro Chefe", "41022")
+        subscription = PushSubscription.objects.create(
+            usuario=setor_original.chefe_responsavel,
+            endpoint="https://push.example.test/subscription/outro-usuario",
+            p256dh="p256dh-original",
+            auth="auth-original",
+        )
+        client = APIClient()
+        client.force_authenticate(user=setor_outro.chefe_responsavel)
+
+        response = client.post(
+            reverse("notification-push-subscriptions"),
+            data={
+                "endpoint": "https://push.example.test/subscription/outro-usuario",
+                "keys": {
+                    "p256dh": "cDI1NmRoLWtleQ",
+                    "auth": "YXV0aC1rZXk",
+                },
+            },
+            format="json",
+        )
+
+        assert response.status_code == 403
+        assert response.data["error"]["code"] == "permission_denied"
+        subscription.refresh_from_db()
+        assert subscription.usuario == setor_original.chefe_responsavel
