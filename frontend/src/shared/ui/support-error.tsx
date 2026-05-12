@@ -62,7 +62,11 @@ export function SupportErrorPanel({
           Copie estes detalhes para suporte: <code>{supportDetails}</code>
         </p>
       ) : null}
-      {copyFeedback ? <p className="helper-text">{copyFeedback}</p> : null}
+      {copyFeedback ? (
+        <p aria-live="polite" className="helper-text" role="status">
+          {copyFeedback}
+        </p>
+      ) : null}
     </div>
   );
 }

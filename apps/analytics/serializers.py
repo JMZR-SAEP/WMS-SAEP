@@ -1,3 +1,5 @@
+import re
+
 from rest_framework import serializers
 
 from apps.analytics.models import (
@@ -31,6 +33,19 @@ SENSITIVE_FIELD_NAMES = {
     "usuario",
     "usuario_id",
 }
+UUID_ENDPOINT_SEGMENT_RE = re.compile(
+    r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-"
+    r"[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$"
+)
+HEX_ENDPOINT_SEGMENT_RE = re.compile(r"^[0-9a-fA-F]{8,}$")
+
+
+def _endpoint_segment_has_identifier(segment: str) -> bool:
+    return (
+        segment.isdigit()
+        or bool(UUID_ENDPOINT_SEGMENT_RE.fullmatch(segment))
+        or bool(HEX_ENDPOINT_SEGMENT_RE.fullmatch(segment))
+    )
 
 
 class FrontendAnalyticsEventInputSerializer(serializers.Serializer):
@@ -69,17 +84,19 @@ class FrontendAnalyticsEventInputSerializer(serializers.Serializer):
     def validate(self, attrs):
         extra_fields = set(getattr(self, "initial_data", {})) - set(self.fields)
         sensitive_fields = sorted(extra_fields & SENSITIVE_FIELD_NAMES)
-        if sensitive_fields:
+        if extra_fields:
             raise serializers.ValidationError(
                 {
-                    "non_field_errors": [
-                        "Payload de analytics contém campos sensíveis não permitidos."
-                    ],
+                    "non_field_errors": ["Payload de analytics contém campos não permitidos."],
+                    "campos_extras": sorted(extra_fields),
                     "campos_sensiveis": sensitive_fields,
                 }
             )
         endpoint_key = attrs.get("endpoint_key", "")
-        if any(segment.isdigit() for segment in endpoint_key.strip("/").split("/")):
+        if any(
+            _endpoint_segment_has_identifier(segment)
+            for segment in endpoint_key.strip("/").split("/")
+        ):
             raise serializers.ValidationError(
                 {
                     "endpoint_key": [

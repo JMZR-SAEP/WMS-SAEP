@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   reportApiError,
@@ -8,6 +8,11 @@ import {
 import { ApiError, supportDetailsFromError } from "../shared/api/errors";
 
 describe("frontend analytics", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
   it("remove payloads com campos sensiveis antes do envio", () => {
     expect(
       sanitizeAnalyticsPayload({
@@ -38,6 +43,23 @@ describe("frontend analytics", () => {
       sanitizeAnalyticsPayload({
         event_type: "api_error",
         endpoint_key: "/api/v1/requisitions/123/",
+        http_status: 500,
+      }),
+    ).toBeNull();
+  });
+
+  it("recusa endpoint_key com uuid ou hash", () => {
+    expect(
+      sanitizeAnalyticsPayload({
+        event_type: "api_error",
+        endpoint_key: "/api/v1/requisitions/550e8400-e29b-41d4-a716-446655440000/",
+        http_status: 500,
+      }),
+    ).toBeNull();
+    expect(
+      sanitizeAnalyticsPayload({
+        event_type: "api_error",
+        endpoint_key: "/api/v1/requisitions/deadbeef/",
         http_status: 500,
       }),
     ).toBeNull();

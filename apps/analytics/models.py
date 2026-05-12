@@ -4,6 +4,16 @@ from django.db import models
 from apps.users.models import PapelChoices
 
 
+class FrontendAnalyticsEventQuerySet(models.QuerySet):
+    def update(self, **kwargs):
+        if "papel" in kwargs:
+            raise ValueError("O papel snapshot do evento de analytics é imutável.")
+        return super().update(**kwargs)
+
+
+FrontendAnalyticsEventManager = models.Manager.from_queryset(FrontendAnalyticsEventQuerySet)
+
+
 class FrontendAnalyticsEventType(models.TextChoices):
     LOGIN_SUCCESS = "login_success", "Login realizado"
     DRAFT_STARTED = "draft_started", "Criação iniciada"
@@ -63,6 +73,8 @@ class FrontendAnalyticsEvent(models.Model):
     error_code = models.CharField(max_length=80, blank=True)
     trace_id = models.CharField(max_length=120, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    objects = FrontendAnalyticsEventManager()
 
     class Meta:
         verbose_name = "Evento de analytics frontend"

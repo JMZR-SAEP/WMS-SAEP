@@ -437,7 +437,12 @@ function AuthorizationDecisionPanel({
         const originalItem = requisicao.itens.find(
           (requisitionItem) => requisitionItem.id === item.item_id,
         );
-        return originalItem?.quantidade_solicitada === item.quantidade_autorizada;
+        if (!originalItem) {
+          return false;
+        }
+        const requested = quantityNumber(originalItem.quantidade_solicitada);
+        const authorized = quantityNumber(item.quantidade_autorizada);
+        return !Number.isNaN(requested) && !Number.isNaN(authorized) && requested === authorized;
       });
       return afterDecisionSuccess(isTotal ? "authorization_total" : "authorization_partial");
     },

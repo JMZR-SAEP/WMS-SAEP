@@ -1,5 +1,6 @@
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
+from rest_framework.authentication import SessionAuthentication
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import SimpleRateThrottle
@@ -27,6 +28,7 @@ class FrontendAnalyticsEventThrottle(SimpleRateThrottle):
 
 
 class FrontendAnalyticsViewSet(ViewSet):
+    authentication_classes = [SessionAuthentication]
     permission_classes = [IsAuthenticated]
     throttle_classes = [FrontendAnalyticsEventThrottle]
 

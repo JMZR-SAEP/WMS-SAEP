@@ -11,10 +11,11 @@ from apps.users.models import PapelChoices, Setor, User
 
 @pytest.fixture(autouse=True)
 def ensure_analytics_table(db):
-    with connection.schema_editor() as schema_editor:
-        existing_tables = connection.introspection.table_names()
-        if FrontendAnalyticsEvent._meta.db_table not in existing_tables:
-            schema_editor.create_model(FrontendAnalyticsEvent)
+    existing_tables = connection.introspection.table_names()
+    if FrontendAnalyticsEvent._meta.db_table not in existing_tables:
+        pytest.fail(
+            "Tabela de analytics ausente; rode rtk make setup para recriar migrations efêmeras."
+        )
 
 
 @pytest.mark.django_db
@@ -53,6 +54,23 @@ class TestFrontendAnalyticsAPI:
 
         assert response.status_code == 403
         assert response.data["error"]["code"] == "permission_denied"
+
+    def test_events_rejeita_usuario_nao_operacional_no_service(self):
+        usuario = self._criar_usuario()
+        usuario.is_active = False
+        usuario.save(update_fields=["is_active"])
+        client = APIClient()
+        client.force_authenticate(user=usuario)
+
+        response = client.post(
+            reverse("analytics-event-list"),
+            data={"event_type": "draft_started", "screen": "nova_requisicao"},
+            format="json",
+        )
+
+        assert response.status_code == 403
+        assert response.data["error"]["code"] == "permission_denied"
+        assert FrontendAnalyticsEvent.objects.count() == 0
 
     def test_events_registra_evento_sem_pii_com_usuario_e_papel_da_sessao(self):
         usuario = self._criar_usuario()
@@ -103,11 +121,37 @@ class TestFrontendAnalyticsAPI:
 
         assert response.status_code == 400
         assert response.data["error"]["code"] == "validation_error"
+        assert set(response.data["error"]["details"]["campos_extras"]) == {
+            "material_id",
+            "nome",
+            "numero_publico",
+        }
         assert set(response.data["error"]["details"]["campos_sensiveis"]) == {
             "material_id",
             "nome",
             "numero_publico",
         }
+        assert FrontendAnalyticsEvent.objects.count() == 0
+
+    def test_events_rejeita_campos_extras_nao_sensiveis(self):
+        usuario = self._criar_usuario()
+        client = APIClient()
+        client.force_authenticate(user=usuario)
+
+        response = client.post(
+            reverse("analytics-event-list"),
+            data={
+                "event_type": "draft_saved",
+                "screen": "nova_requisicao",
+                "ignored": "x",
+            },
+            format="json",
+        )
+
+        assert response.status_code == 400
+        assert response.data["error"]["code"] == "validation_error"
+        assert response.data["error"]["details"]["campos_extras"] == ["ignored"]
+        assert response.data["error"]["details"]["campos_sensiveis"] == []
         assert FrontendAnalyticsEvent.objects.count() == 0
 
     def test_events_rejeita_endpoint_com_id_cru(self):
@@ -124,6 +168,32 @@ class TestFrontendAnalyticsAPI:
                 "http_status": 500,
                 "error_code": "internal_error",
                 "trace_id": "trace-abc",
+            },
+            format="json",
+        )
+
+        assert response.status_code == 400
+        assert response.data["error"]["code"] == "validation_error"
+
+    @pytest.mark.parametrize(
+        "endpoint_key",
+        [
+            "/api/v1/requisitions/550e8400-e29b-41d4-a716-446655440000/",
+            "/api/v1/requisitions/deadbeef/",
+        ],
+    )
+    def test_events_rejeita_endpoint_com_uuid_ou_hash(self, endpoint_key):
+        usuario = self._criar_usuario()
+        client = APIClient()
+        client.force_authenticate(user=usuario)
+
+        response = client.post(
+            reverse("analytics-event-list"),
+            data={
+                "event_type": "api_error",
+                "screen": "requisicao_detalhe",
+                "endpoint_key": endpoint_key,
+                "http_status": 500,
             },
             format="json",
         )
@@ -187,3 +257,20 @@ class TestFrontendAnalyticsAPI:
         event.papel = PapelChoices.CHEFE_ALMOXARIFADO
         with pytest.raises(ValueError, match="papel snapshot"):
             event.save(update_fields=["papel"])
+
+    def test_papel_snapshot_e_imutavel_em_queryset_update(self):
+        usuario = self._criar_usuario()
+        event = FrontendAnalyticsEvent.objects.create(
+            usuario=usuario,
+            papel=usuario.papel,
+            event_type="login_success",
+            screen="login",
+        )
+
+        with pytest.raises(ValueError, match="papel snapshot"):
+            FrontendAnalyticsEvent.objects.filter(pk=event.pk).update(
+                papel=PapelChoices.CHEFE_ALMOXARIFADO
+            )
+
+        event.refresh_from_db()
+        assert event.papel == PapelChoices.CHEFE_SETOR

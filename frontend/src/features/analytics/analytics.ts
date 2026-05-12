@@ -71,6 +71,18 @@ const SENSITIVE_ANALYTICS_KEYS = new Set([
   "usuario_id",
 ]);
 
+const UUID_ENDPOINT_SEGMENT_PATTERN =
+  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
+const HEX_ENDPOINT_SEGMENT_PATTERN = /^[0-9a-fA-F]{8,}$/;
+
+function endpointSegmentHasIdentifier(segment: string) {
+  return (
+    /^\d+$/.test(segment) ||
+    UUID_ENDPOINT_SEGMENT_PATTERN.test(segment) ||
+    HEX_ENDPOINT_SEGMENT_PATTERN.test(segment)
+  );
+}
+
 function isSafeEndpointKey(value: unknown) {
   if (value === undefined || value === "") {
     return true;
@@ -85,7 +97,7 @@ function isSafeEndpointKey(value: unknown) {
   return !value
     .split("/")
     .filter(Boolean)
-    .some((segment) => /^\d+$/.test(segment));
+    .some((segment) => endpointSegmentHasIdentifier(segment));
 }
 
 export function sanitizeAnalyticsPayload(input: Record<string, unknown>) {

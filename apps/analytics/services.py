@@ -1,5 +1,8 @@
+from rest_framework.exceptions import PermissionDenied
+
 from apps.analytics.models import FrontendAnalyticsEvent
 from apps.users.models import User
+from apps.users.policies import usuario_operacional_ativo
 
 
 def registrar_frontend_analytics_event(
@@ -14,6 +17,9 @@ def registrar_frontend_analytics_event(
     error_code: str = "",
     trace_id: str = "",
 ) -> FrontendAnalyticsEvent:
+    if not usuario_operacional_ativo(usuario):
+        raise PermissionDenied("Usuário sem permissão para registrar analytics.")
+
     return FrontendAnalyticsEvent.objects.create(
         usuario=usuario,
         papel=usuario.papel,
