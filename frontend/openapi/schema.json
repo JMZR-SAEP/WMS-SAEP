@@ -410,6 +410,167 @@
                 }
             }
         },
+        "/api/v1/notifications/push/config/": {
+            "get": {
+                "operationId": "notifications_push_config",
+                "description": "Retorna configuração pública de Web Push para o usuário autenticado.",
+                "tags": [
+                    "notifications"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PushConfigOutput"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/notifications/push/subscriptions/": {
+            "post": {
+                "operationId": "notifications_push_subscriptions",
+                "description": "Registra ou atualiza a assinatura Web Push do usuário autenticado.",
+                "tags": [
+                    "notifications"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PushSubscriptionInput"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PushSubscriptionInput"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PushSubscriptionInput"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PushSubscriptionOutput"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/notifications/push/subscriptions/deactivate/": {
+            "post": {
+                "operationId": "notifications_push_subscriptions_deactivate",
+                "description": "Desativa uma assinatura Web Push do usuário autenticado pelo endpoint.",
+                "tags": [
+                    "notifications"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PushSubscriptionDeactivateInput"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PushSubscriptionDeactivateInput"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PushSubscriptionDeactivateInput"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No response body"
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/v1/notifications/unread-count/": {
             "get": {
                 "operationId": "notifications_unread_count",
@@ -2185,6 +2346,89 @@
                 },
                 "required": [
                     "unread_count"
+                ]
+            },
+            "PushConfigOutput": {
+                "type": "object",
+                "properties": {
+                    "enabled": {
+                        "type": "boolean",
+                        "readOnly": true
+                    },
+                    "vapid_public_key": {
+                        "type": "string",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "enabled",
+                    "vapid_public_key"
+                ]
+            },
+            "PushSubscriptionDeactivateInput": {
+                "type": "object",
+                "properties": {
+                    "endpoint": {
+                        "type": "string",
+                        "format": "uri",
+                        "maxLength": 500
+                    }
+                },
+                "required": [
+                    "endpoint"
+                ]
+            },
+            "PushSubscriptionInput": {
+                "type": "object",
+                "properties": {
+                    "endpoint": {
+                        "type": "string",
+                        "format": "uri",
+                        "maxLength": 500
+                    },
+                    "keys": {
+                        "$ref": "#/components/schemas/PushSubscriptionKeysInput"
+                    }
+                },
+                "required": [
+                    "endpoint",
+                    "keys"
+                ]
+            },
+            "PushSubscriptionKeysInput": {
+                "type": "object",
+                "properties": {
+                    "p256dh": {
+                        "type": "string",
+                        "maxLength": 512
+                    },
+                    "auth": {
+                        "type": "string",
+                        "maxLength": 256
+                    }
+                },
+                "required": [
+                    "auth",
+                    "p256dh"
+                ]
+            },
+            "PushSubscriptionOutput": {
+                "type": "object",
+                "properties": {
+                    "endpoint": {
+                        "type": "string",
+                        "format": "uri",
+                        "readOnly": true,
+                        "description": "Endpoint retornado pelo PushManager do navegador."
+                    },
+                    "active": {
+                        "type": "boolean",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "active",
+                    "endpoint"
                 ]
             },
             "RequisicaoActionOutput": {

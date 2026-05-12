@@ -1,7 +1,11 @@
+import base64
+import binascii
+import re
+
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from apps.notifications.models import Notificacao
+from apps.notifications.models import Notificacao, PushSubscription
 
 REQUISICAO_APP_LABEL = "requisitions"
 REQUISICAO_MODEL = "requisicao"
@@ -97,3 +101,51 @@ class NotificacaoListPaginatedSerializer(serializers.Serializer):
 
 class NotificacaoUnreadCountOutputSerializer(serializers.Serializer):
     unread_count = serializers.IntegerField(read_only=True)
+
+
+class PushConfigOutputSerializer(serializers.Serializer):
+    enabled = serializers.BooleanField(read_only=True)
+    vapid_public_key = serializers.CharField(allow_blank=True, read_only=True)
+
+
+class PushSubscriptionKeysInputSerializer(serializers.Serializer):
+    BASE64URL_RE = re.compile(r"^[A-Za-z0-9_-]+={0,2}$")
+
+    p256dh = serializers.CharField(max_length=512)
+    auth = serializers.CharField(max_length=256)
+
+    def _validate_base64url(self, field_name: str, value: str, min_length: int) -> str:
+        if len(value) < min_length or len(value) > self.fields[field_name].max_length:
+            raise serializers.ValidationError("Valor fora do tamanho permitido.")
+        if not self.BASE64URL_RE.fullmatch(value):
+            raise serializers.ValidationError("Formato inválido.")
+
+        padding = "=" * ((4 - len(value) % 4) % 4)
+        try:
+            base64.b64decode((value + padding).replace("-", "+").replace("_", "/"), validate=True)
+        except (binascii.Error, ValueError) as exc:
+            raise serializers.ValidationError("Formato inválido.") from exc
+
+        return value
+
+    def validate_p256dh(self, value: str) -> str:
+        return self._validate_base64url("p256dh", value, min_length=8)
+
+    def validate_auth(self, value: str) -> str:
+        return self._validate_base64url("auth", value, min_length=8)
+
+
+class PushSubscriptionInputSerializer(serializers.Serializer):
+    endpoint = serializers.URLField(max_length=500)
+    keys = PushSubscriptionKeysInputSerializer()
+
+
+class PushSubscriptionOutputSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PushSubscription
+        fields = ["endpoint", "active"]
+        read_only_fields = fields
+
+
+class PushSubscriptionDeactivateInputSerializer(serializers.Serializer):
+    endpoint = serializers.URLField(max_length=500)

@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
 
 import saepLogoUrl from "../../assets/saep-logo.webp";
 import { ApiError, authQueryKeys, logoutSession, meQueryOptions } from "../../features/auth/session";
@@ -12,6 +13,7 @@ import {
   notificationUnreadCountQueryOptions,
   notificationsQueryKeys,
 } from "../../features/notifications/notifications";
+import { hasSeenPushOnboarding, isPushOnboardingPapel } from "../../features/pwa/push";
 import { navigationItems } from "../../shared/config/navigation";
 
 function messageFromLogoutError(error: unknown) {
@@ -72,6 +74,17 @@ export function AppShell() {
   });
   const notifications = notificationsQuery.data?.results ?? [];
   const unreadCount = unreadCountQuery.data?.unread_count ?? 0;
+
+  useEffect(() => {
+    if (
+      session &&
+      isPushOnboardingPapel(session.papel) &&
+      location.pathname !== "/alertas" &&
+      !hasSeenPushOnboarding(session)
+    ) {
+      void navigate({ to: "/alertas" });
+    }
+  }, [location.pathname, navigate, session]);
 
   if (location.pathname === "/login") {
     return (

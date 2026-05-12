@@ -10,6 +10,7 @@ from apps.notifications.models import TipoNotificacao
 from apps.notifications.services import (
     criar_notificacao_papel,
     criar_notificacoes_usuarios_unicos,
+    enviar_push_requisicao_aguardando_autorizacao,
 )
 from apps.requisitions.models import Requisicao
 from apps.users.models import PapelChoices
@@ -37,6 +38,7 @@ def _notificar_envio_autorizacao(payload: dict[str, object]) -> None:
         mensagem=f"A requisição {_identificador(requisicao)} aguarda autorização.",
         objeto_relacionado=requisicao,
     )
+    enviar_push_requisicao_aguardando_autorizacao(requisicao=requisicao)
 
 
 def _notificar_autorizacao(payload: dict[str, object]) -> None:

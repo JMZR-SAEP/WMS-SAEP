@@ -154,6 +154,9 @@ class TestOpenAPISchema:
         assert "/api/v1/requisitions/pending-fulfillments/" in paths
         assert "/api/v1/notifications/" in paths
         assert "/api/v1/notifications/{id}/mark-read/" in paths
+        assert "/api/v1/notifications/push/config/" in paths
+        assert "/api/v1/notifications/push/subscriptions/" in paths
+        assert "/api/v1/notifications/push/subscriptions/deactivate/" in paths
         assert "/api/v1/notifications/unread-count/" in paths
         assert paths["/api/v1/materials/{id}/"]["get"]["operationId"] == "materials_retrieve"
         assert (
@@ -332,6 +335,29 @@ class TestOpenAPISchema:
                 "error_codes": {"403"},
                 "operation_id": "notifications_unread_count",
             },
+            ("/api/v1/notifications/push/config/", "get"): {
+                "request_body": False,
+                "success_codes": {"200"},
+                "success_ref": "#/components/schemas/PushConfigOutput",
+                "error_codes": {"403"},
+                "operation_id": "notifications_push_config",
+            },
+            ("/api/v1/notifications/push/subscriptions/", "post"): {
+                "request_body": True,
+                "request_ref": "#/components/schemas/PushSubscriptionInput",
+                "success_codes": {"200"},
+                "success_ref": "#/components/schemas/PushSubscriptionOutput",
+                "error_codes": {"400", "403"},
+                "operation_id": "notifications_push_subscriptions",
+            },
+            ("/api/v1/notifications/push/subscriptions/deactivate/", "post"): {
+                "request_body": True,
+                "request_ref": "#/components/schemas/PushSubscriptionDeactivateInput",
+                "success_codes": {"204"},
+                "success_ref": None,
+                "error_codes": {"400", "403"},
+                "operation_id": "notifications_push_subscriptions_deactivate",
+            },
         }
 
         for (path, method), expectation in expected_operations.items():
@@ -346,15 +372,22 @@ class TestOpenAPISchema:
 
             if expectation["request_body"]:
                 assert "requestBody" in operation
+                assert (
+                    operation["requestBody"]["content"]["application/json"]["schema"]["$ref"]
+                    == expectation["request_ref"]
+                )
             else:
                 assert "requestBody" not in operation
 
             for code in expectation["success_codes"]:
                 assert code in responses
-                assert (
-                    responses[code]["content"]["application/json"]["schema"]["$ref"]
-                    == expectation["success_ref"]
-                )
+                if expectation["success_ref"] is None:
+                    assert "content" not in responses[code]
+                else:
+                    assert (
+                        responses[code]["content"]["application/json"]["schema"]["$ref"]
+                        == expectation["success_ref"]
+                    )
 
             for code in expectation["error_codes"]:
                 assert code in responses

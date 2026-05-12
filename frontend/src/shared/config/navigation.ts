@@ -2,6 +2,7 @@ type NavigationItem = {
   to:
     | "/"
     | "/login"
+    | "/alertas"
     | "/minhas-requisicoes"
     | "/requisicoes/nova"
     | "/requisicoes/$id"
@@ -62,6 +63,13 @@ export const navigationItems: NavigationItem[] = [
     hint: "#40",
     tag: "Queue",
     matches: (pathname: string) => pathname === "/autorizacoes",
+  },
+  {
+    to: "/alertas",
+    label: "Alertas",
+    hint: "#67",
+    tag: "Push",
+    matches: (pathname: string) => pathname === "/alertas",
   },
   {
     to: "/atendimentos",

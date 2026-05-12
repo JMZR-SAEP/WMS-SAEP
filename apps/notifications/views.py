@@ -1,24 +1,35 @@
+from django.conf import settings
 from django.shortcuts import get_object_or_404
 from drf_spectacular.helpers import forced_singular_serializer
 from drf_spectacular.openapi import OpenApiParameter
 from drf_spectacular.utils import extend_schema
-from rest_framework import mixins
+from rest_framework import mixins, status
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 
 from apps.core.api.serializers import ErrorResponseSerializer
 from apps.notifications.models import Notificacao
-from apps.notifications.policies import queryset_notificacoes_visiveis
+from apps.notifications.policies import (
+    pode_gerenciar_push_subscription,
+    queryset_notificacoes_visiveis,
+)
 from apps.notifications.serializers import (
     NotificacaoListPaginatedSerializer,
     NotificacaoOutputSerializer,
     NotificacaoUnreadCountOutputSerializer,
+    PushConfigOutputSerializer,
+    PushSubscriptionDeactivateInputSerializer,
+    PushSubscriptionInputSerializer,
+    PushSubscriptionOutputSerializer,
 )
 from apps.notifications.services import (
     contar_notificacoes_individuais_nao_lidas,
+    desativar_push_subscription,
     marcar_notificacao_como_lida,
+    registrar_push_subscription,
 )
 
 
@@ -103,3 +114,70 @@ class NotificacaoViewSet(mixins.ListModelMixin, GenericViewSet):
     def unread_count(self, request):
         unread_count = contar_notificacoes_individuais_nao_lidas(usuario=request.user)
         return Response({"unread_count": unread_count})
+
+    @extend_schema(
+        operation_id="notifications_push_config",
+        tags=["notifications"],
+        description="Retorna configuração pública de Web Push para o usuário autenticado.",
+        responses={
+            200: PushConfigOutputSerializer(),
+            403: ErrorResponseSerializer(),
+        },
+    )
+    @action(detail=False, methods=["get"], url_path="push/config")
+    def push_config(self, request):
+        if not pode_gerenciar_push_subscription(request.user):
+            raise PermissionDenied("Usuário não pode gerenciar alertas push.")
+
+        public_key = getattr(settings, "WEB_PUSH_VAPID_PUBLIC_KEY", "")
+        return Response(
+            {
+                "enabled": bool(public_key),
+                "vapid_public_key": public_key,
+            }
+        )
+
+    @extend_schema(
+        operation_id="notifications_push_subscriptions",
+        tags=["notifications"],
+        description="Registra ou atualiza a assinatura Web Push do usuário autenticado.",
+        request=PushSubscriptionInputSerializer(),
+        responses={
+            200: PushSubscriptionOutputSerializer(),
+            400: ErrorResponseSerializer(),
+            403: ErrorResponseSerializer(),
+        },
+    )
+    @action(detail=False, methods=["post"], url_path="push/subscriptions")
+    def push_subscriptions(self, request):
+        serializer = PushSubscriptionInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        keys = serializer.validated_data["keys"]
+        subscription = registrar_push_subscription(
+            usuario=request.user,
+            endpoint=serializer.validated_data["endpoint"],
+            p256dh=keys["p256dh"],
+            auth=keys["auth"],
+        )
+        return Response(PushSubscriptionOutputSerializer(subscription).data)
+
+    @extend_schema(
+        operation_id="notifications_push_subscriptions_deactivate",
+        tags=["notifications"],
+        description="Desativa uma assinatura Web Push do usuário autenticado pelo endpoint.",
+        request=PushSubscriptionDeactivateInputSerializer(),
+        responses={
+            204: None,
+            400: ErrorResponseSerializer(),
+            403: ErrorResponseSerializer(),
+        },
+    )
+    @action(detail=False, methods=["post"], url_path="push/subscriptions/deactivate")
+    def push_subscriptions_deactivate(self, request):
+        serializer = PushSubscriptionDeactivateInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        desativar_push_subscription(
+            usuario=request.user,
+            endpoint=serializer.validated_data["endpoint"],
+        )
+        return Response(status=status.HTTP_204_NO_CONTENT)
