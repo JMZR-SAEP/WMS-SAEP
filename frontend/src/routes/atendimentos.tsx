@@ -14,15 +14,14 @@ import { authQueryKeys, isUnauthenticatedError } from "../features/auth/session"
 import {
   formatDateTime,
   pendingFulfillmentsQueryOptions,
-  queryErrorMessage,
   statusLabel,
   type RequisicaoPendingFulfillmentItem,
 } from "../features/requisitions/requisitions";
 import {
   ResponsiveWorklistFrame,
   WorklistEmptyState,
-  WorklistErrorState,
 } from "../shared/ui/worklist";
+import { SupportErrorPanel } from "../shared/ui/support-error";
 
 const DEFAULT_PAGE_SIZE = 20;
 
@@ -272,9 +271,10 @@ function AtendimentosPage() {
       </div>
 
       {listQuery.isError ? (
-        <WorklistErrorState>
-          {queryErrorMessage(listQuery.error, "Não foi possível carregar atendimentos pendentes.")}
-        </WorklistErrorState>
+        <SupportErrorPanel
+          error={listQuery.error}
+          fallback="Não foi possível carregar atendimentos pendentes."
+        />
       ) : null}
 
       {!listQuery.isError ? (

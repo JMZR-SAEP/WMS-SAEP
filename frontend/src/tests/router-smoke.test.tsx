@@ -2384,7 +2384,9 @@ describe("frontend pilot router", () => {
     expect(await screen.findByText("Saldo atual insuficiente.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Copiar detalhes para suporte" }));
     await waitFor(() => {
-      expect(writeText).toHaveBeenCalledWith("trace_id: trace-domain");
+      expect(writeText).toHaveBeenCalledWith(
+        "status: 409\ncode: domain_conflict\ntrace_id: trace-domain",
+      );
     });
     expect(await screen.findByText("Detalhes copiados.")).toBeInTheDocument();
     expect(container.ownerDocument.location.pathname).toBe("/requisicoes/101");
@@ -2437,7 +2439,9 @@ describe("frontend pilot router", () => {
     expect(await screen.findByText("Saldo atual insuficiente.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Copiar detalhes para suporte" }));
     await waitFor(() => {
-      expect(writeText).toHaveBeenCalledWith("trace_id: trace-domain");
+      expect(writeText).toHaveBeenCalledWith(
+        "status: 409\ncode: domain_conflict\ntrace_id: trace-domain",
+      );
       expect(consoleError).toHaveBeenCalledWith(
         "Não foi possível copiar detalhes para suporte.",
         clipboardError,
@@ -2490,7 +2494,9 @@ describe("frontend pilot router", () => {
     expect(await screen.findByText("Saldo atual insuficiente.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Copiar detalhes para suporte" })).not.toBeInTheDocument();
     expect(screen.getByText(/Copie estes detalhes para suporte:/)).toBeInTheDocument();
-    expect(screen.getByText("trace_id: trace-domain")).toBeInTheDocument();
+    expect(screen.getByText(/status: 409/)).toBeInTheDocument();
+    expect(screen.getByText(/code: domain_conflict/)).toBeInTheDocument();
+    expect(screen.getByText(/trace_id: trace-domain/)).toBeInTheDocument();
   });
 
   it("redirects to login when authorize returns unauthenticated error", async () => {

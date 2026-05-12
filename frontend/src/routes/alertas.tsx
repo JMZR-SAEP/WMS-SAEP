@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect } from "react";
 
 import { requireOperationalPapel } from "../features/auth/guards";
-import { ApiError, meQueryOptions } from "../features/auth/session";
+import { meQueryOptions } from "../features/auth/session";
 import {
   getPushDiagnostic,
   isPushSupported,
@@ -12,6 +12,7 @@ import {
   registerPushSubscription,
   reportPushDiagnosticIfNeeded,
 } from "../features/pwa/push";
+import { SupportErrorPanel } from "../shared/ui/support-error";
 
 export const Route = createFileRoute("/alertas")({
   beforeLoad: async ({ context, location }) => {
@@ -23,18 +24,6 @@ export const Route = createFileRoute("/alertas")({
   },
   component: AlertasPage,
 });
-
-function messageFromError(error: unknown) {
-  if (error instanceof ApiError) {
-    return error.payload?.error.message || error.message;
-  }
-
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-
-  return "Não foi possível configurar alertas.";
-}
 
 function AlertasPage() {
   const sessionQuery = useQuery(meQueryOptions);
@@ -94,9 +83,10 @@ function AlertasPage() {
           ) : null}
 
           {pushConfigQuery.isError ? (
-            <p className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
-              {messageFromError(pushConfigQuery.error)}
-            </p>
+            <SupportErrorPanel
+              error={pushConfigQuery.error}
+              fallback="Não foi possível carregar a configuração de alertas."
+            />
           ) : null}
 
           {pushConfigQuery.isSuccess ? (
@@ -144,9 +134,10 @@ function AlertasPage() {
           ) : null}
 
           {pushMutation.isError ? (
-            <p className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
-              {messageFromError(pushMutation.error)}
-            </p>
+            <SupportErrorPanel
+              error={pushMutation.error}
+              fallback="Não foi possível configurar alertas."
+            />
           ) : null}
         </article>
 

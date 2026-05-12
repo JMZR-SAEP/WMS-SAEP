@@ -623,6 +623,35 @@ class TestNotificacoesAPI:
         with pytest.raises(ValueError, match="papel snapshot"):
             event.save(update_fields=["papel", "updated_at"])
 
+    def test_push_events_rejeita_campos_sensiveis(self):
+        setor = self._criar_setor("Push Events Sem PII", "41030")
+        client = APIClient()
+        client.force_authenticate(user=setor.chefe_responsavel)
+
+        response = client.post(
+            reverse("notification-push-events"),
+            data={
+                "event_type": "push_unavailable",
+                "diagnostic_status": "sem_suporte",
+                "notification_supported": False,
+                "service_worker_supported": False,
+                "push_manager_supported": False,
+                "badging_supported": False,
+                "standalone_display": False,
+                "nome": "Fulano",
+                "numero_publico": "REQ-2026-000001",
+            },
+            format="json",
+        )
+
+        assert response.status_code == 400
+        assert response.data["error"]["code"] == "validation_error"
+        assert set(response.data["error"]["details"]["campos_sensiveis"]) == {
+            "nome",
+            "numero_publico",
+        }
+        assert PushClientEvent.objects.count() == 0
+
     def test_push_events_rejeita_usuario_sem_permissao(self):
         usuario = self._criar_usuario("41028", "Usuario Push Event Sem Permissao")
         client = APIClient()

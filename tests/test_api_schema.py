@@ -159,6 +159,7 @@ class TestOpenAPISchema:
         assert "/api/v1/notifications/push/subscriptions/" in paths
         assert "/api/v1/notifications/push/subscriptions/deactivate/" in paths
         assert "/api/v1/notifications/unread-count/" in paths
+        assert "/api/v1/analytics/events/" in paths
         assert paths["/api/v1/materials/{id}/"]["get"]["operationId"] == "materials_retrieve"
         assert (
             paths["/api/v1/materials/"]["get"]["responses"]["200"]["content"]["application/json"][
@@ -401,6 +402,25 @@ class TestOpenAPISchema:
             for code in expectation["error_codes"]:
                 assert code in responses
                 assert responses[code]["content"]["application/json"]["schema"]["$ref"] == error_ref
+
+    def test_analytics_endpoint_declara_request_response_e_erros(self):
+        """Verify frontend analytics endpoint exposes explicit no-PII contract."""
+        schema = self._get_schema()
+        operation = schema["paths"]["/api/v1/analytics/events/"]["post"]
+        responses = operation["responses"]
+        error_ref = "#/components/schemas/ErrorResponse"
+
+        assert operation["operationId"] == "analytics_events_create"
+        assert operation["tags"] == ["analytics"]
+        assert operation["requestBody"]["content"]["application/json"]["schema"]["$ref"] == (
+            "#/components/schemas/FrontendAnalyticsEventInput"
+        )
+        assert responses["201"]["content"]["application/json"]["schema"]["$ref"] == (
+            "#/components/schemas/FrontendAnalyticsEventOutput"
+        )
+        assert responses["400"]["content"]["application/json"]["schema"]["$ref"] == error_ref
+        assert responses["403"]["content"]["application/json"]["schema"]["$ref"] == error_ref
+        assert responses["429"]["content"]["application/json"]["schema"]["$ref"] == error_ref
 
     def test_error_response_schema_declara_trace_id(self):
         """Verify the standard error envelope includes trace_id in OpenAPI."""

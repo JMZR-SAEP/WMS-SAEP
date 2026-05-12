@@ -6,6 +6,7 @@ import { requireSession } from "../../features/auth/guards";
 import { meQueryOptions } from "../../features/auth/session";
 import { DraftRequisitionEditor } from "../../features/requisitions/DraftRequisitionEditor";
 import { draftStepSchema, type DraftStep } from "../../features/requisitions/draftSteps";
+import { SupportErrorPanel } from "../../shared/ui/support-error";
 
 const draftSearchSchema = z.object({
   etapa: draftStepSchema.optional().catch("beneficiario"),
@@ -33,12 +34,12 @@ function NovaRequisicaoPage() {
 
   if (sessionQuery.isError) {
     return (
-      <div className="error-panel">
-        <p>Erro carregando sessão.</p>
-        <button className="compact-action" type="button" onClick={() => void sessionQuery.refetch()}>
-          Tentar novamente
-        </button>
-      </div>
+      <SupportErrorPanel
+        error={sessionQuery.error}
+        fallback="Erro carregando sessão."
+        onRetry={() => void sessionQuery.refetch()}
+        retryLabel="Tentar novamente"
+      />
     );
   }
 

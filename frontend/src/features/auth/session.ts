@@ -1,11 +1,16 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { apiClient } from "../../shared/api/client";
+import {
+  ApiError,
+  messageFromErrorPayload,
+  type ErrorResponse,
+} from "../../shared/api/errors";
 import type { components } from "../../shared/api/schema";
 
 export type AuthSession = components["schemas"]["AuthSessionOutput"];
 export type AuthLoginInput = components["schemas"]["AuthLoginInput"];
-export type ErrorResponse = components["schemas"]["ErrorResponse"];
+export { ApiError };
 
 export const PAPEL_OPERACIONAL_VALUES = [
   "solicitante",
@@ -19,23 +24,12 @@ export type PapelOperacional = (typeof PAPEL_OPERACIONAL_VALUES)[number];
 
 export const UNKNOWN_ROLE_PATH = "/unknown-role";
 
-export class ApiError extends Error {
-  constructor(
-    message: string,
-    readonly status: number,
-    readonly payload?: ErrorResponse,
-  ) {
-    super(message);
-    this.name = "ApiError";
-  }
-}
-
 export const authQueryKeys = {
   me: ["auth", "me"] as const,
 };
 
 function messageFromError(error: ErrorResponse | undefined, fallback: string) {
-  return error?.error?.message || fallback;
+  return messageFromErrorPayload(error, fallback);
 }
 
 export function isAuthError(error: unknown) {
@@ -63,6 +57,7 @@ export async function ensureCsrfCookie() {
       messageFromError(error, "Não foi possível preparar a sessão."),
       result.response.status,
       error,
+      "/api/v1/auth/csrf/",
     );
   }
 }
@@ -72,7 +67,12 @@ export async function fetchCurrentSession() {
   const { data, error, response } = await apiClient.GET("/api/v1/auth/me/");
 
   if (error || !data) {
-    throw new ApiError(messageFromError(error, "Sessão expirada."), response.status, error);
+    throw new ApiError(
+      messageFromError(error, "Sessão expirada."),
+      response.status,
+      error,
+      "/api/v1/auth/me/",
+    );
   }
 
   return data;
@@ -90,6 +90,7 @@ export async function loginWithMatricula(input: AuthLoginInput) {
       messageFromError(error, "Matrícula funcional ou senha inválidas."),
       response.status,
       error,
+      "/api/v1/auth/login/",
     );
   }
 
@@ -102,7 +103,12 @@ export async function logoutSession() {
   const { error, response } = await apiClient.POST("/api/v1/auth/logout/");
 
   if (error) {
-    throw new ApiError(messageFromError(error, "Não foi possível encerrar a sessão."), response.status, error);
+    throw new ApiError(
+      messageFromError(error, "Não foi possível encerrar a sessão."),
+      response.status,
+      error,
+      "/api/v1/auth/logout/",
+    );
   }
 }
 

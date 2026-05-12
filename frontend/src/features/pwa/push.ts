@@ -1,15 +1,16 @@
 import { queryOptions } from "@tanstack/react-query";
 
-import { ensureCsrfCookie, ApiError, type AuthSession, type ErrorResponse } from "../auth/session";
+import { ensureCsrfCookie, type AuthSession } from "../auth/session";
 import { apiClient } from "../../shared/api/client";
+import { ApiError, messageFromErrorPayload, type ErrorResponse } from "../../shared/api/errors";
 import type { components } from "../../shared/api/schema";
 
 export type PushConfig = components["schemas"]["PushConfigOutput"];
 export type PushSubscriptionOutput = components["schemas"]["PushSubscriptionOutput"];
 type PushEventDiagnosticStatus = components["schemas"]["DiagnosticStatusEnum"];
 export type PushDiagnosticStatus = PushEventDiagnosticStatus | "aguardando_config";
-export type PushClientEventType = components["schemas"]["EventTypeEnum"];
 export type PushClientEventInput = components["schemas"]["PushClientEventInput"];
+export type PushClientEventType = PushClientEventInput["event_type"];
 export type PushClientEventOutput = components["schemas"]["PushClientEventOutput"];
 export type PushCapabilities = Pick<
   PushClientEventInput,
@@ -114,7 +115,7 @@ export function resetPushOnboardingStateForTests() {
 }
 
 function messageFromError(error: ErrorResponse | undefined, fallback: string) {
-  return error?.error?.message || fallback;
+  return messageFromErrorPayload(error, fallback);
 }
 
 export async function fetchPushConfig() {
@@ -125,6 +126,7 @@ export async function fetchPushConfig() {
       messageFromError(error, "Não foi possível carregar configuração de alertas."),
       response.status,
       error,
+      "/api/v1/notifications/push/config/",
     );
   }
 
@@ -314,6 +316,7 @@ export async function recordPushClientEvent(input: PushClientEventInput) {
       messageFromError(error, "Não foi possível registrar diagnóstico de alertas."),
       response.status,
       error,
+      "/api/v1/notifications/push/events/",
     );
   }
 
@@ -480,6 +483,7 @@ export async function registerPushSubscription(publicKey: string) {
       messageFromError(error, "Não foi possível ativar alertas neste navegador."),
       response.status,
       error,
+      "/api/v1/notifications/push/subscriptions/",
     );
   }
 
