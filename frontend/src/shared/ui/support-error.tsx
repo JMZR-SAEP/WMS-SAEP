@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { queryErrorMessage, supportDetailsFromError } from "../api/errors";
 
@@ -22,6 +22,20 @@ export function SupportErrorPanel({
       navigator.clipboard &&
       typeof navigator.clipboard.writeText === "function",
   );
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    queueMicrotask(() => {
+      if (isCurrent) {
+        setCopyFeedback("");
+      }
+    });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [supportDetails]);
 
   async function copySupportDetails() {
     if (!supportDetails || !canCopySupportDetails) {

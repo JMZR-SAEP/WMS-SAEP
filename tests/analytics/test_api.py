@@ -55,6 +55,30 @@ class TestFrontendAnalyticsAPI:
         assert response.status_code == 403
         assert response.data["error"]["code"] == "permission_denied"
 
+    def test_events_com_sessao_e_csrf_valido_retorna_201(self):
+        usuario = self._criar_usuario()
+        usuario.set_password("senha-valida")
+        usuario.save(update_fields=["password"])
+        client = APIClient(enforce_csrf_checks=True)
+
+        assert client.login(username=usuario.matricula_funcional, password="senha-valida")
+        csrf_response = client.get(reverse("auth-csrf"))
+        csrf_token = csrf_response.data["csrf_token"]
+
+        response = client.post(
+            reverse("analytics-event-list"),
+            data={"event_type": "draft_started", "screen": "nova_requisicao"},
+            format="json",
+            HTTP_X_CSRFTOKEN=csrf_token,
+        )
+
+        assert response.status_code == 201
+        assert response.data["event_type"] == "draft_started"
+        assert response.data["screen"] == "nova_requisicao"
+        event = FrontendAnalyticsEvent.objects.get()
+        assert event.usuario == usuario
+        assert event.papel == PapelChoices.CHEFE_SETOR
+
     def test_events_rejeita_usuario_nao_operacional_no_service(self):
         usuario = self._criar_usuario()
         usuario.is_active = False
