@@ -37,9 +37,10 @@ function messageFromError(error: unknown) {
 function AlertasPage() {
   const sessionQuery = useQuery(meQueryOptions);
   const pushConfigQuery = useQuery(pushConfigQueryOptions);
+  const publicKey = pushConfigQuery.data?.vapid_public_key ?? "";
+  const pushConfigReady = pushConfigQuery.isSuccess && Boolean(pushConfigQuery.data?.enabled);
   const pushMutation = useMutation({
     mutationFn: async () => {
-      const publicKey = pushConfigQuery.data?.vapid_public_key;
       if (!publicKey) {
         throw new Error("Servidor de push não configurado.");
       }
@@ -47,9 +48,9 @@ function AlertasPage() {
       return registerPushSubscription(publicKey);
     },
   });
-  const serverEnabled = Boolean(pushConfigQuery.data?.enabled);
+  const serverEnabled = pushConfigReady;
   const browserSupported = isPushSupported();
-  const canActivate = serverEnabled && browserSupported && !pushMutation.isPending;
+  const canActivate = pushConfigReady && browserSupported && !pushMutation.isPending;
 
   useEffect(() => {
     if (sessionQuery.data) {

@@ -14,11 +14,11 @@ const originalServiceWorkerDescriptor = Object.getOwnPropertyDescriptor(navigato
 function renderRoute(
   pathname: string,
   queryClient = createAppQueryClient(),
-  options: { pushOnboardingSeen?: boolean } = {},
+  options: { pushOnboardingSeen?: boolean; pushOnboardingUserId?: number } = {},
 ) {
   window.history.replaceState({}, "", pathname);
   if (options.pushOnboardingSeen !== false) {
-    markPushOnboardingSeen({ id: 20 });
+    markPushOnboardingSeen({ id: options.pushOnboardingUserId ?? 20 });
   }
   const router = buildRouter({ queryClient });
 

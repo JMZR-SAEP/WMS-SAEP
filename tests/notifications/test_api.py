@@ -295,8 +295,8 @@ class TestNotificacoesAPI:
             data={
                 "endpoint": "https://push.example.test/subscription/abc",
                 "keys": {
-                    "p256dh": "p256dh-key",
-                    "auth": "auth-key",
+                    "p256dh": "cDI1NmRoLWtleQ",
+                    "auth": "YXV0aC1rZXk",
                 },
             },
             format="json",

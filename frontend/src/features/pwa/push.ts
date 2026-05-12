@@ -59,9 +59,20 @@ export function resetPushOnboardingStateForTests() {
   fallbackOnboardingState.clear();
 
   try {
-    if (typeof window.localStorage?.clear === "function") {
-      window.localStorage.clear();
+    const storage = getLocalStorage();
+    if (!storage) {
+      return;
     }
+
+    const keysToRemove: string[] = [];
+    for (let index = 0; index < storage.length; index += 1) {
+      const key = storage.key(index);
+      if (key?.startsWith(PUSH_ONBOARDING_PREFIX)) {
+        keysToRemove.push(key);
+      }
+    }
+
+    keysToRemove.forEach((key) => storage.removeItem(key));
   } catch {
     // Test environments may expose a partial localStorage shim.
   }

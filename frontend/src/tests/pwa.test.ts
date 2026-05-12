@@ -28,4 +28,10 @@ describe("PWA bootstrap", () => {
 
     expect(register).toHaveBeenCalledWith("/sw.js");
   });
+
+  it("retorna null quando navigator.serviceWorker não existe", async () => {
+    Reflect.deleteProperty(navigator, "serviceWorker");
+
+    await expect(registerServiceWorker()).resolves.toBeNull();
+  });
 });

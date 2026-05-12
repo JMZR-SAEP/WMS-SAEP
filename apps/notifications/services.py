@@ -107,6 +107,10 @@ def registrar_push_subscription(
     p256dh: str,
     auth: str,
 ) -> PushSubscription:
+    existing = PushSubscription.objects.filter(endpoint=endpoint).first()
+    if existing is not None and existing.usuario_id != usuario.pk:
+        raise PermissionDenied("Endpoint de push já vinculado a outro usuário.")
+
     subscription, _ = PushSubscription.objects.update_or_create(
         endpoint=endpoint,
         defaults={
@@ -122,6 +126,9 @@ def registrar_push_subscription(
 
 
 def desativar_push_subscription(*, usuario: User, endpoint: str) -> None:
+    subscription = PushSubscription.objects.filter(endpoint=endpoint).first()
+    if subscription is not None and subscription.usuario_id != usuario.pk:
+        raise PermissionDenied("Endpoint de push já vinculado a outro usuário.")
     PushSubscription.objects.filter(usuario=usuario, endpoint=endpoint).update(active=False)
 
 
@@ -191,6 +198,8 @@ def enviar_push_requisicao_aguardando_autorizacao(*, requisicao) -> None:
                 timeout=10,
             )
         except Exception as exc:
+            if _status_from_push_exception(exc) is None:
+                raise
             _record_push_failure(subscription, exc)
             continue
 

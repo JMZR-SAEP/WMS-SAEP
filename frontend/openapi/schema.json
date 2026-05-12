@@ -2399,10 +2399,12 @@
                 "type": "object",
                 "properties": {
                     "p256dh": {
-                        "type": "string"
+                        "type": "string",
+                        "maxLength": 512
                     },
                     "auth": {
-                        "type": "string"
+                        "type": "string",
+                        "maxLength": 256
                     }
                 },
                 "required": [
