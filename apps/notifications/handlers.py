@@ -1,4 +1,5 @@
 from apps.core.events import (
+    PUSH_LEMBRETE_AUTORIZACOES_ATRASADAS,
     REQUISICAO_ATENDIDA,
     REQUISICAO_AUTORIZADA,
     REQUISICAO_CANCELADA,
@@ -10,6 +11,7 @@ from apps.notifications.models import TipoNotificacao
 from apps.notifications.services import (
     criar_notificacao_papel,
     criar_notificacoes_usuarios_unicos,
+    enviar_push_payload_usuario,
     enviar_push_requisicao_aguardando_autorizacao,
 )
 from apps.requisitions.models import Requisicao
@@ -93,9 +95,18 @@ def _notificar_atendimento(payload: dict[str, object]) -> None:
     )
 
 
+def _enviar_lembrete_autorizacoes_atrasadas(payload: dict[str, object]) -> None:
+    enviar_push_payload_usuario(
+        usuario_id=payload["usuario_id"],
+        payload=payload["payload"],
+        ttl=payload["ttl"],
+    )
+
+
 def register_event_handlers() -> None:
     subscribe(REQUISICAO_ENVIADA_AUTORIZACAO, _notificar_envio_autorizacao)
     subscribe(REQUISICAO_AUTORIZADA, _notificar_autorizacao)
     subscribe(REQUISICAO_RECUSADA, _notificar_recusa)
     subscribe(REQUISICAO_CANCELADA, _notificar_cancelamento)
     subscribe(REQUISICAO_ATENDIDA, _notificar_atendimento)
+    subscribe(PUSH_LEMBRETE_AUTORIZACOES_ATRASADAS, _enviar_lembrete_autorizacoes_atrasadas)

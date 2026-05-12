@@ -20,6 +20,7 @@ from apps.notifications.services import (
     criar_notificacao_papel,
     criar_notificacao_usuario,
     enviar_push_lembretes_autorizacoes_atrasadas,
+    enviar_push_payload_usuario,
     marcar_notificacao_como_lida,
 )
 from apps.requisitions.models import StatusRequisicao
@@ -385,6 +386,34 @@ class TestNotificacoes:
         assert len(chamadas) == 1
         state = PushReminderState.objects.get(usuario=setor.chefe_responsavel)
         assert state.last_count == 1
+
+    def test_push_payload_nao_envia_para_usuario_inelegivel(self, monkeypatch, settings):
+        settings.WEB_PUSH_VAPID_PRIVATE_KEY = "private-key"
+        settings.WEB_PUSH_VAPID_SUBJECT = "mailto:suporte@saep.test"
+        chamadas = []
+
+        def fake_webpush(**kwargs):
+            chamadas.append(kwargs)
+
+        monkeypatch.setattr("apps.notifications.services._webpush", fake_webpush)
+        usuario = self._criar_usuario("30024", "Solicitante Inelegivel")
+        subscription = PushSubscription.objects.create(
+            usuario=usuario,
+            endpoint="https://push.example.test/subscription/inelegivel",
+            p256dh="p256dh-key",
+            auth="auth-key",
+        )
+
+        sent = enviar_push_payload_usuario(
+            usuario_id=usuario.pk,
+            payload={"title": "Teste", "body": "Teste", "url": "/autorizacoes"},
+        )
+
+        assert sent == 0
+        assert chamadas == []
+        subscription.refresh_from_db()
+        assert subscription.last_success_at is None
+        assert subscription.last_failure_status is None
 
     def test_send_push_reminders_command_reporta_falha(self, monkeypatch):
         def falha_servico():

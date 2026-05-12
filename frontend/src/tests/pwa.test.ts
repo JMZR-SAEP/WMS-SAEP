@@ -19,6 +19,7 @@ const originalClearAppBadgeDescriptor = Object.getOwnPropertyDescriptor(navigato
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  vi.useRealTimers();
   resetPushOnboardingStateForTests();
   if (originalServiceWorkerDescriptor) {
     Object.defineProperty(navigator, "serviceWorker", originalServiceWorkerDescriptor);
@@ -175,6 +176,21 @@ describe("PWA bootstrap", () => {
 
   it("registra evento de diagnostico uma vez por dia", async () => {
     const postedBodies: unknown[] = [];
+    const storage = new Map<string, string>();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 4, 12, 23, 30, 0));
+    Object.defineProperty(window, "localStorage", {
+      configurable: true,
+      value: {
+        getItem: (key: string) => storage.get(key) ?? null,
+        setItem: (key: string, value: string) => storage.set(key, value),
+        removeItem: (key: string) => storage.delete(key),
+        key: (index: number) => Array.from(storage.keys())[index] ?? null,
+        get length() {
+          return storage.size;
+        },
+      },
+    });
     Object.defineProperty(navigator, "userAgent", {
       configurable: true,
       value: "Mozilla/5.0 desktop",
@@ -218,6 +234,9 @@ describe("PWA bootstrap", () => {
       badging_supported: false,
       standalone_display: false,
     });
+    expect(
+      window.localStorage.getItem("wms-saep:push-event:v1:user:88:push_unavailable:2026-05-12"),
+    ).toBe("sent");
   });
 
   it("evita duplicidade concorrente e reverte marca local quando registro falha", async () => {

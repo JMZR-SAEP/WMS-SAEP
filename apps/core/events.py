@@ -13,6 +13,7 @@ REQUISICAO_AUTORIZADA = "requisicao.autorizada"
 REQUISICAO_RECUSADA = "requisicao.recusada"
 REQUISICAO_CANCELADA = "requisicao.cancelada"
 REQUISICAO_ATENDIDA = "requisicao.atendida"
+PUSH_LEMBRETE_AUTORIZACOES_ATRASADAS = "push.lembrete_autorizacoes_atrasadas"
 
 EventPayload = dict[str, Any]
 EventHandler = Callable[[EventPayload], None]

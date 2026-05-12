@@ -9,6 +9,7 @@ from django.db.models import Count
 from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied
 
+from apps.core.events import PUSH_LEMBRETE_AUTORIZACOES_ATRASADAS, publish_on_commit
 from apps.notifications.models import (
     Notificacao,
     PushClientEvent,
@@ -272,6 +273,9 @@ def _record_push_failure(subscription: PushSubscription, exc: Exception) -> None
 
 
 def _enviar_push_para_usuario(*, usuario: User, payload: dict[str, object], ttl: int = 3600) -> int:
+    if not usuario.is_active or not pode_gerenciar_push_subscription(usuario):
+        return 0
+
     private_key = getattr(settings, "WEB_PUSH_VAPID_PRIVATE_KEY", "")
     subject = getattr(settings, "WEB_PUSH_VAPID_SUBJECT", "")
     if not private_key or not subject:
@@ -315,6 +319,16 @@ def _enviar_push_para_usuario(*, usuario: User, payload: dict[str, object], ttl:
         )
 
     return sent
+
+
+def enviar_push_payload_usuario(
+    *,
+    usuario_id: int,
+    payload: dict[str, object],
+    ttl: int = 3600,
+) -> int:
+    usuario = User.objects.get(pk=usuario_id)
+    return _enviar_push_para_usuario(usuario=usuario, payload=payload, ttl=ttl)
 
 
 def enviar_push_requisicao_aguardando_autorizacao(*, requisicao) -> None:
@@ -377,12 +391,13 @@ def enviar_push_lembretes_autorizacoes_atrasadas(*, now=None) -> int:
             state.last_count = total
             state.save(update_fields=["last_sent_at", "last_count", "updated_at"])
             sent_to_users += 1
-            transaction.on_commit(
-                lambda chefe=chefe, payload=payload: _enviar_push_para_usuario(
-                    usuario=chefe,
-                    payload=payload,
-                    ttl=3600,
-                )
+            publish_on_commit(
+                PUSH_LEMBRETE_AUTORIZACOES_ATRASADAS,
+                {
+                    "usuario_id": chefe.pk,
+                    "payload": payload,
+                    "ttl": 3600,
+                },
             )
 
     return sent_to_users
