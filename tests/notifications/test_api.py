@@ -1,6 +1,8 @@
 import pytest
 from django.core.cache import cache
+from django.db import IntegrityError
 from django.urls import reverse
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.test import APIClient
 
 from apps.notifications.models import PushClientEvent, PushSubscription, TipoNotificacao
@@ -8,6 +10,7 @@ from apps.notifications.services import (
     criar_notificacao_papel,
     criar_notificacao_usuario,
     marcar_notificacao_como_lida,
+    registrar_push_subscription,
 )
 from apps.notifications.views import PushClientEventThrottle
 from apps.requisitions.models import Requisicao
@@ -442,6 +445,29 @@ class TestNotificacoesAPI:
         assert subscription.p256dh == original_p256dh
         assert subscription.auth == original_auth
         assert subscription.active == original_active
+
+    def test_registrar_push_subscription_revalida_dono_apos_integrity_error(self, monkeypatch):
+        setor_original = self._criar_setor("Push Race Dono Original", "41030")
+        setor_outro = self._criar_setor("Push Race Outro Chefe", "41031")
+        PushSubscription.objects.create(
+            usuario=setor_original.chefe_responsavel,
+            endpoint="https://push.example.test/subscription/race-outro",
+            p256dh="p256dh-original",
+            auth="auth-original",
+        )
+        monkeypatch.setattr(
+            PushSubscription.objects,
+            "create",
+            lambda **kwargs: (_ for _ in ()).throw(IntegrityError("duplicate endpoint")),
+        )
+
+        with pytest.raises(PermissionDenied, match="Endpoint de push"):
+            registrar_push_subscription(
+                usuario=setor_outro.chefe_responsavel,
+                endpoint="https://push.example.test/subscription/race-outro",
+                p256dh="p256dh-novo",
+                auth="auth-novo",
+            )
 
     def test_push_subscriptions_deactivate_desativa_assinatura_do_usuario(self):
         setor = self._criar_setor("Push Deactivate", "41023")

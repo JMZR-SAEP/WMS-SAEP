@@ -149,7 +149,7 @@ function isStandaloneDisplay() {
   const navigatorWithStandalone = navigator as Navigator & { standalone?: boolean };
   return (
     navigatorWithStandalone.standalone === true ||
-    window.matchMedia?.("(display-mode: standalone)").matches === true
+    window.matchMedia?.("(display-mode: standalone)")?.matches === true
   );
 }
 
@@ -279,6 +279,20 @@ function markPushEventReported(
   fallbackReportedEvents.add(key);
 }
 
+function unmarkPushEventReported(
+  session: Pick<AuthSession, "id">,
+  eventType: PushClientEventType,
+) {
+  const key = pushEventStorageKey(session, eventType);
+  fallbackReportedEvents.delete(key);
+
+  try {
+    getLocalStorage()?.removeItem(key);
+  } catch {
+    // Keep rollback best-effort when storage is unavailable.
+  }
+}
+
 export async function recordPushClientEvent(input: PushClientEventInput) {
   await ensureCsrfCookie();
   const { data, error, response } = await apiClient.POST("/api/v1/notifications/push/events/", {
@@ -308,12 +322,17 @@ export async function reportPushDiagnosticIfNeeded(
     return;
   }
 
-  await recordPushClientEvent({
-    event_type: diagnostic.eventType,
-    diagnostic_status: diagnostic.status,
-    ...diagnostic.capabilities,
-  });
   markPushEventReported(session, diagnostic.eventType);
+  try {
+    await recordPushClientEvent({
+      event_type: diagnostic.eventType,
+      diagnostic_status: diagnostic.status,
+      ...diagnostic.capabilities,
+    });
+  } catch (error) {
+    unmarkPushEventReported(session, diagnostic.eventType);
+    throw error;
+  }
 }
 
 export async function reportBadgeUnavailableIfNeeded(
@@ -325,12 +344,17 @@ export async function reportBadgeUnavailableIfNeeded(
     return;
   }
 
-  await recordPushClientEvent({
-    event_type: eventType,
-    diagnostic_status: capabilities.badging_supported ? "ativo" : "sem_suporte",
-    ...capabilities,
-  });
   markPushEventReported(session, eventType);
+  try {
+    await recordPushClientEvent({
+      event_type: eventType,
+      diagnostic_status: capabilities.badging_supported ? "ativo" : "sem_suporte",
+      ...capabilities,
+    });
+  } catch (error) {
+    unmarkPushEventReported(session, eventType);
+    throw error;
+  }
 }
 
 type NavigatorWithBadging = Navigator & {

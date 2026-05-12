@@ -18,6 +18,7 @@ const originalClearAppBadgeDescriptor = Object.getOwnPropertyDescriptor(navigato
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   resetPushOnboardingStateForTests();
   if (originalServiceWorkerDescriptor) {
     Object.defineProperty(navigator, "serviceWorker", originalServiceWorkerDescriptor);
@@ -217,5 +218,60 @@ describe("PWA bootstrap", () => {
       badging_supported: false,
       standalone_display: false,
     });
+  });
+
+  it("evita duplicidade concorrente e reverte marca local quando registro falha", async () => {
+    let requestCount = 0;
+    let failRequest = false;
+    vi.stubGlobal("fetch", (request: Request) => {
+      if (request.url.includes("/api/v1/auth/csrf/")) {
+        return new Response(JSON.stringify({ csrf_token: "token" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (request.url.includes("/api/v1/notifications/push/events/")) {
+        requestCount += 1;
+        if (failRequest) {
+          return new Response(JSON.stringify({ error: { message: "falhou" } }), {
+            status: 503,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        return new Response(
+          JSON.stringify({
+            event_type: "push_unavailable",
+            diagnostic_status: "sem_suporte",
+            notification_supported: false,
+            service_worker_supported: false,
+            push_manager_supported: false,
+            badging_supported: false,
+            standalone_display: false,
+            event_date: "2026-05-12",
+            updated_at: "2026-05-12T10:00:00Z",
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      return new Response("Not found", { status: 404 });
+    });
+
+    const diagnostic = getPushDiagnostic({ enabled: false });
+    await Promise.all([
+      reportPushDiagnosticIfNeeded({ id: 89 }, diagnostic),
+      reportPushDiagnosticIfNeeded({ id: 89 }, diagnostic),
+    ]);
+
+    expect(requestCount).toBe(1);
+
+    resetPushOnboardingStateForTests();
+    requestCount = 0;
+    failRequest = true;
+    await expect(reportPushDiagnosticIfNeeded({ id: 89 }, diagnostic)).rejects.toThrow();
+
+    failRequest = false;
+    await reportPushDiagnosticIfNeeded({ id: 89 }, diagnostic);
+
+    expect(requestCount).toBe(2);
   });
 });

@@ -4,7 +4,7 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.contenttypes.models import ContentType
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Count
 from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied
@@ -25,6 +25,15 @@ from apps.users.models import PapelChoices, User
 
 PUSH_REMINDER_COOLDOWN = timedelta(hours=4)
 PUSH_REMINDER_OVERDUE_AFTER = timedelta(hours=4)
+PUSH_SUBSCRIPTION_UPDATE_FIELDS = [
+    "usuario",
+    "p256dh",
+    "auth",
+    "active",
+    "last_failure_status",
+    "last_failure_reason",
+    "updated_at",
+]
 
 
 def _content_type_e_object_id(objeto_relacionado):
@@ -126,24 +135,39 @@ def registrar_push_subscription(
 ) -> PushSubscription:
     _validar_usuario_push(usuario)
 
+    def update_subscription(subscription: PushSubscription) -> PushSubscription:
+        subscription.usuario = usuario
+        subscription.p256dh = p256dh
+        subscription.auth = auth
+        subscription.active = True
+        subscription.last_failure_status = None
+        subscription.last_failure_reason = ""
+        subscription.save(update_fields=PUSH_SUBSCRIPTION_UPDATE_FIELDS)
+        return subscription
+
     with transaction.atomic():
         _validar_usuario_push(usuario)
         existing = PushSubscription.objects.select_for_update().filter(endpoint=endpoint).first()
         if existing is not None and existing.usuario_id != usuario.pk:
             raise PermissionDenied("Endpoint de push já vinculado a outro usuário.")
+        if existing is not None:
+            return update_subscription(existing)
 
-        subscription, _ = PushSubscription.objects.update_or_create(
-            endpoint=endpoint,
-            defaults={
-                "usuario": usuario,
-                "p256dh": p256dh,
-                "auth": auth,
-                "active": True,
-                "last_failure_status": None,
-                "last_failure_reason": "",
-            },
-        )
-        return subscription
+        try:
+            return PushSubscription.objects.create(
+                usuario=usuario,
+                endpoint=endpoint,
+                p256dh=p256dh,
+                auth=auth,
+                active=True,
+                last_failure_status=None,
+                last_failure_reason="",
+            )
+        except IntegrityError:
+            existing = PushSubscription.objects.select_for_update().get(endpoint=endpoint)
+            if existing.usuario_id != usuario.pk:
+                raise PermissionDenied("Endpoint de push já vinculado a outro usuário.") from None
+            return update_subscription(existing)
 
 
 def desativar_push_subscription(*, usuario: User, endpoint: str) -> None:
