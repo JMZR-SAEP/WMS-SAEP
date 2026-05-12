@@ -154,7 +154,13 @@ function isStandaloneDisplay() {
 }
 
 function isLikelyIos() {
-  return /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const navigatorWithPlatform = navigator as Navigator & { platform?: string };
+  return (
+    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    ((navigator.userAgent.includes("Macintosh") ||
+      navigatorWithPlatform.platform === "MacIntel") &&
+      navigator.maxTouchPoints > 1)
+  );
 }
 
 export function getPushCapabilities(): PushCapabilities {
@@ -181,18 +187,6 @@ export function getPushDiagnostic(config?: Pick<PushConfig, "enabled"> | null): 
     };
   }
 
-  if (isLikelyIos() && !capabilities.standalone_display) {
-    return {
-      status: "requer_instalacao_pwa",
-      label: "Requer instalação PWA",
-      description: "No iPhone/iPad, os alertas funcionam pelo app instalado na Tela de Início.",
-      nextAction: "Instale o WMS-SAEP na Tela de Início e volte a esta tela.",
-      canActivate: false,
-      eventType: "push_requires_pwa",
-      capabilities,
-    };
-  }
-
   if (!config.enabled || !isPushSupported()) {
     return {
       status: "sem_suporte",
@@ -201,6 +195,18 @@ export function getPushDiagnostic(config?: Pick<PushConfig, "enabled"> | null): 
       nextAction: "Use Chrome Android atual ou Safari iOS com PWA instalado.",
       canActivate: false,
       eventType: "push_unavailable",
+      capabilities,
+    };
+  }
+
+  if (isLikelyIos() && !capabilities.standalone_display) {
+    return {
+      status: "requer_instalacao_pwa",
+      label: "Requer instalação PWA",
+      description: "No iPhone/iPad, os alertas funcionam pelo app instalado na Tela de Início.",
+      nextAction: "Instale o WMS-SAEP na Tela de Início e volte a esta tela.",
+      canActivate: false,
+      eventType: "push_requires_pwa",
       capabilities,
     };
   }
@@ -343,6 +349,10 @@ export async function reportBadgeUnavailableIfNeeded(
   session: Pick<AuthSession, "id">,
   capabilities = getPushCapabilities(),
 ) {
+  if (capabilities.badging_supported) {
+    return;
+  }
+
   const eventType: PushClientEventType = "push_badge_unavailable";
   if (hasReportedPushEvent(session, eventType)) {
     return;
@@ -352,7 +362,7 @@ export async function reportBadgeUnavailableIfNeeded(
   try {
     await recordPushClientEvent({
       event_type: eventType,
-      diagnostic_status: capabilities.badging_supported ? "ativo" : "sem_suporte",
+      diagnostic_status: "sem_suporte",
       ...capabilities,
     });
   } catch (error) {

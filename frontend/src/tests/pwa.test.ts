@@ -4,6 +4,7 @@ import {
   getPushDiagnostic,
   hasSeenPushOnboarding,
   markPushOnboardingSeen,
+  reportBadgeUnavailableIfNeeded,
   reportPushDiagnosticIfNeeded,
   resetPushOnboardingStateForTests,
   updateAppBadge,
@@ -13,6 +14,8 @@ import { registerServiceWorker } from "../features/pwa/service-worker";
 const originalServiceWorkerDescriptor = Object.getOwnPropertyDescriptor(navigator, "serviceWorker");
 const originalLocalStorageDescriptor = Object.getOwnPropertyDescriptor(window, "localStorage");
 const originalUserAgent = navigator.userAgent;
+const originalPlatformDescriptor = Object.getOwnPropertyDescriptor(navigator, "platform");
+const originalMaxTouchPointsDescriptor = Object.getOwnPropertyDescriptor(navigator, "maxTouchPoints");
 const originalSetAppBadgeDescriptor = Object.getOwnPropertyDescriptor(navigator, "setAppBadge");
 const originalClearAppBadgeDescriptor = Object.getOwnPropertyDescriptor(navigator, "clearAppBadge");
 
@@ -33,6 +36,16 @@ afterEach(() => {
     configurable: true,
     value: originalUserAgent,
   });
+  if (originalPlatformDescriptor) {
+    Object.defineProperty(navigator, "platform", originalPlatformDescriptor);
+  } else {
+    Reflect.deleteProperty(navigator, "platform");
+  }
+  if (originalMaxTouchPointsDescriptor) {
+    Object.defineProperty(navigator, "maxTouchPoints", originalMaxTouchPointsDescriptor);
+  } else {
+    Reflect.deleteProperty(navigator, "maxTouchPoints");
+  }
   if (originalSetAppBadgeDescriptor) {
     Object.defineProperty(navigator, "setAppBadge", originalSetAppBadgeDescriptor);
   } else {
@@ -148,6 +161,56 @@ describe("PWA bootstrap", () => {
         dispatchEvent: vi.fn(),
       })),
     );
+
+    const diagnostic = getPushDiagnostic({ enabled: true });
+
+    expect(diagnostic.status).toBe("requer_instalacao_pwa");
+    expect(diagnostic.eventType).toBe("push_requires_pwa");
+  });
+
+  it("prioriza servidor desabilitado antes de instalacao PWA no iOS", () => {
+    Object.defineProperty(navigator, "userAgent", {
+      configurable: true,
+      value: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)",
+    });
+    vi.stubGlobal("Notification", {
+      permission: "default",
+      requestPermission: vi.fn(),
+    });
+    vi.stubGlobal("PushManager", function PushManager() {});
+    Object.defineProperty(navigator, "serviceWorker", {
+      configurable: true,
+      value: {},
+    });
+
+    const diagnostic = getPushDiagnostic({ enabled: false });
+
+    expect(diagnostic.status).toBe("sem_suporte");
+    expect(diagnostic.eventType).toBe("push_unavailable");
+  });
+
+  it("diagnostica iPad em modo desktop como iOS", () => {
+    Object.defineProperty(navigator, "userAgent", {
+      configurable: true,
+      value: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
+    });
+    Object.defineProperty(navigator, "platform", {
+      configurable: true,
+      value: "MacIntel",
+    });
+    Object.defineProperty(navigator, "maxTouchPoints", {
+      configurable: true,
+      value: 5,
+    });
+    vi.stubGlobal("Notification", {
+      permission: "default",
+      requestPermission: vi.fn(),
+    });
+    vi.stubGlobal("PushManager", function PushManager() {});
+    Object.defineProperty(navigator, "serviceWorker", {
+      configurable: true,
+      value: {},
+    });
 
     const diagnostic = getPushDiagnostic({ enabled: true });
 
@@ -292,5 +355,23 @@ describe("PWA bootstrap", () => {
     await reportPushDiagnosticIfNeeded({ id: 89 }, diagnostic);
 
     expect(requestCount).toBe(2);
+  });
+
+  it("nao registra evento de badge quando API existe", async () => {
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+
+    await reportBadgeUnavailableIfNeeded(
+      { id: 90 },
+      {
+        notification_supported: true,
+        service_worker_supported: true,
+        push_manager_supported: true,
+        badging_supported: true,
+        standalone_display: false,
+      },
+    );
+
+    expect(fetch).not.toHaveBeenCalled();
   });
 });
