@@ -410,3 +410,90 @@ class TestNotificacoesAPI:
         assert response.data["error"]["code"] == "permission_denied"
         subscription.refresh_from_db()
         assert subscription.usuario == setor_original.chefe_responsavel
+
+    def test_push_subscriptions_deactivate_desativa_assinatura_do_usuario(self):
+        setor = self._criar_setor("Push Deactivate", "41023")
+        usuario = setor.chefe_responsavel
+        subscription = PushSubscription.objects.create(
+            usuario=usuario,
+            endpoint="https://push.example.test/subscription/deactivate",
+            p256dh="p256dh-original",
+            auth="auth-original",
+        )
+        client = APIClient()
+        client.force_authenticate(user=usuario)
+
+        response = client.post(
+            reverse("notification-push-subscriptions-deactivate"),
+            data={
+                "endpoint": "https://push.example.test/subscription/deactivate",
+            },
+            format="json",
+        )
+
+        assert response.status_code == 204
+        subscription.refresh_from_db()
+        assert subscription.active is False
+
+    def test_push_subscriptions_deactivate_exige_autenticacao(self):
+        client = APIClient()
+
+        response = client.post(
+            reverse("notification-push-subscriptions-deactivate"),
+            data={
+                "endpoint": "https://push.example.test/subscription/deactivate-auth",
+            },
+            format="json",
+        )
+
+        assert response.status_code == 403
+        assert response.data["error"]["code"] == "not_authenticated"
+
+    def test_push_subscriptions_deactivate_rejeita_usuario_sem_permissao(self):
+        usuario = self._criar_usuario("41024", "Usuario Push Deactivate Sem Permissao")
+        subscription = PushSubscription.objects.create(
+            usuario=usuario,
+            endpoint="https://push.example.test/subscription/deactivate-sem-permissao",
+            p256dh="p256dh-original",
+            auth="auth-original",
+        )
+        client = APIClient()
+        client.force_authenticate(user=usuario)
+
+        response = client.post(
+            reverse("notification-push-subscriptions-deactivate"),
+            data={
+                "endpoint": "https://push.example.test/subscription/deactivate-sem-permissao",
+            },
+            format="json",
+        )
+
+        assert response.status_code == 403
+        assert response.data["error"]["code"] == "permission_denied"
+        subscription.refresh_from_db()
+        assert subscription.active is True
+
+    def test_push_subscriptions_deactivate_rejeita_endpoint_de_outro_usuario(self):
+        setor_original = self._criar_setor("Push Deactivate Dono Original", "41025")
+        setor_outro = self._criar_setor("Push Deactivate Outro Chefe", "41026")
+        subscription = PushSubscription.objects.create(
+            usuario=setor_original.chefe_responsavel,
+            endpoint="https://push.example.test/subscription/deactivate-outro-usuario",
+            p256dh="p256dh-original",
+            auth="auth-original",
+        )
+        client = APIClient()
+        client.force_authenticate(user=setor_outro.chefe_responsavel)
+
+        response = client.post(
+            reverse("notification-push-subscriptions-deactivate"),
+            data={
+                "endpoint": "https://push.example.test/subscription/deactivate-outro-usuario",
+            },
+            format="json",
+        )
+
+        assert response.status_code == 403
+        assert response.data["error"]["code"] == "permission_denied"
+        subscription.refresh_from_db()
+        assert subscription.active is True

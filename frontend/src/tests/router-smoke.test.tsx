@@ -3580,6 +3580,7 @@ describe("frontend pilot router", () => {
   });
 
   it("registers push subscription from onboarding action", async () => {
+    const getSubscription = vi.fn().mockResolvedValue(null);
     const subscribe = vi.fn().mockResolvedValue({
       toJSON: () => ({
         endpoint: "https://push.example.test/subscription/browser",
@@ -3600,6 +3601,7 @@ describe("frontend pilot router", () => {
       value: {
         ready: Promise.resolve({
           pushManager: {
+            getSubscription,
             subscribe,
           },
         }),
@@ -3647,6 +3649,7 @@ describe("frontend pilot router", () => {
     fireEvent.click(activateButton);
 
     expect(await screen.findByText("Alertas ativos neste navegador.")).toBeInTheDocument();
+    expect(getSubscription).toHaveBeenCalled();
     expect(subscribe).toHaveBeenCalledWith({
       userVisibleOnly: true,
       applicationServerKey: expect.any(Uint8Array),
@@ -3657,6 +3660,89 @@ describe("frontend pilot router", () => {
         keys: {
           p256dh: "p256dh-browser",
           auth: "auth-browser",
+        },
+      },
+    ]);
+  });
+
+  it("reuses existing push subscription from onboarding action", async () => {
+    const getSubscription = vi.fn().mockResolvedValue({
+      toJSON: () => ({
+        endpoint: "https://push.example.test/subscription/existing-browser",
+        keys: {
+          p256dh: "p256dh-existing",
+          auth: "auth-existing",
+        },
+      }),
+    });
+    const subscribe = vi.fn();
+    const postedBodies: unknown[] = [];
+
+    vi.stubGlobal("Notification", {
+      requestPermission: vi.fn().mockResolvedValue("granted"),
+    });
+    vi.stubGlobal("PushManager", function PushManager() {});
+    Object.defineProperty(navigator, "serviceWorker", {
+      configurable: true,
+      value: {
+        ready: Promise.resolve({
+          pushManager: {
+            getSubscription,
+            subscribe,
+          },
+        }),
+      },
+    });
+
+    vi.stubGlobal("fetch", async (request: Request) => {
+      if (requestUrl(request).includes("/api/v1/auth/me/")) {
+        return sessionResponse(chefeSession());
+      }
+
+      if (requestUrl(request).includes("/api/v1/auth/csrf/")) {
+        return new Response(JSON.stringify({ csrf_token: "token" }), {
+          status: 200,
+          headers: jsonHeaders,
+        });
+      }
+
+      if (
+        requestUrl(request).includes("/api/v1/notifications/push/subscriptions/") &&
+        request.method === "POST"
+      ) {
+        postedBodies.push(await request.json());
+        return new Response(
+          JSON.stringify({
+            endpoint: "https://push.example.test/subscription/existing-browser",
+            active: true,
+          }),
+          { status: 200, headers: jsonHeaders },
+        );
+      }
+
+      const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return notificationsResponse;
+
+      return new Response("Not found", { status: 404 });
+    });
+
+    renderRoute("/alertas");
+
+    const activateButton = await screen.findByRole("button", {
+      name: "Ativar alertas neste navegador",
+    });
+    await waitFor(() => expect(activateButton).not.toBeDisabled());
+    fireEvent.click(activateButton);
+
+    expect(await screen.findByText("Alertas ativos neste navegador.")).toBeInTheDocument();
+    expect(getSubscription).toHaveBeenCalled();
+    expect(subscribe).not.toHaveBeenCalled();
+    expect(postedBodies).toEqual([
+      {
+        endpoint: "https://push.example.test/subscription/existing-browser",
+        keys: {
+          p256dh: "p256dh-existing",
+          auth: "auth-existing",
         },
       },
     ]);
