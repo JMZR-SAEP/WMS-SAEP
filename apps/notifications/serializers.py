@@ -5,7 +5,13 @@ import re
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
-from apps.notifications.models import Notificacao, PushSubscription
+from apps.notifications.models import (
+    Notificacao,
+    PushClientEvent,
+    PushClientEventType,
+    PushDiagnosticStatus,
+    PushSubscription,
+)
 
 REQUISICAO_APP_LABEL = "requisitions"
 REQUISICAO_MODEL = "requisicao"
@@ -149,3 +155,30 @@ class PushSubscriptionOutputSerializer(serializers.ModelSerializer):
 
 class PushSubscriptionDeactivateInputSerializer(serializers.Serializer):
     endpoint = serializers.URLField(max_length=500)
+
+
+class PushClientEventInputSerializer(serializers.Serializer):
+    event_type = serializers.ChoiceField(choices=PushClientEventType.choices)
+    diagnostic_status = serializers.ChoiceField(choices=PushDiagnosticStatus.choices)
+    notification_supported = serializers.BooleanField()
+    service_worker_supported = serializers.BooleanField()
+    push_manager_supported = serializers.BooleanField()
+    badging_supported = serializers.BooleanField()
+    standalone_display = serializers.BooleanField()
+
+
+class PushClientEventOutputSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PushClientEvent
+        fields = [
+            "event_type",
+            "diagnostic_status",
+            "notification_supported",
+            "service_worker_supported",
+            "push_manager_supported",
+            "badging_supported",
+            "standalone_display",
+            "event_date",
+            "updated_at",
+        ]
+        read_only_fields = fields

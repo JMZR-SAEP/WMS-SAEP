@@ -8,6 +8,7 @@ from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import SimpleRateThrottle
 from rest_framework.viewsets import GenericViewSet
 
 from apps.core.api.serializers import ErrorResponseSerializer
@@ -20,6 +21,8 @@ from apps.notifications.serializers import (
     NotificacaoListPaginatedSerializer,
     NotificacaoOutputSerializer,
     NotificacaoUnreadCountOutputSerializer,
+    PushClientEventInputSerializer,
+    PushClientEventOutputSerializer,
     PushConfigOutputSerializer,
     PushSubscriptionDeactivateInputSerializer,
     PushSubscriptionInputSerializer,
@@ -29,8 +32,22 @@ from apps.notifications.services import (
     contar_notificacoes_individuais_nao_lidas,
     desativar_push_subscription,
     marcar_notificacao_como_lida,
+    registrar_push_client_event,
     registrar_push_subscription,
 )
+
+
+class PushClientEventThrottle(SimpleRateThrottle):
+    scope = "push_client_event"
+    rate = "20/min"
+
+    def get_cache_key(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return None
+        return self.cache_format % {
+            "scope": self.scope,
+            "ident": request.user.pk,
+        }
 
 
 class NotificacaoViewSet(mixins.ListModelMixin, GenericViewSet):
@@ -136,6 +153,33 @@ class NotificacaoViewSet(mixins.ListModelMixin, GenericViewSet):
                 "vapid_public_key": public_key,
             }
         )
+
+    @extend_schema(
+        operation_id="notifications_push_events",
+        tags=["notifications"],
+        description=(
+            "Registra evento técnico sem PII sobre suporte, permissão ou badge de Web Push. "
+            "Limitado a 20 chamadas por minuto por usuário autenticado."
+        ),
+        request=PushClientEventInputSerializer(),
+        responses={
+            200: PushClientEventOutputSerializer(),
+            400: ErrorResponseSerializer(),
+            403: ErrorResponseSerializer(),
+            429: ErrorResponseSerializer(),
+        },
+    )
+    @action(
+        detail=False,
+        methods=["post"],
+        url_path="push/events",
+        throttle_classes=[PushClientEventThrottle],
+    )
+    def push_events(self, request):
+        serializer = PushClientEventInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        event = registrar_push_client_event(usuario=request.user, **serializer.validated_data)
+        return Response(PushClientEventOutputSerializer(event).data)
 
     @extend_schema(
         operation_id="notifications_push_subscriptions",

@@ -2,7 +2,7 @@ from django.contrib import admin, messages
 from django.db.models import Q
 from rest_framework.exceptions import PermissionDenied
 
-from apps.notifications.models import Notificacao
+from apps.notifications.models import Notificacao, PushClientEvent, PushReminderState
 from apps.notifications.services import marcar_notificacao_como_lida
 
 
@@ -65,3 +65,77 @@ class NotificacaoAdmin(admin.ModelAdmin):
                 ),
                 level=messages.WARNING,
             )
+
+
+@admin.register(PushClientEvent)
+class PushClientEventAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "usuario",
+        "papel",
+        "event_type",
+        "diagnostic_status",
+        "event_date",
+        "updated_at",
+    )
+    list_filter = ("event_type", "diagnostic_status", "papel", "event_date")
+    search_fields = ("usuario__matricula_funcional", "usuario__nome_completo")
+    readonly_fields = (
+        "usuario",
+        "papel",
+        "event_type",
+        "diagnostic_status",
+        "notification_supported",
+        "service_worker_supported",
+        "push_manager_supported",
+        "badging_supported",
+        "standalone_display",
+        "event_date",
+        "created_at",
+        "updated_at",
+    )
+    list_select_related = ("usuario",)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        actions.pop("delete_selected", None)
+        return actions
+
+
+@admin.register(PushReminderState)
+class PushReminderStateAdmin(admin.ModelAdmin):
+    list_display = ("id", "usuario", "reminder_type", "last_count", "last_sent_at")
+    list_filter = ("reminder_type", "last_sent_at")
+    search_fields = ("usuario__matricula_funcional", "usuario__nome_completo")
+    readonly_fields = (
+        "usuario",
+        "reminder_type",
+        "last_sent_at",
+        "last_count",
+        "created_at",
+        "updated_at",
+    )
+    list_select_related = ("usuario",)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        actions.pop("delete_selected", None)
+        return actions

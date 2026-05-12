@@ -155,6 +155,7 @@ class TestOpenAPISchema:
         assert "/api/v1/notifications/" in paths
         assert "/api/v1/notifications/{id}/mark-read/" in paths
         assert "/api/v1/notifications/push/config/" in paths
+        assert "/api/v1/notifications/push/events/" in paths
         assert "/api/v1/notifications/push/subscriptions/" in paths
         assert "/api/v1/notifications/push/subscriptions/deactivate/" in paths
         assert "/api/v1/notifications/unread-count/" in paths
@@ -341,6 +342,14 @@ class TestOpenAPISchema:
                 "success_ref": "#/components/schemas/PushConfigOutput",
                 "error_codes": {"403"},
                 "operation_id": "notifications_push_config",
+            },
+            ("/api/v1/notifications/push/events/", "post"): {
+                "request_body": True,
+                "request_ref": "#/components/schemas/PushClientEventInput",
+                "success_codes": {"200"},
+                "success_ref": "#/components/schemas/PushClientEventOutput",
+                "error_codes": {"400", "403"},
+                "operation_id": "notifications_push_events",
             },
             ("/api/v1/notifications/push/subscriptions/", "post"): {
                 "request_body": True,

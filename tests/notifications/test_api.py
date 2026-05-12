@@ -1,13 +1,18 @@
 import pytest
+from django.core.cache import cache
+from django.db import IntegrityError
 from django.urls import reverse
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.test import APIClient
 
-from apps.notifications.models import PushSubscription, TipoNotificacao
+from apps.notifications.models import PushClientEvent, PushSubscription, TipoNotificacao
 from apps.notifications.services import (
     criar_notificacao_papel,
     criar_notificacao_usuario,
     marcar_notificacao_como_lida,
+    registrar_push_subscription,
 )
+from apps.notifications.views import PushClientEventThrottle
 from apps.requisitions.models import Requisicao
 from apps.users.models import PapelChoices, Setor, User
 
@@ -441,6 +446,29 @@ class TestNotificacoesAPI:
         assert subscription.auth == original_auth
         assert subscription.active == original_active
 
+    def test_registrar_push_subscription_revalida_dono_apos_integrity_error(self, monkeypatch):
+        setor_original = self._criar_setor("Push Race Dono Original", "41030")
+        setor_outro = self._criar_setor("Push Race Outro Chefe", "41031")
+        PushSubscription.objects.create(
+            usuario=setor_original.chefe_responsavel,
+            endpoint="https://push.example.test/subscription/race-outro",
+            p256dh="p256dh-original",
+            auth="auth-original",
+        )
+        monkeypatch.setattr(
+            PushSubscription.objects,
+            "create",
+            lambda **kwargs: (_ for _ in ()).throw(IntegrityError("duplicate endpoint")),
+        )
+
+        with pytest.raises(PermissionDenied, match="Endpoint de push"):
+            registrar_push_subscription(
+                usuario=setor_outro.chefe_responsavel,
+                endpoint="https://push.example.test/subscription/race-outro",
+                p256dh="p256dh-novo",
+                auth="auth-novo",
+            )
+
     def test_push_subscriptions_deactivate_desativa_assinatura_do_usuario(self):
         setor = self._criar_setor("Push Deactivate", "41023")
         usuario = setor.chefe_responsavel
@@ -527,3 +555,124 @@ class TestNotificacoesAPI:
         assert response.data["error"]["code"] == "permission_denied"
         subscription.refresh_from_db()
         assert subscription.active is True
+
+    def test_push_events_registra_evento_sem_pii_e_deduplica_por_dia(self):
+        setor = self._criar_setor("Push Events", "41027")
+        usuario = setor.chefe_responsavel
+        client = APIClient()
+        client.force_authenticate(user=usuario)
+
+        payload = {
+            "event_type": "push_permission_denied",
+            "diagnostic_status": "bloqueado",
+            "notification_supported": True,
+            "service_worker_supported": True,
+            "push_manager_supported": True,
+            "badging_supported": False,
+            "standalone_display": False,
+        }
+        response = client.post(
+            reverse("notification-push-events"),
+            data=payload,
+            format="json",
+            HTTP_USER_AGENT="Mozilla/5.0 deve ser ignorado",
+            REMOTE_ADDR="192.0.2.10",
+        )
+
+        assert response.status_code == 200
+        assert response.data["event_type"] == "push_permission_denied"
+        assert response.data["diagnostic_status"] == "bloqueado"
+        assert "user_agent" not in response.data
+        assert "ip" not in response.data
+        assert "beneficiario" not in response.data
+        assert PushClientEvent.objects.count() == 1
+
+        second_response = client.post(
+            reverse("notification-push-events"),
+            data={
+                **payload,
+                "badging_supported": True,
+            },
+            format="json",
+        )
+
+        assert second_response.status_code == 200
+        assert PushClientEvent.objects.count() == 1
+        event = PushClientEvent.objects.get()
+        assert event.usuario == usuario
+        assert event.papel == PapelChoices.CHEFE_SETOR
+        assert event.badging_supported is True
+
+        usuario.papel = PapelChoices.CHEFE_ALMOXARIFADO
+        usuario.save(update_fields=["papel"])
+        third_response = client.post(
+            reverse("notification-push-events"),
+            data={
+                **payload,
+                "push_manager_supported": False,
+            },
+            format="json",
+        )
+
+        assert third_response.status_code == 200
+        event.refresh_from_db()
+        assert event.papel == PapelChoices.CHEFE_SETOR
+        assert event.push_manager_supported is False
+
+        event.papel = PapelChoices.SOLICITANTE
+        with pytest.raises(ValueError, match="papel snapshot"):
+            event.save(update_fields=["papel", "updated_at"])
+
+    def test_push_events_rejeita_usuario_sem_permissao(self):
+        usuario = self._criar_usuario("41028", "Usuario Push Event Sem Permissao")
+        client = APIClient()
+        client.force_authenticate(user=usuario)
+
+        response = client.post(
+            reverse("notification-push-events"),
+            data={
+                "event_type": "push_unavailable",
+                "diagnostic_status": "sem_suporte",
+                "notification_supported": False,
+                "service_worker_supported": False,
+                "push_manager_supported": False,
+                "badging_supported": False,
+                "standalone_display": False,
+            },
+            format="json",
+        )
+
+        assert response.status_code == 403
+        assert response.data["error"]["code"] == "permission_denied"
+
+    def test_push_events_aplica_throttle_por_usuario(self, monkeypatch):
+        cache.clear()
+        monkeypatch.setattr(PushClientEventThrottle, "rate", "1/min")
+        setor = self._criar_setor("Push Events Throttle", "41029")
+        usuario = setor.chefe_responsavel
+        client = APIClient()
+        client.force_authenticate(user=usuario)
+
+        payload = {
+            "event_type": "push_unavailable",
+            "diagnostic_status": "sem_suporte",
+            "notification_supported": False,
+            "service_worker_supported": False,
+            "push_manager_supported": False,
+            "badging_supported": False,
+            "standalone_display": False,
+        }
+
+        first_response = client.post(
+            reverse("notification-push-events"),
+            data=payload,
+            format="json",
+        )
+        second_response = client.post(
+            reverse("notification-push-events"),
+            data=payload,
+            format="json",
+        )
+
+        assert first_response.status_code == 200
+        assert second_response.status_code == 429

@@ -1,14 +1,26 @@
 import json
+from datetime import timedelta
 from decimal import Decimal
+from io import StringIO
 
 import pytest
+from django.core.management import call_command
+from django.core.management.base import CommandError
+from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied
 
 from apps.materials.models import GrupoMaterial, Material, SubgrupoMaterial
-from apps.notifications.models import Notificacao, PushSubscription, TipoNotificacao
+from apps.notifications.models import (
+    Notificacao,
+    PushReminderState,
+    PushSubscription,
+    TipoNotificacao,
+)
 from apps.notifications.services import (
     criar_notificacao_papel,
     criar_notificacao_usuario,
+    enviar_push_lembretes_autorizacoes_atrasadas,
+    enviar_push_payload_usuario,
     marcar_notificacao_como_lida,
 )
 from apps.requisitions.models import StatusRequisicao
@@ -263,6 +275,161 @@ class TestNotificacoes:
         subscription.refresh_from_db()
         assert subscription.active is False
         assert subscription.last_failure_status == 410
+
+    def test_lembrete_agregado_envia_um_push_por_chefe_para_autorizacoes_atrasadas(
+        self,
+        monkeypatch,
+        settings,
+    ):
+        settings.WEB_PUSH_VAPID_PRIVATE_KEY = "private-key"
+        settings.WEB_PUSH_VAPID_SUBJECT = "mailto:suporte@saep.test"
+        chamadas = []
+
+        def fake_webpush(**kwargs):
+            chamadas.append(kwargs)
+
+        monkeypatch.setattr("apps.notifications.services._webpush", fake_webpush)
+
+        now = timezone.now()
+        setor_a = self._criar_setor("Setor Sigiloso A", "30020")
+        setor_b = self._criar_setor("Setor Sigiloso B", "30021")
+        PushSubscription.objects.create(
+            usuario=setor_a.chefe_responsavel,
+            endpoint="https://push.example.test/subscription/chefe-a",
+            p256dh="p256dh-key-a",
+            auth="auth-key-a",
+        )
+        PushSubscription.objects.create(
+            usuario=setor_b.chefe_responsavel,
+            endpoint="https://push.example.test/subscription/chefe-b",
+            p256dh="p256dh-key-b",
+            auth="auth-key-b",
+        )
+        material = self._criar_material_com_estoque("001.001.308", Decimal("10"))
+
+        for index, setor in enumerate((setor_a, setor_b), start=1):
+            solicitante = self._criar_usuario(
+                f"3003{index}",
+                f"Beneficiario Sigiloso {index}",
+                setor=setor,
+            )
+            requisicao = criar_rascunho_requisicao(
+                criador=solicitante,
+                beneficiario=solicitante,
+                observacao="",
+                itens=[
+                    ItemRascunhoData(
+                        material_id=material.id,
+                        quantidade_solicitada=Decimal("2"),
+                    )
+                ],
+            )
+            enviada = enviar_para_autorizacao(requisicao=requisicao, ator=solicitante)
+            enviada.data_envio_autorizacao = now - timedelta(hours=5)
+            enviada.save(update_fields=["data_envio_autorizacao", "updated_at"])
+
+        chamadas.clear()
+        sent = enviar_push_lembretes_autorizacoes_atrasadas(now=now)
+
+        assert sent == 2
+        assert len(chamadas) == 2
+        payloads = [json.loads(chamada["data"]) for chamada in chamadas]
+        assert {payload["url"] for payload in payloads} == {"/autorizacoes"}
+        assert {payload["tag"] for payload in payloads} == {"autorizacoes-atrasadas"}
+        for payload in payloads:
+            assert "autorização" in payload["body"]
+            assert "Beneficiario Sigiloso" not in payload["body"]
+            assert "Setor Sigiloso" not in payload["body"]
+            assert "Material" not in payload["body"]
+
+    def test_lembrete_agregado_respeita_cooldown_por_chefe(self, monkeypatch, settings):
+        settings.WEB_PUSH_VAPID_PRIVATE_KEY = "private-key"
+        settings.WEB_PUSH_VAPID_SUBJECT = "mailto:suporte@saep.test"
+        chamadas = []
+
+        def fake_webpush(**kwargs):
+            chamadas.append(kwargs)
+
+        monkeypatch.setattr("apps.notifications.services._webpush", fake_webpush)
+
+        now = timezone.now()
+        setor = self._criar_setor("Cooldown", "30022")
+        PushSubscription.objects.create(
+            usuario=setor.chefe_responsavel,
+            endpoint="https://push.example.test/subscription/cooldown",
+            p256dh="p256dh-key",
+            auth="auth-key",
+        )
+        solicitante = self._criar_usuario("30023", "Solicitante Cooldown", setor=setor)
+        material = self._criar_material_com_estoque("001.001.309", Decimal("5"))
+        requisicao = criar_rascunho_requisicao(
+            criador=solicitante,
+            beneficiario=solicitante,
+            observacao="",
+            itens=[
+                ItemRascunhoData(
+                    material_id=material.id,
+                    quantidade_solicitada=Decimal("2"),
+                )
+            ],
+        )
+        enviada = enviar_para_autorizacao(requisicao=requisicao, ator=solicitante)
+        enviada.data_envio_autorizacao = now - timedelta(hours=5)
+        enviada.save(update_fields=["data_envio_autorizacao", "updated_at"])
+
+        chamadas.clear()
+        first_sent = enviar_push_lembretes_autorizacoes_atrasadas(now=now)
+        second_sent = enviar_push_lembretes_autorizacoes_atrasadas(now=now + timedelta(hours=1))
+
+        assert first_sent == 1
+        assert second_sent == 0
+        assert len(chamadas) == 1
+        state = PushReminderState.objects.get(usuario=setor.chefe_responsavel)
+        assert state.last_count == 1
+
+    def test_push_payload_nao_envia_para_usuario_inelegivel(self, monkeypatch, settings):
+        settings.WEB_PUSH_VAPID_PRIVATE_KEY = "private-key"
+        settings.WEB_PUSH_VAPID_SUBJECT = "mailto:suporte@saep.test"
+        chamadas = []
+
+        def fake_webpush(**kwargs):
+            chamadas.append(kwargs)
+
+        monkeypatch.setattr("apps.notifications.services._webpush", fake_webpush)
+        usuario = self._criar_usuario("30024", "Solicitante Inelegivel")
+        subscription = PushSubscription.objects.create(
+            usuario=usuario,
+            endpoint="https://push.example.test/subscription/inelegivel",
+            p256dh="p256dh-key",
+            auth="auth-key",
+        )
+
+        sent = enviar_push_payload_usuario(
+            usuario_id=usuario.pk,
+            payload={"title": "Teste", "body": "Teste", "url": "/autorizacoes"},
+        )
+
+        assert sent == 0
+        assert chamadas == []
+        subscription.refresh_from_db()
+        assert subscription.last_success_at is None
+        assert subscription.last_failure_status is None
+
+    def test_send_push_reminders_command_reporta_falha(self, monkeypatch):
+        def falha_servico():
+            raise RuntimeError("serviço indisponível")
+
+        monkeypatch.setattr(
+            "apps.notifications.management.commands.send_push_reminders."
+            "enviar_push_lembretes_autorizacoes_atrasadas",
+            falha_servico,
+        )
+        stderr = StringIO()
+
+        with pytest.raises(CommandError, match="Falha ao enviar lembretes push agregados"):
+            call_command("send_push_reminders", stderr=stderr)
+
+        assert "serviço indisponível" in stderr.getvalue()
 
     def test_autorizacao_notifica_solicitante_e_almoxarifado(self):
         setor = self._criar_setor("Notificacao Autorizacao", "30004")

@@ -152,6 +152,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/notifications/push/events/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Registra evento técnico sem PII sobre suporte, permissão ou badge de Web Push. Limitado a 20 chamadas por minuto por usuário autenticado. */
+        post: operations["notifications_push_events"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/notifications/push/subscriptions/": {
         parameters: {
             query?: never;
@@ -481,6 +498,15 @@ export interface components {
         CsrfTokenOutput: {
             readonly csrf_token: string;
         };
+        /**
+         * @description * `ativo` - Ativo
+         *     * `bloqueado` - Bloqueado
+         *     * `sem_suporte` - Sem suporte
+         *     * `requer_instalacao_pwa` - Requer instalação PWA
+         *     * `requer_ativacao` - Requer ativação
+         * @enum {string}
+         */
+        DiagnosticStatusEnum: "ativo" | "bloqueado" | "sem_suporte" | "requer_instalacao_pwa" | "requer_ativacao";
         ErrorDetail: {
             code: string;
             message: string;
@@ -490,6 +516,14 @@ export interface components {
         ErrorResponse: {
             error: components["schemas"]["ErrorDetail"];
         };
+        /**
+         * @description * `push_permission_denied` - Push negado
+         *     * `push_unavailable` - Push indisponível
+         *     * `push_requires_pwa` - Push requer PWA instalado
+         *     * `push_badge_unavailable` - Badge indisponível
+         * @enum {string}
+         */
+        EventTypeEnum: "push_permission_denied" | "push_unavailable" | "push_requires_pwa" | "push_badge_unavailable";
         /**
          * @description Serializer para listagem de materiais disponíveis.
          *
@@ -586,6 +620,28 @@ export interface components {
         NotificacaoOutputTipoEnum: "requisicao_enviada_autorizacao" | "requisicao_autorizada" | "requisicao_recusada" | "requisicao_cancelada" | "requisicao_atendida";
         NotificacaoUnreadCountOutput: {
             readonly unread_count: number;
+        };
+        PushClientEventInput: {
+            event_type: components["schemas"]["EventTypeEnum"];
+            diagnostic_status: components["schemas"]["DiagnosticStatusEnum"];
+            notification_supported: boolean;
+            service_worker_supported: boolean;
+            push_manager_supported: boolean;
+            badging_supported: boolean;
+            standalone_display: boolean;
+        };
+        PushClientEventOutput: {
+            readonly event_type: components["schemas"]["EventTypeEnum"];
+            readonly diagnostic_status: components["schemas"]["DiagnosticStatusEnum"];
+            readonly notification_supported: boolean;
+            readonly service_worker_supported: boolean;
+            readonly push_manager_supported: boolean;
+            readonly badging_supported: boolean;
+            readonly standalone_display: boolean;
+            /** Format: date */
+            readonly event_date: string;
+            /** Format: date-time */
+            readonly updated_at: string;
         };
         PushConfigOutput: {
             readonly enabled: boolean;
@@ -1224,6 +1280,55 @@ export interface operations {
                 };
             };
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    notifications_push_events: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PushClientEventInput"];
+                "application/x-www-form-urlencoded": components["schemas"]["PushClientEventInput"];
+                "multipart/form-data": components["schemas"]["PushClientEventInput"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PushClientEventOutput"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };

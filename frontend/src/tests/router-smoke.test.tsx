@@ -340,6 +340,26 @@ function maybeNotificationsRequest(request: Request) {
   }
 
   if (
+    requestUrl(request).includes("/api/v1/notifications/push/events/") &&
+    request.method === "POST"
+  ) {
+    return new Response(
+      JSON.stringify({
+        event_type: "push_unavailable",
+        diagnostic_status: "sem_suporte",
+        notification_supported: false,
+        service_worker_supported: false,
+        push_manager_supported: false,
+        badging_supported: false,
+        standalone_display: false,
+        event_date: "2026-05-12",
+        updated_at: "2026-05-12T10:00:00Z",
+      }),
+      { status: 200, headers: jsonHeaders },
+    );
+  }
+
+  if (
     requestUrl(request).includes("/api/v1/notifications/") &&
     request.method === "GET" &&
     requestUrl(request).includes("/api/v1/notifications/unread-count/")
@@ -3605,6 +3625,43 @@ describe("frontend pilot router", () => {
 
     await waitFor(() => expect(container.ownerDocument.location.pathname).toBe("/alertas"));
     expect(await screen.findByRole("heading", { name: "Alertas de autorização" })).toBeInTheDocument();
+  });
+
+  it("mostra aviso persistente quando push esta bloqueado sem bloquear fila", async () => {
+    vi.stubGlobal("Notification", {
+      permission: "denied",
+      requestPermission: vi.fn(),
+    });
+    vi.stubGlobal("PushManager", function PushManager() {});
+    Object.defineProperty(navigator, "serviceWorker", {
+      configurable: true,
+      value: {},
+    });
+
+    vi.stubGlobal("fetch", (request: Request) => {
+      if (requestUrl(request).includes("/api/v1/auth/me/")) {
+        return Promise.resolve(sessionResponse(chefeSession()));
+      }
+
+      if (requestUrl(request).includes("/api/v1/auth/csrf/")) {
+        return Promise.resolve(csrfResponse());
+      }
+
+      if (requestUrl(request).includes("/api/v1/requisitions/pending-approvals/")) {
+        return Promise.resolve(pendingApprovalListResponse());
+      }
+
+      const notificationsResponse = maybeNotificationsRequest(request);
+      if (notificationsResponse) return Promise.resolve(notificationsResponse);
+
+      return Promise.resolve(new Response("Not found", { status: 404 }));
+    });
+
+    renderRoute("/autorizacoes");
+
+    await waitFor(() => expect(screen.getAllByText("Alertas: Bloqueado").length).toBeGreaterThan(0));
+    expect(screen.getByRole("heading", { name: "Fila de autorizações" })).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "Abrir" })[0]).toBeInTheDocument();
   });
 
   it("registers push subscription from onboarding action", async () => {
