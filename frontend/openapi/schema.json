@@ -449,7 +449,7 @@
         "/api/v1/notifications/push/events/": {
             "post": {
                 "operationId": "notifications_push_events",
-                "description": "Registra evento técnico sem PII sobre suporte, permissão ou badge de Web Push.",
+                "description": "Registra evento técnico sem PII sobre suporte, permissão ou badge de Web Push. Limitado a 20 chamadas por minuto por usuário autenticado.",
                 "tags": [
                     "notifications"
                 ],
@@ -500,6 +500,16 @@
                         "description": ""
                     },
                     "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "429": {
                         "content": {
                             "application/json": {
                                 "schema": {

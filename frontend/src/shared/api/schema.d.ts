@@ -161,7 +161,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Registra evento técnico sem PII sobre suporte, permissão ou badge de Web Push. */
+        /** @description Registra evento técnico sem PII sobre suporte, permissão ou badge de Web Push. Limitado a 20 chamadas por minuto por usuário autenticado. */
         post: operations["notifications_push_events"];
         delete?: never;
         options?: never;
@@ -1321,6 +1321,14 @@ export interface operations {
                 };
             };
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };

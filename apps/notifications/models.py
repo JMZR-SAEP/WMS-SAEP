@@ -191,6 +191,16 @@ class PushClientEvent(models.Model):
     def __str__(self):
         return f"{self.event_type}:{self.usuario_id}:{self.event_date}"
 
+    def save(self, *args, **kwargs):
+        if self.pk:
+            persisted_papel = (
+                type(self).objects.filter(pk=self.pk).values_list("papel", flat=True).first()
+            )
+            if persisted_papel is not None and self.papel != persisted_papel:
+                raise ValueError("O papel snapshot do evento técnico de push é imutável.")
+
+        super().save(*args, **kwargs)
+
 
 class PushReminderState(models.Model):
     usuario = models.ForeignKey(

@@ -385,7 +385,11 @@ function AutorizacoesPage() {
       return;
     }
 
-    void reportPushDiagnosticIfNeeded(sessionQuery.data, pushDiagnostic).catch(() => undefined);
+    void reportPushDiagnosticIfNeeded(sessionQuery.data, pushDiagnostic).catch((error: unknown) => {
+      if (import.meta.env.DEV) {
+        console.error("Falha ao registrar diagnóstico push:", error);
+      }
+    });
   }, [pushDiagnostic, sessionQuery.data]);
 
   if (authError) {

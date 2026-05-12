@@ -176,7 +176,7 @@ def registrar_push_client_event(
     _validar_usuario_push(usuario)
     today = timezone.localdate()
 
-    event, _ = PushClientEvent.objects.update_or_create(
+    event, created = PushClientEvent.objects.get_or_create(
         usuario=usuario,
         event_type=event_type,
         event_date=today,
@@ -190,6 +190,24 @@ def registrar_push_client_event(
             "standalone_display": standalone_display,
         },
     )
+    if not created:
+        event.diagnostic_status = diagnostic_status
+        event.notification_supported = notification_supported
+        event.service_worker_supported = service_worker_supported
+        event.push_manager_supported = push_manager_supported
+        event.badging_supported = badging_supported
+        event.standalone_display = standalone_display
+        event.save(
+            update_fields=[
+                "diagnostic_status",
+                "notification_supported",
+                "service_worker_supported",
+                "push_manager_supported",
+                "badging_supported",
+                "standalone_display",
+                "updated_at",
+            ]
+        )
     return event
 
 
@@ -331,13 +349,16 @@ def enviar_push_lembretes_autorizacoes_atrasadas(*, now=None) -> int:
                 "url": "/autorizacoes",
                 "tag": "autorizacoes-atrasadas",
             }
-            sent = _enviar_push_para_usuario(usuario=chefe, payload=payload, ttl=3600)
-            if sent == 0:
-                continue
-
             state.last_sent_at = current_time
             state.last_count = total
             state.save(update_fields=["last_sent_at", "last_count", "updated_at"])
             sent_to_users += 1
+            transaction.on_commit(
+                lambda chefe=chefe, payload=payload: _enviar_push_para_usuario(
+                    usuario=chefe,
+                    payload=payload,
+                    ttl=3600,
+                )
+            )
 
     return sent_to_users

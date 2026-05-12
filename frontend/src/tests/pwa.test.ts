@@ -111,6 +111,14 @@ describe("PWA bootstrap", () => {
     expect(diagnostic.eventType).toBe("push_unavailable");
   });
 
+  it("mantem diagnostico neutro enquanto configuracao nao carregou", () => {
+    const diagnostic = getPushDiagnostic(null);
+
+    expect(diagnostic.status).toBe("aguardando_config");
+    expect(diagnostic.eventType).toBeUndefined();
+    expect(diagnostic.canActivate).toBe(false);
+  });
+
   it("diagnostica iOS fora do modo PWA instalado", () => {
     Object.defineProperty(navigator, "userAgent", {
       configurable: true,

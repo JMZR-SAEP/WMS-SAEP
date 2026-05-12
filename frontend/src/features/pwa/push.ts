@@ -6,7 +6,8 @@ import type { components } from "../../shared/api/schema";
 
 export type PushConfig = components["schemas"]["PushConfigOutput"];
 export type PushSubscriptionOutput = components["schemas"]["PushSubscriptionOutput"];
-export type PushDiagnosticStatus = components["schemas"]["DiagnosticStatusEnum"];
+type PushEventDiagnosticStatus = components["schemas"]["DiagnosticStatusEnum"];
+export type PushDiagnosticStatus = PushEventDiagnosticStatus | "aguardando_config";
 export type PushClientEventType = components["schemas"]["EventTypeEnum"];
 export type PushClientEventInput = components["schemas"]["PushClientEventInput"];
 export type PushClientEventOutput = components["schemas"]["PushClientEventOutput"];
@@ -169,6 +170,17 @@ export function getPushCapabilities(): PushCapabilities {
 export function getPushDiagnostic(config?: Pick<PushConfig, "enabled"> | null): PushDiagnostic {
   const capabilities = getPushCapabilities();
 
+  if (config == null) {
+    return {
+      status: "aguardando_config",
+      label: "Verificando",
+      description: "A configuração de alertas ainda está sendo carregada.",
+      nextAction: "Aguarde a verificação dos alertas neste navegador.",
+      canActivate: false,
+      capabilities,
+    };
+  }
+
   if (isLikelyIos() && !capabilities.standalone_display) {
     return {
       status: "requer_instalacao_pwa",
@@ -181,7 +193,7 @@ export function getPushDiagnostic(config?: Pick<PushConfig, "enabled"> | null): 
     };
   }
 
-  if (!config?.enabled || !isPushSupported()) {
+  if (!config.enabled || !isPushSupported()) {
     return {
       status: "sem_suporte",
       label: "Sem suporte",
@@ -288,7 +300,11 @@ export async function reportPushDiagnosticIfNeeded(
   session: Pick<AuthSession, "id">,
   diagnostic: PushDiagnostic,
 ) {
-  if (!diagnostic.eventType || hasReportedPushEvent(session, diagnostic.eventType)) {
+  if (
+    !diagnostic.eventType ||
+    diagnostic.status === "aguardando_config" ||
+    hasReportedPushEvent(session, diagnostic.eventType)
+  ) {
     return;
   }
 

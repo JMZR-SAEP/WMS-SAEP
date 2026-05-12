@@ -1,8 +1,11 @@
 import json
 from datetime import timedelta
 from decimal import Decimal
+from io import StringIO
 
 import pytest
+from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied
 
@@ -382,6 +385,22 @@ class TestNotificacoes:
         assert len(chamadas) == 1
         state = PushReminderState.objects.get(usuario=setor.chefe_responsavel)
         assert state.last_count == 1
+
+    def test_send_push_reminders_command_reporta_falha(self, monkeypatch):
+        def falha_servico():
+            raise RuntimeError("serviço indisponível")
+
+        monkeypatch.setattr(
+            "apps.notifications.management.commands.send_push_reminders."
+            "enviar_push_lembretes_autorizacoes_atrasadas",
+            falha_servico,
+        )
+        stderr = StringIO()
+
+        with pytest.raises(CommandError, match="Falha ao enviar lembretes push agregados"):
+            call_command("send_push_reminders", stderr=stderr)
+
+        assert "serviço indisponível" in stderr.getvalue()
 
     def test_autorizacao_notifica_solicitante_e_almoxarifado(self):
         setor = self._criar_setor("Notificacao Autorizacao", "30004")
