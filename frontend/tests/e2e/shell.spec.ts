@@ -3,7 +3,27 @@ import { expect, test, type Page } from "@playwright/test";
 // Keep aligned with apps/requisitions/seed_pilot_minimo.py (SEED_PASSWORD).
 const SEED_PASSWORD = "piloto-minimo";
 
-async function loginAs(page: Page, matricula: string, expectedPath: RegExp) {
+async function skipPushOnboarding(page: Page) {
+  await page.addInitScript(() => {
+    const originalGetItem = window.localStorage.getItem.bind(window.localStorage);
+    Storage.prototype.getItem = function getItem(key: string) {
+      if (key.startsWith("wms-saep:push-onboarding:v1:user:")) {
+        return "seen";
+      }
+      return originalGetItem(key);
+    };
+  });
+}
+
+async function loginAs(
+  page: Page,
+  matricula: string,
+  expectedPath: RegExp,
+  options: { afterOnboardingPath?: string } = {},
+) {
+  if (options.afterOnboardingPath) {
+    await skipPushOnboarding(page);
+  }
   await page.goto("/login");
   await page.getByLabel("Matrícula funcional").fill(matricula);
   await page.getByLabel("Senha").fill(SEED_PASSWORD);
@@ -32,7 +52,9 @@ function expectDetailContextUrl(
 }
 
 test("logs in and logs out through real backend", async ({ page }) => {
-  await loginAs(page, "chefe-setor", /\/autorizacoes(?:\?.*)?$/);
+  await loginAs(page, "chefe-setor", /\/autorizacoes(?:\?.*)?$/, {
+    afterOnboardingPath: "/autorizacoes",
+  });
   await expect(page.getByRole("heading", { name: "Fila de autorizações" })).toBeVisible();
   await expect(page.getByText("Wagner Fonseca")).toBeVisible();
 
@@ -117,7 +139,9 @@ test("draft wizard fits mobile viewport with sticky actions", async ({ page }) =
 });
 
 test("authorizes pending requisition from worklist", async ({ page }) => {
-  await loginAs(page, "chefe-setor", /\/autorizacoes(?:\?.*)?$/);
+  await loginAs(page, "chefe-setor", /\/autorizacoes(?:\?.*)?$/, {
+    afterOnboardingPath: "/autorizacoes",
+  });
 
   await expect(page.getByRole("heading", { name: "Fila de autorizações" })).toBeVisible();
   const approvalRows = page.locator("tbody tr");
