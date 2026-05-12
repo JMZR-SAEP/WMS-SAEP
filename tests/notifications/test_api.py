@@ -310,15 +310,16 @@ class TestNotificacoesAPI:
         client = APIClient()
         client.force_authenticate(user=usuario)
 
+        payload = {
+            "endpoint": "https://push.example.test/subscription/abc",
+            "keys": {
+                "p256dh": "cDI1NmRoLWtleQ",
+                "auth": "YXV0aC1rZXk",
+            },
+        }
         response = client.post(
             reverse("notification-push-subscriptions"),
-            data={
-                "endpoint": "https://push.example.test/subscription/abc",
-                "keys": {
-                    "p256dh": "cDI1NmRoLWtleQ",
-                    "auth": "YXV0aC1rZXk",
-                },
-            },
+            data=payload,
             format="json",
         )
 
@@ -327,6 +328,24 @@ class TestNotificacoesAPI:
             "endpoint": "https://push.example.test/subscription/abc",
             "active": True,
         }
+
+        second_response = client.post(
+            reverse("notification-push-subscriptions"),
+            data=payload,
+            format="json",
+        )
+
+        assert second_response.status_code == 200
+        assert second_response.data["endpoint"] == "https://push.example.test/subscription/abc"
+        assert (
+            PushSubscription.objects.filter(
+                usuario=usuario,
+                endpoint="https://push.example.test/subscription/abc",
+            ).count()
+            == 1
+        )
+        subscription = PushSubscription.objects.get(usuario=usuario)
+        assert subscription.active is True
 
     def test_push_subscriptions_exige_autenticacao(self):
         client = APIClient()
@@ -391,6 +410,10 @@ class TestNotificacoesAPI:
             p256dh="p256dh-original",
             auth="auth-original",
         )
+        original_endpoint = subscription.endpoint
+        original_p256dh = subscription.p256dh
+        original_auth = subscription.auth
+        original_active = subscription.active
         client = APIClient()
         client.force_authenticate(user=setor_outro.chefe_responsavel)
 
@@ -410,6 +433,10 @@ class TestNotificacoesAPI:
         assert response.data["error"]["code"] == "permission_denied"
         subscription.refresh_from_db()
         assert subscription.usuario == setor_original.chefe_responsavel
+        assert subscription.endpoint == original_endpoint
+        assert subscription.p256dh == original_p256dh
+        assert subscription.auth == original_auth
+        assert subscription.active == original_active
 
     def test_push_subscriptions_deactivate_desativa_assinatura_do_usuario(self):
         setor = self._criar_setor("Push Deactivate", "41023")

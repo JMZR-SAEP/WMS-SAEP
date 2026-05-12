@@ -132,6 +132,22 @@ function base64UrlToUint8Array(value: string) {
   return output;
 }
 
+function applicationServerKeysMatch(
+  existingKey: ArrayBuffer | null | undefined,
+  expectedKey: Uint8Array,
+) {
+  if (!existingKey) {
+    return false;
+  }
+
+  const existingBytes = new Uint8Array(existingKey);
+  if (existingBytes.byteLength !== expectedKey.byteLength) {
+    return false;
+  }
+
+  return existingBytes.every((byte, index) => byte === expectedKey[index]);
+}
+
 export async function registerPushSubscription(publicKey: string) {
   if (!isPushSupported()) {
     throw new Error("Este navegador não oferece suporte a push.");
@@ -144,12 +160,26 @@ export async function registerPushSubscription(publicKey: string) {
 
   const registration = await navigator.serviceWorker.ready;
   const existingSubscription = await registration.pushManager.getSubscription();
-  const subscription =
-    existingSubscription ??
-    (await registration.pushManager.subscribe({
+  const applicationServerKey = base64UrlToUint8Array(publicKey);
+  let subscription = existingSubscription;
+
+  if (
+    existingSubscription &&
+    !applicationServerKeysMatch(
+      existingSubscription.options?.applicationServerKey,
+      applicationServerKey,
+    )
+  ) {
+    await existingSubscription.unsubscribe();
+    subscription = null;
+  }
+
+  if (!subscription) {
+    subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: base64UrlToUint8Array(publicKey),
-    }));
+      applicationServerKey,
+    });
+  }
   const subscriptionJson = subscription.toJSON();
 
   if (!subscriptionJson.endpoint || !subscriptionJson.keys?.p256dh || !subscriptionJson.keys.auth) {
