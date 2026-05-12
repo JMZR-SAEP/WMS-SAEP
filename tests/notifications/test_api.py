@@ -344,7 +344,10 @@ class TestNotificacoesAPI:
             ).count()
             == 1
         )
-        subscription = PushSubscription.objects.get(usuario=usuario)
+        subscription = PushSubscription.objects.get(
+            usuario=usuario,
+            endpoint="https://push.example.test/subscription/abc",
+        )
         assert subscription.active is True
 
     def test_push_subscriptions_exige_autenticacao(self):
