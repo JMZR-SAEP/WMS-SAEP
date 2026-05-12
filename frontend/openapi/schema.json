@@ -446,6 +446,72 @@
                 }
             }
         },
+        "/api/v1/notifications/push/events/": {
+            "post": {
+                "operationId": "notifications_push_events",
+                "description": "Registra evento técnico sem PII sobre suporte, permissão ou badge de Web Push.",
+                "tags": [
+                    "notifications"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PushClientEventInput"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PushClientEventInput"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/PushClientEventInput"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PushClientEventOutput"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/v1/notifications/push/subscriptions/": {
             "post": {
                 "operationId": "notifications_push_subscriptions",
@@ -2010,6 +2076,17 @@
                     "csrf_token"
                 ]
             },
+            "DiagnosticStatusEnum": {
+                "enum": [
+                    "ativo",
+                    "bloqueado",
+                    "sem_suporte",
+                    "requer_instalacao_pwa",
+                    "requer_ativacao"
+                ],
+                "type": "string",
+                "description": "* `ativo` - Ativo\n* `bloqueado` - Bloqueado\n* `sem_suporte` - Sem suporte\n* `requer_instalacao_pwa` - Requer instalação PWA\n* `requer_ativacao` - Requer ativação"
+            },
             "ErrorDetail": {
                 "type": "object",
                 "properties": {
@@ -2042,6 +2119,16 @@
                 "required": [
                     "error"
                 ]
+            },
+            "EventTypeEnum": {
+                "enum": [
+                    "push_permission_denied",
+                    "push_unavailable",
+                    "push_requires_pwa",
+                    "push_badge_unavailable"
+                ],
+                "type": "string",
+                "description": "* `push_permission_denied` - Push negado\n* `push_unavailable` - Push indisponível\n* `push_requires_pwa` - Push requer PWA instalado\n* `push_badge_unavailable` - Badge indisponível"
             },
             "MaterialListOutput": {
                 "type": "object",
@@ -2346,6 +2433,103 @@
                 },
                 "required": [
                     "unread_count"
+                ]
+            },
+            "PushClientEventInput": {
+                "type": "object",
+                "properties": {
+                    "event_type": {
+                        "$ref": "#/components/schemas/EventTypeEnum"
+                    },
+                    "diagnostic_status": {
+                        "$ref": "#/components/schemas/DiagnosticStatusEnum"
+                    },
+                    "notification_supported": {
+                        "type": "boolean"
+                    },
+                    "service_worker_supported": {
+                        "type": "boolean"
+                    },
+                    "push_manager_supported": {
+                        "type": "boolean"
+                    },
+                    "badging_supported": {
+                        "type": "boolean"
+                    },
+                    "standalone_display": {
+                        "type": "boolean"
+                    }
+                },
+                "required": [
+                    "badging_supported",
+                    "diagnostic_status",
+                    "event_type",
+                    "notification_supported",
+                    "push_manager_supported",
+                    "service_worker_supported",
+                    "standalone_display"
+                ]
+            },
+            "PushClientEventOutput": {
+                "type": "object",
+                "properties": {
+                    "event_type": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/EventTypeEnum"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "diagnostic_status": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/DiagnosticStatusEnum"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "notification_supported": {
+                        "type": "boolean",
+                        "readOnly": true
+                    },
+                    "service_worker_supported": {
+                        "type": "boolean",
+                        "readOnly": true
+                    },
+                    "push_manager_supported": {
+                        "type": "boolean",
+                        "readOnly": true
+                    },
+                    "badging_supported": {
+                        "type": "boolean",
+                        "readOnly": true
+                    },
+                    "standalone_display": {
+                        "type": "boolean",
+                        "readOnly": true
+                    },
+                    "event_date": {
+                        "type": "string",
+                        "format": "date",
+                        "readOnly": true
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "badging_supported",
+                    "diagnostic_status",
+                    "event_date",
+                    "event_type",
+                    "notification_supported",
+                    "push_manager_supported",
+                    "service_worker_supported",
+                    "standalone_display",
+                    "updated_at"
                 ]
             },
             "PushConfigOutput": {

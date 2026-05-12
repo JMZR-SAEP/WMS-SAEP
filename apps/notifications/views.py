@@ -20,6 +20,8 @@ from apps.notifications.serializers import (
     NotificacaoListPaginatedSerializer,
     NotificacaoOutputSerializer,
     NotificacaoUnreadCountOutputSerializer,
+    PushClientEventInputSerializer,
+    PushClientEventOutputSerializer,
     PushConfigOutputSerializer,
     PushSubscriptionDeactivateInputSerializer,
     PushSubscriptionInputSerializer,
@@ -29,6 +31,7 @@ from apps.notifications.services import (
     contar_notificacoes_individuais_nao_lidas,
     desativar_push_subscription,
     marcar_notificacao_como_lida,
+    registrar_push_client_event,
     registrar_push_subscription,
 )
 
@@ -136,6 +139,26 @@ class NotificacaoViewSet(mixins.ListModelMixin, GenericViewSet):
                 "vapid_public_key": public_key,
             }
         )
+
+    @extend_schema(
+        operation_id="notifications_push_events",
+        tags=["notifications"],
+        description=(
+            "Registra evento técnico sem PII sobre suporte, permissão ou badge de Web Push."
+        ),
+        request=PushClientEventInputSerializer(),
+        responses={
+            200: PushClientEventOutputSerializer(),
+            400: ErrorResponseSerializer(),
+            403: ErrorResponseSerializer(),
+        },
+    )
+    @action(detail=False, methods=["post"], url_path="push/events")
+    def push_events(self, request):
+        serializer = PushClientEventInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        event = registrar_push_client_event(usuario=request.user, **serializer.validated_data)
+        return Response(PushClientEventOutputSerializer(event).data)
 
     @extend_schema(
         operation_id="notifications_push_subscriptions",

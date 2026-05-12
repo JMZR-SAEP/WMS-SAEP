@@ -10,7 +10,13 @@ import {
 import { z } from "zod";
 
 import { requireOperationalPapel } from "../features/auth/guards";
-import { authQueryKeys, isUnauthenticatedError } from "../features/auth/session";
+import { authQueryKeys, isUnauthenticatedError, meQueryOptions } from "../features/auth/session";
+import {
+  getPushDiagnostic,
+  pushConfigQueryOptions,
+  reportPushDiagnosticIfNeeded,
+} from "../features/pwa/push";
+import { PushStatusWarning } from "../features/pwa/PushStatusWarning";
 import {
   authorizeRequisition,
   formatDateTime,
@@ -178,6 +184,8 @@ function AutorizacoesPage() {
   const navigate = useNavigate({ from: "/autorizacoes" });
   const searchParams = Route.useSearch();
   const currentPage = searchParams.page ?? 1;
+  const sessionQuery = useQuery(meQueryOptions);
+  const pushConfigQuery = useQuery(pushConfigQueryOptions);
   const listQuery = useQuery(
     pendingApprovalsQueryOptions({
       page: currentPage,
@@ -191,6 +199,9 @@ function AutorizacoesPage() {
     hasError: listQuery.isError && !listQuery.data,
     isLoading: listQuery.isLoading,
   });
+  const pushDiagnostic = pushConfigQuery.isSuccess
+    ? getPushDiagnostic(pushConfigQuery.data)
+    : null;
 
   const quickAuthorizeMutation = useMutation({
     mutationFn: async (id: number) => {
@@ -369,6 +380,14 @@ function AutorizacoesPage() {
     });
   }, [authError, currentPage, navigate, queryClient]);
 
+  useEffect(() => {
+    if (!sessionQuery.data || !pushDiagnostic || pushDiagnostic.status === "ativo") {
+      return;
+    }
+
+    void reportPushDiagnosticIfNeeded(sessionQuery.data, pushDiagnostic).catch(() => undefined);
+  }, [pushDiagnostic, sessionQuery.data]);
+
   if (authError) {
     return null;
   }
@@ -386,6 +405,8 @@ function AutorizacoesPage() {
           {recordsLabel}
         </div>
       </div>
+
+      {pushDiagnostic ? <PushStatusWarning diagnostic={pushDiagnostic} /> : null}
 
       {listQuery.isError ? (
         <WorklistErrorState>

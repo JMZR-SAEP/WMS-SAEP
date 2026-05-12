@@ -17,6 +17,25 @@ class TipoNotificacao(models.TextChoices):
     REQUISICAO_ATENDIDA = "requisicao_atendida", "Requisição atendida"
 
 
+class PushClientEventType(models.TextChoices):
+    PERMISSION_DENIED = "push_permission_denied", "Push negado"
+    UNAVAILABLE = "push_unavailable", "Push indisponível"
+    REQUIRES_PWA = "push_requires_pwa", "Push requer PWA instalado"
+    BADGE_UNAVAILABLE = "push_badge_unavailable", "Badge indisponível"
+
+
+class PushDiagnosticStatus(models.TextChoices):
+    ACTIVE = "ativo", "Ativo"
+    BLOCKED = "bloqueado", "Bloqueado"
+    UNSUPPORTED = "sem_suporte", "Sem suporte"
+    REQUIRES_PWA = "requer_instalacao_pwa", "Requer instalação PWA"
+    REQUIRES_ACTIVATION = "requer_ativacao", "Requer ativação"
+
+
+class PushReminderType(models.TextChoices):
+    OVERDUE_APPROVALS = "autorizacoes_atrasadas", "Autorizações atrasadas"
+
+
 class Notificacao(models.Model):
     destinatario = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -130,3 +149,72 @@ class PushSubscription(models.Model):
 
     def __str__(self):
         return f"push:{self.usuario_id}:{self.endpoint}"
+
+
+class PushClientEvent(models.Model):
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="push_client_events",
+        help_text="Usuário autenticado associado ao evento técnico de push.",
+    )
+    papel = models.CharField(
+        max_length=30,
+        choices=PapelChoices.choices,
+        help_text="Snapshot do papel operacional no momento do evento.",
+    )
+    event_type = models.CharField(max_length=40, choices=PushClientEventType.choices)
+    diagnostic_status = models.CharField(max_length=30, choices=PushDiagnosticStatus.choices)
+    notification_supported = models.BooleanField(default=False)
+    service_worker_supported = models.BooleanField(default=False)
+    push_manager_supported = models.BooleanField(default=False)
+    badging_supported = models.BooleanField(default=False)
+    standalone_display = models.BooleanField(default=False)
+    event_date = models.DateField(db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Evento técnico de push"
+        verbose_name_plural = "Eventos técnicos de push"
+        ordering = ["-event_date", "-updated_at", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["usuario", "event_type", "event_date"],
+                name="push_client_event_usuario_tipo_dia_unico",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["usuario", "event_type", "-event_date"]),
+        ]
+
+    def __str__(self):
+        return f"{self.event_type}:{self.usuario_id}:{self.event_date}"
+
+
+class PushReminderState(models.Model):
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="push_reminder_states",
+        help_text="Usuário destinatário do lembrete agregado.",
+    )
+    reminder_type = models.CharField(max_length=40, choices=PushReminderType.choices)
+    last_sent_at = models.DateTimeField(null=True, blank=True)
+    last_count = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Estado de lembrete push"
+        verbose_name_plural = "Estados de lembrete push"
+        ordering = ["-updated_at", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["usuario", "reminder_type"],
+                name="push_reminder_state_usuario_tipo_unico",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.reminder_type}:{self.usuario_id}"

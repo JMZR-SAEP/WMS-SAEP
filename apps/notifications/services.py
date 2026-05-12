@@ -1,15 +1,30 @@
 import json
 from collections.abc import Iterable
+from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
+from django.db.models import Count
 from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied
 
-from apps.notifications.models import Notificacao, PushSubscription, TipoNotificacao
+from apps.notifications.models import (
+    Notificacao,
+    PushClientEvent,
+    PushClientEventType,
+    PushDiagnosticStatus,
+    PushReminderState,
+    PushReminderType,
+    PushSubscription,
+    TipoNotificacao,
+)
 from apps.notifications.policies import pode_gerenciar_push_subscription
+from apps.requisitions.models import Requisicao, StatusRequisicao
 from apps.users.models import PapelChoices, User
+
+PUSH_REMINDER_COOLDOWN = timedelta(hours=4)
+PUSH_REMINDER_OVERDUE_AFTER = timedelta(hours=4)
 
 
 def _content_type_e_object_id(objeto_relacionado):
@@ -147,6 +162,37 @@ def desativar_push_subscription(*, usuario: User, endpoint: str) -> None:
         subscription.save(update_fields=["active", "updated_at"])
 
 
+def registrar_push_client_event(
+    *,
+    usuario: User,
+    event_type: PushClientEventType,
+    diagnostic_status: PushDiagnosticStatus,
+    notification_supported: bool,
+    service_worker_supported: bool,
+    push_manager_supported: bool,
+    badging_supported: bool,
+    standalone_display: bool,
+) -> PushClientEvent:
+    _validar_usuario_push(usuario)
+    today = timezone.localdate()
+
+    event, _ = PushClientEvent.objects.update_or_create(
+        usuario=usuario,
+        event_type=event_type,
+        event_date=today,
+        defaults={
+            "papel": usuario.papel,
+            "diagnostic_status": diagnostic_status,
+            "notification_supported": notification_supported,
+            "service_worker_supported": service_worker_supported,
+            "push_manager_supported": push_manager_supported,
+            "badging_supported": badging_supported,
+            "standalone_display": standalone_display,
+        },
+    )
+    return event
+
+
 def _validar_usuario_push(usuario: User) -> None:
     if not pode_gerenciar_push_subscription(usuario):
         raise PermissionDenied("Usuário não pode gerenciar alertas push.")
@@ -183,24 +229,14 @@ def _record_push_failure(subscription: PushSubscription, exc: Exception) -> None
     )
 
 
-def enviar_push_requisicao_aguardando_autorizacao(*, requisicao) -> None:
+def _enviar_push_para_usuario(*, usuario: User, payload: dict[str, object], ttl: int = 3600) -> int:
     private_key = getattr(settings, "WEB_PUSH_VAPID_PRIVATE_KEY", "")
     subject = getattr(settings, "WEB_PUSH_VAPID_SUBJECT", "")
     if not private_key or not subject:
-        return
+        return 0
 
-    chefe = requisicao.setor_beneficiario.chefe_responsavel
-    subscriptions = PushSubscription.objects.filter(usuario=chefe, active=True)
-    if not subscriptions.exists():
-        return
-
-    payload = {
-        "title": "Requisição aguardando autorização",
-        "body": f"Beneficiário: {requisicao.beneficiario.nome_completo}",
-        "url": f"/requisicoes/{requisicao.pk}?contexto=autorizacao",
-        "tag": f"requisicao-autorizacao-{requisicao.pk}",
-    }
-
+    subscriptions = PushSubscription.objects.filter(usuario=usuario, active=True)
+    sent = 0
     for subscription in subscriptions:
         try:
             _webpush(
@@ -214,7 +250,7 @@ def enviar_push_requisicao_aguardando_autorizacao(*, requisicao) -> None:
                 data=json.dumps(payload),
                 vapid_private_key=private_key,
                 vapid_claims={"sub": subject},
-                ttl=3600,
+                ttl=ttl,
                 timeout=10,
             )
         except Exception as exc:
@@ -223,6 +259,7 @@ def enviar_push_requisicao_aguardando_autorizacao(*, requisicao) -> None:
             _record_push_failure(subscription, exc)
             continue
 
+        sent += 1
         subscription.last_success_at = timezone.now()
         subscription.last_failure_status = None
         subscription.last_failure_reason = ""
@@ -234,3 +271,73 @@ def enviar_push_requisicao_aguardando_autorizacao(*, requisicao) -> None:
                 "updated_at",
             ]
         )
+
+    return sent
+
+
+def enviar_push_requisicao_aguardando_autorizacao(*, requisicao) -> None:
+    chefe = requisicao.setor_beneficiario.chefe_responsavel
+    payload = {
+        "title": "Requisição aguardando autorização",
+        "body": f"Beneficiário: {requisicao.beneficiario.nome_completo}",
+        "url": f"/requisicoes/{requisicao.pk}?contexto=autorizacao",
+        "tag": f"requisicao-autorizacao-{requisicao.pk}",
+    }
+    _enviar_push_para_usuario(usuario=chefe, payload=payload)
+
+
+def enviar_push_lembretes_autorizacoes_atrasadas(*, now=None) -> int:
+    current_time = now or timezone.now()
+    overdue_before = current_time - PUSH_REMINDER_OVERDUE_AFTER
+    overdue_rows = (
+        Requisicao.objects.filter(
+            status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
+            data_envio_autorizacao__lte=overdue_before,
+            setor_beneficiario__chefe_responsavel__isnull=False,
+        )
+        .values("setor_beneficiario__chefe_responsavel")
+        .annotate(total=Count("id"))
+        .order_by("setor_beneficiario__chefe_responsavel")
+    )
+    sent_to_users = 0
+
+    for row in overdue_rows:
+        chefe_id = row["setor_beneficiario__chefe_responsavel"]
+        total = row["total"]
+        chefe = User.objects.filter(pk=chefe_id, is_active=True).first()
+        if chefe is None or not pode_gerenciar_push_subscription(chefe):
+            continue
+
+        with transaction.atomic():
+            state, _ = PushReminderState.objects.select_for_update().get_or_create(
+                usuario=chefe,
+                reminder_type=PushReminderType.OVERDUE_APPROVALS,
+                defaults={"last_count": 0},
+            )
+            if (
+                state.last_sent_at is not None
+                and current_time - state.last_sent_at < PUSH_REMINDER_COOLDOWN
+            ):
+                continue
+
+            body = (
+                "1 autorização atrasada aguarda decisão."
+                if total == 1
+                else f"{total} autorizações atrasadas aguardam decisão."
+            )
+            payload = {
+                "title": "Autorizações atrasadas",
+                "body": body,
+                "url": "/autorizacoes",
+                "tag": "autorizacoes-atrasadas",
+            }
+            sent = _enviar_push_para_usuario(usuario=chefe, payload=payload, ttl=3600)
+            if sent == 0:
+                continue
+
+            state.last_sent_at = current_time
+            state.last_count = total
+            state.save(update_fields=["last_sent_at", "last_count", "updated_at"])
+            sent_to_users += 1
+
+    return sent_to_users

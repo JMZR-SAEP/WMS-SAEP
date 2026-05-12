@@ -13,7 +13,17 @@ import {
   notificationUnreadCountQueryOptions,
   notificationsQueryKeys,
 } from "../../features/notifications/notifications";
-import { hasSeenPushOnboarding, isPushOnboardingPapel } from "../../features/pwa/push";
+import {
+  getPushDiagnostic,
+  hasSeenPushOnboarding,
+  isPushOnboardingPapel,
+  pushConfigQueryOptions,
+  reportBadgeUnavailableIfNeeded,
+  reportPushDiagnosticIfNeeded,
+  updateAppBadge,
+} from "../../features/pwa/push";
+import { PushStatusWarning } from "../../features/pwa/PushStatusWarning";
+import { pendingApprovalsQueryOptions } from "../../features/requisitions/requisitions";
 import { navigationItems } from "../../shared/config/navigation";
 
 function messageFromLogoutError(error: unknown) {
@@ -46,6 +56,16 @@ export function AppShell() {
   const queryClient = useQueryClient();
   const sessionQuery = useQuery(meQueryOptions);
   const session = sessionQuery.data;
+  const pushRole = Boolean(session && isPushOnboardingPapel(session.papel));
+  const pushConfigQuery = useQuery({
+    ...pushConfigQueryOptions,
+    enabled: pushRole,
+  });
+  const pendingApprovalsBadgeQuery = useQuery({
+    ...pendingApprovalsQueryOptions({ page: 1, pageSize: 1 }),
+    enabled: pushRole && location.pathname !== "/alertas",
+    refetchInterval: 60_000,
+  });
   const logoutMutation = useMutation({
     mutationFn: logoutSession,
     retry: false,
@@ -74,6 +94,8 @@ export function AppShell() {
   });
   const notifications = notificationsQuery.data?.results ?? [];
   const unreadCount = unreadCountQuery.data?.unread_count ?? 0;
+  const pushDiagnostic =
+    pushRole && pushConfigQuery.isSuccess ? getPushDiagnostic(pushConfigQuery.data) : null;
 
   useEffect(() => {
     if (
@@ -85,6 +107,36 @@ export function AppShell() {
       void navigate({ to: "/alertas" });
     }
   }, [location.pathname, navigate, session]);
+
+  useEffect(() => {
+    if (!session || !pushDiagnostic || pushDiagnostic.status === "ativo") {
+      return;
+    }
+
+    void reportPushDiagnosticIfNeeded(session, pushDiagnostic).catch(() => undefined);
+  }, [pushDiagnostic, session]);
+
+  useEffect(() => {
+    if (!session || !pushRole || !pendingApprovalsBadgeQuery.isSuccess) {
+      return;
+    }
+
+    void updateAppBadge(pendingApprovalsBadgeQuery.data.count)
+      .then((updated) => {
+        if (!updated) {
+          void reportBadgeUnavailableIfNeeded(session).catch(() => undefined);
+        }
+        return undefined;
+      })
+      .catch(() => {
+        void reportBadgeUnavailableIfNeeded(session).catch(() => undefined);
+      });
+  }, [
+    pendingApprovalsBadgeQuery.data?.count,
+    pendingApprovalsBadgeQuery.isSuccess,
+    pushRole,
+    session,
+  ]);
 
   if (location.pathname === "/login") {
     return (
@@ -152,6 +204,7 @@ export function AppShell() {
                     <p className="mt-2 text-sm text-[var(--ink-soft)]">{session.setor.nome}</p>
                   ) : null}
                 </div>
+                {pushDiagnostic ? <PushStatusWarning diagnostic={pushDiagnostic} /> : null}
                 <div className="notifications-panel">
                   <div className="notifications-header">
                     <p className="text-xs font-bold uppercase text-[var(--ink-muted)]">

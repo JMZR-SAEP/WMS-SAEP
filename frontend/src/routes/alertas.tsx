@@ -5,10 +5,12 @@ import { useEffect } from "react";
 import { requireOperationalPapel } from "../features/auth/guards";
 import { ApiError, meQueryOptions } from "../features/auth/session";
 import {
+  getPushDiagnostic,
   isPushSupported,
   markPushOnboardingSeen,
   pushConfigQueryOptions,
   registerPushSubscription,
+  reportPushDiagnosticIfNeeded,
 } from "../features/pwa/push";
 
 export const Route = createFileRoute("/alertas")({
@@ -38,6 +40,9 @@ function AlertasPage() {
   const sessionQuery = useQuery(meQueryOptions);
   const pushConfigQuery = useQuery(pushConfigQueryOptions);
   const publicKey = pushConfigQuery.data?.vapid_public_key ?? "";
+  const pushDiagnostic = pushConfigQuery.isSuccess
+    ? getPushDiagnostic(pushConfigQuery.data)
+    : null;
   const pushConfigReady = pushConfigQuery.isSuccess && Boolean(pushConfigQuery.data?.enabled);
   const pushMutation = useMutation({
     mutationFn: async () => {
@@ -50,13 +55,22 @@ function AlertasPage() {
   });
   const serverEnabled = pushConfigReady;
   const browserSupported = isPushSupported();
-  const canActivate = pushConfigReady && browserSupported && !pushMutation.isPending;
+  const canActivate =
+    pushConfigReady && browserSupported && pushDiagnostic?.canActivate && !pushMutation.isPending;
 
   useEffect(() => {
     if (sessionQuery.data) {
       markPushOnboardingSeen(sessionQuery.data);
     }
   }, [sessionQuery.data]);
+
+  useEffect(() => {
+    if (!sessionQuery.data || !pushDiagnostic || pushDiagnostic.status === "ativo") {
+      return;
+    }
+
+    void reportPushDiagnosticIfNeeded(sessionQuery.data, pushDiagnostic).catch(() => undefined);
+  }, [pushDiagnostic, sessionQuery.data]);
 
   return (
     <section className="space-y-5">
@@ -88,6 +102,12 @@ function AlertasPage() {
           {pushConfigQuery.isSuccess ? (
             <dl className="mt-4 grid gap-3 text-sm">
               <div className="notification-item">
+                <dt className="font-bold text-[var(--ink-strong)]">Alertas</dt>
+                <dd className="mt-1 text-[var(--ink-soft)]">
+                  {pushDiagnostic?.label ?? "Verificando"}
+                </dd>
+              </div>
+              <div className="notification-item">
                 <dt className="font-bold text-[var(--ink-strong)]">Servidor</dt>
                 <dd className="mt-1 text-[var(--ink-soft)]">
                   {serverEnabled ? "Push disponível" : "Push não configurado"}
@@ -97,6 +117,12 @@ function AlertasPage() {
                 <dt className="font-bold text-[var(--ink-strong)]">Navegador</dt>
                 <dd className="mt-1 text-[var(--ink-soft)]">
                   {browserSupported ? "Suporte detectado" : "Sem suporte a Web Push"}
+                </dd>
+              </div>
+              <div className="notification-item">
+                <dt className="font-bold text-[var(--ink-strong)]">Próxima ação</dt>
+                <dd className="mt-1 text-[var(--ink-soft)]">
+                  {pushDiagnostic?.nextAction ?? "Aguarde a verificação."}
                 </dd>
               </div>
             </dl>
