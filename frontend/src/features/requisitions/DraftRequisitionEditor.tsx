@@ -13,7 +13,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { trackEvent } from "../analytics/analytics";
 import { authQueryKeys, isAuthError, type AuthSession } from "../auth/session";
 import { SupportErrorPanel } from "../../shared/ui/support-error";
-import type { DraftStep } from "./draftSteps";
+import { canRequestForThirdParty, type DraftStep } from "./draftSteps";
 import {
   cancelDraftRequisition,
   createDraftRequisition,
@@ -61,6 +61,16 @@ const DRAFT_STEPS: Array<{ key: DraftStep; label: string }> = [
   { key: "revisao", label: "Revisão" },
   { key: "envio", label: "Envio" },
 ];
+
+const DRAFT_STEPS_SIMPLE: Array<{ key: DraftStep; label: string }> = [
+  { key: "itens", label: "Itens" },
+  { key: "revisao", label: "Revisão" },
+  { key: "envio", label: "Envio" },
+];
+
+function activeDraftSteps(hasThirdParty: boolean) {
+  return hasThirdParty ? DRAFT_STEPS : DRAFT_STEPS_SIMPLE;
+}
 
 type DraftRequisitionEditorProps = {
   activeStep?: DraftStep;
@@ -130,9 +140,6 @@ function formValuesFromRequisition(
   };
 }
 
-function canRequestForThirdParty(session: AuthSession) {
-  return session.papel !== "solicitante";
-}
 
 function hasPositiveStock(material: MaterialListItem) {
   return material.saldo_disponivel !== null && material.saldo_disponivel > 0;
@@ -319,16 +326,16 @@ function draftFieldError(
   return null;
 }
 
-function stepIndex(step: DraftStep) {
-  return DRAFT_STEPS.findIndex((candidate) => candidate.key === step);
+function stepIndex(step: DraftStep, steps: Array<{ key: DraftStep; label: string }>) {
+  return steps.findIndex((candidate) => candidate.key === step);
 }
 
-function nextStep(step: DraftStep) {
-  return DRAFT_STEPS[Math.min(stepIndex(step) + 1, DRAFT_STEPS.length - 1)].key;
+function nextStep(step: DraftStep, steps: Array<{ key: DraftStep; label: string }>) {
+  return steps[Math.min(stepIndex(step, steps) + 1, steps.length - 1)].key;
 }
 
-function previousStep(step: DraftStep) {
-  return DRAFT_STEPS[Math.max(stepIndex(step) - 1, 0)].key;
+function previousStep(step: DraftStep, steps: Array<{ key: DraftStep; label: string }>) {
+  return steps[Math.max(stepIndex(step, steps) - 1, 0)].key;
 }
 
 function StepSection({
@@ -357,7 +364,11 @@ export function DraftRequisitionEditor({
   const navigate = useNavigate();
   const [formError, setFormError] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
-  const [localStep, setLocalStep] = useState<DraftStep>(activeStepProp);
+  const hasThirdParty = canRequestForThirdParty(session);
+  const steps = activeDraftSteps(hasThirdParty);
+  const resolvedInitialStep =
+    activeStepProp === "beneficiario" && !hasThirdParty ? "itens" : activeStepProp;
+  const [localStep, setLocalStep] = useState<DraftStep>(resolvedInitialStep);
   const [recentMaterials, setRecentMaterials] = useState<MaterialListItem[]>(() =>
     normalizeRecentMaterials(safeReadJson<unknown>(recentMaterialsStorageKey(session.id))),
   );
@@ -419,6 +430,8 @@ export function DraftRequisitionEditor({
   useEffect(() => {
     activeStepRef.current = activeStep;
   }, [activeStep]);
+
+
 
   useEffect(() => {
     if (isEdit) {
@@ -774,7 +787,7 @@ export function DraftRequisitionEditor({
         return;
       }
     }
-    goToStep(nextStep(activeStep));
+    goToStep(nextStep(activeStep, steps));
   }
 
   async function validateDraftStep(step: DraftStep) {
@@ -909,7 +922,7 @@ export function DraftRequisitionEditor({
       </div>
 
       <div className="draft-stepper" aria-label="Etapas do rascunho">
-        {DRAFT_STEPS.map((step) => (
+        {steps.map((step) => (
           <button
             aria-current={activeStep === step.key ? "step" : undefined}
             className={activeStep === step.key ? "draft-step active" : "draft-step"}
@@ -1206,11 +1219,11 @@ export function DraftRequisitionEditor({
         </StepSection>
 
         <div className="draft-actions draft-sticky-actions">
-          {activeStep !== "beneficiario" ? (
+          {steps[0].key !== activeStep ? (
             <button
               className="action-link compact-action"
               disabled={pending}
-              onClick={() => goToStep(previousStep(activeStep))}
+              onClick={() => goToStep(previousStep(activeStep, steps))}
               type="button"
             >
               Voltar etapa
@@ -1240,19 +1253,21 @@ export function DraftRequisitionEditor({
                   : "Próximo: envio"}
             </button>
           ) : null}
-          <button className="preview-button draft-primary" disabled={pending} type="submit">
+          <button className="action-link compact-action" disabled={pending} type="submit">
             {saveMutation.isPending ? "Salvando..." : "Salvar rascunho"}
           </button>
-          <button
-            className="preview-button draft-primary"
-            disabled={pending}
-            onClick={(event) => {
-              void form.handleSubmit(requestSubmitDraft)(event);
-            }}
-            type="button"
-          >
-            {submitMutation.isPending ? "Enviando..." : "Enviar para autorização"}
-          </button>
+          {activeStep === "envio" ? (
+            <button
+              className="preview-button draft-primary"
+              disabled={pending}
+              onClick={(event) => {
+                void form.handleSubmit(requestSubmitDraft)(event);
+              }}
+              type="button"
+            >
+              {submitMutation.isPending ? "Enviando..." : "Enviar para autorização"}
+            </button>
+          ) : null}
         </div>
       </form>
 
