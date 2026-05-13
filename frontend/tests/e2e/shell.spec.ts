@@ -3,6 +3,13 @@ import { expect, test, type Page } from "@playwright/test";
 // Keep aligned with apps/requisitions/seed_pilot_minimo.py (SEED_PASSWORD).
 const SEED_PASSWORD = "piloto-minimo";
 
+async function expectNoHorizontalOverflow(page: Page) {
+  const hasHorizontalOverflow = await page.evaluate(
+    () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+  );
+  expect(hasHorizontalOverflow).toBe(false);
+}
+
 async function skipPushOnboarding(page: Page) {
   await page.addInitScript(() => {
     const originalGetItem = Object.getOwnPropertyDescriptor(Storage.prototype, "getItem")
@@ -13,6 +20,29 @@ async function skipPushOnboarding(page: Page) {
       }
       return Reflect.apply(originalGetItem, this, [key]);
     };
+  });
+}
+
+async function forcePushDeniedCapabilities(page: Page) {
+  await page.addInitScript(() => {
+    Object.defineProperty(window, "Notification", {
+      configurable: true,
+      value: {
+        permission: "denied",
+        requestPermission: () => Promise.resolve("denied"),
+      },
+    });
+    Object.defineProperty(window, "PushManager", {
+      configurable: true,
+      value: function PushManager() {},
+    });
+    Object.defineProperty(navigator, "serviceWorker", {
+      configurable: true,
+      value: {
+        register: () => Promise.resolve({}),
+        ready: Promise.resolve({ pushManager: {} }),
+      },
+    });
   });
 }
 
@@ -64,7 +94,7 @@ test("logs in and logs out through real backend", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Entrar no piloto" })).toBeVisible();
 });
 
-test("login fits mobile viewport with SAEP identity", async ({ page }) => {
+test("login fits mobile viewport with SAEP identity @qa-final", async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 });
   await page.goto("/login");
 
@@ -72,10 +102,7 @@ test("login fits mobile viewport with SAEP identity", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Entrar no piloto" })).toBeVisible();
   await expect(page.getByText(/scaffold/i)).toHaveCount(0);
 
-  const hasHorizontalOverflow = await page.evaluate(
-    () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
-  );
-  expect(hasHorizontalOverflow).toBe(false);
+  await expectNoHorizontalOverflow(page);
 
   for (let index = 0; index < 12; index += 1) {
     if (await page.getByLabel("Matrícula funcional").evaluate((element) => element === document.activeElement)) {
@@ -90,9 +117,7 @@ test("opens minhas requisicoes and canonical detail with real data", async ({ pa
   await loginAs(page, "solicitante1", /\/minhas-requisicoes(?:\?.*)?$/);
 
   await expect(page.getByRole("heading", { name: "Minhas requisições" })).toBeVisible();
-  const formalRow = page.locator("tbody tr").filter({ hasText: /REQ-\d{4}-\d+/ }).first();
-  await expect(formalRow).toBeVisible();
-  await formalRow.getByRole("link", { name: "Abrir" }).click();
+  await page.getByRole("link", { name: "Abrir" }).first().click();
 
   await expect(page).toHaveURL(/\/requisicoes\/\d+$/);
   await expect(page.getByRole("heading", { name: /REQ-\d{4}-\d+/ })).toBeVisible();
@@ -133,10 +158,135 @@ test("draft wizard fits mobile viewport with sticky actions", async ({ page }) =
   await expect(page.getByRole("heading", { name: "Nova requisição" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Próximo: itens" })).toBeVisible();
 
-  const hasHorizontalOverflow = await page.evaluate(
-    () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
-  );
-  expect(hasHorizontalOverflow).toBe(false);
+  await expectNoHorizontalOverflow(page);
+});
+
+test("qa final keeps P0 mobile worklists without horizontal overflow @qa-final", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await loginAs(page, "solicitante1", /\/minhas-requisicoes(?:\?.*)?$/);
+  await expect(page.getByRole("heading", { name: "Minhas requisições" })).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+  await expect(page.getByRole("link", { name: "Abrir" }).first()).toBeVisible();
+
+  await page.getByRole("button", { name: "Sair" }).click();
+  await loginAs(page, "chefe-setor", /\/autorizacoes(?:\?.*)?$/, {
+    skipPushOnboarding: true,
+  });
+  await expect(page.getByRole("heading", { name: "Fila de autorizações" })).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+  await expect(page.getByRole("link", { name: "Abrir" }).first()).toBeVisible();
+
+  await page.getByRole("button", { name: "Sair" }).click();
+  await loginAs(page, "auxiliar-almox", /\/atendimentos(?:\?.*)?$/);
+  await expect(page.getByRole("heading", { name: "Fila de atendimento" })).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+  await expect(page.getByRole("link", { name: "Abrir" }).first()).toBeVisible();
+});
+
+test("qa final preserves local draft after failed save @qa-final", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await loginAs(page, "91002", /\/minhas-requisicoes(?:\?.*)?$/);
+
+  await page.goto("/requisicoes/nova");
+  await page.getByLabel("Para terceiro").click();
+  await page.getByLabel("Buscar beneficiário").fill("Ped");
+  await page.getByRole("button", { name: /Pedro Nunes/i }).click();
+  await page.getByRole("button", { name: "Próximo: itens" }).click();
+  await page.getByLabel("Buscar material").fill("Papel sulfite");
+  await page.getByRole("button", { name: /Adicionar Papel sulfite A4/i }).click();
+  await page.getByLabel("Quantidade solicitada").fill("2");
+
+  await page.route(/\/api\/v1\/requisitions\/(?:\d+\/draft\/)?(?:\?.*)?$/, async (route, request) => {
+    if (request.method() === "POST" || request.method() === "PUT") {
+      await route.fulfill({
+        contentType: "application/json",
+        status: 503,
+        body: JSON.stringify({
+          error: {
+            code: "service_unavailable",
+            message: "Falha controlada para QA.",
+            trace_id: "qa-final-draft",
+          },
+        }),
+      });
+      return;
+    }
+    await route.fallback();
+  });
+
+  await page.getByRole("button", { name: "Salvar rascunho" }).click();
+  await expect(page.getByRole("alert")).toBeVisible();
+  await page.reload();
+
+  await expect(page.getByRole("heading", { name: /Nova requisição|Editar rascunho/ })).toBeVisible();
+  const continueLocalDraft = page.getByRole("button", { name: "Continuar" });
+  if (await continueLocalDraft.isVisible()) {
+    await continueLocalDraft.click();
+  }
+  await expect(page.getByRole("heading", { name: /Papel sulfite A4/ }).first()).toBeVisible();
+  await expect(page.getByLabel("Quantidade solicitada")).toHaveValue("2");
+});
+
+test("qa final opens authorization detail from deep link @qa-final", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await loginAs(page, "chefe-setor", /\/autorizacoes(?:\?.*)?$/, {
+    skipPushOnboarding: true,
+  });
+
+  await expect(page.getByRole("heading", { name: "Fila de autorizações" })).toBeVisible();
+  await page.getByRole("link", { name: "Abrir" }).first().click();
+  await expect(page).toHaveURL(/\/requisicoes\/\d+\?/);
+  await expect(page.getByRole("heading", { name: /REQ-\d{4}-\d+/ })).toBeVisible();
+  const deepLink = page.url();
+  expectDetailContextUrl(deepLink, "autorizacao");
+
+  const deepLinkUrl = new URL(deepLink);
+  await page.goto(`${deepLinkUrl.pathname}${deepLinkUrl.search}`, { waitUntil: "domcontentloaded" });
+  await expect(page.getByRole("heading", { name: /REQ-\d{4}-\d+/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Voltar" })).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+});
+
+test("qa final push denied warning does not block authorization queue @qa-final", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await forcePushDeniedCapabilities(page);
+  await loginAs(page, "chefe-setor", /\/autorizacoes(?:\?.*)?$/, {
+    skipPushOnboarding: true,
+  });
+
+  await expect(page.getByRole("heading", { name: "Fila de autorizações" })).toBeVisible();
+  await expect(page.getByRole("status").first()).toContainText(/Bloqueado|Sem suporte|Requer instalação PWA/);
+  await expect(page.getByRole("link", { name: "Abrir" }).first()).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+});
+
+test("qa final exposes support details on API failure @qa-final", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: () => Promise.resolve(undefined),
+      },
+    });
+  });
+  await page.route(/\/api\/v1\/requisitions\/mine\//, async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      status: 500,
+      body: JSON.stringify({
+        error: {
+          code: "server_error",
+          message: "Falha controlada para QA.",
+          trace_id: "qa-final-trace",
+        },
+      }),
+    });
+  });
+
+  await loginAs(page, "solicitante1", /\/minhas-requisicoes(?:\?.*)?$/);
+  await expect(page.getByRole("alert")).toContainText("Falha controlada para QA.");
+  await page.getByRole("button", { name: "Copiar detalhes para suporte" }).click();
+  await expect(page.getByRole("status")).toContainText("Detalhes copiados.");
 });
 
 test("authorizes pending requisition from worklist", async ({ page }) => {
@@ -145,11 +295,7 @@ test("authorizes pending requisition from worklist", async ({ page }) => {
   });
 
   await expect(page.getByRole("heading", { name: "Fila de autorizações" })).toBeVisible();
-  const approvalRows = page.locator("tbody tr");
-  await expect(approvalRows).not.toHaveCount(0);
-  const approvalRow = approvalRows.first();
-  await expect(approvalRow).toBeVisible();
-  await approvalRow.getByRole("link", { name: "Abrir" }).click();
+  await page.getByRole("link", { name: "Abrir" }).first().click();
 
   await expect(page).toHaveURL(/\/requisicoes\/\d+\?/);
   expectDetailContextUrl(page.url(), "autorizacao");
@@ -162,11 +308,7 @@ test("fulfills authorized requisition from worklist", async ({ page }) => {
   await loginAs(page, "auxiliar-almox", /\/atendimentos(?:\?.*)?$/);
 
   await expect(page.getByRole("heading", { name: "Fila de atendimento" })).toBeVisible();
-  const fulfillmentRows = page.locator("tbody tr");
-  await expect(fulfillmentRows).not.toHaveCount(0);
-  const fulfillmentRow = fulfillmentRows.first();
-  await expect(fulfillmentRow).toBeVisible();
-  await fulfillmentRow.getByRole("link", { name: "Abrir" }).click();
+  await page.getByRole("link", { name: "Abrir" }).first().click();
 
   await expect(page).toHaveURL(/\/requisicoes\/\d+\?/);
   expectDetailContextUrl(page.url(), "atendimento");

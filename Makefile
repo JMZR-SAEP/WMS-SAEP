@@ -134,7 +134,7 @@ frontend-deps: $(FRONTEND_DEPS_STAMP) ## Instalar dependências do frontend quan
 
 frontend-init: frontend-deps ## Instalar dependências do frontend e preparar Playwright
 	@test -d $(FRONTEND_DIR) || (echo "Diretório $(FRONTEND_DIR) não encontrado" && exit 1)
-	cd $(FRONTEND_DIR) && ./node_modules/.bin/playwright install chromium
+	cd $(FRONTEND_DIR) && ./node_modules/.bin/playwright install chromium webkit
 
 frontend-gen-api: frontend-deps ## Exportar OpenAPI do backend e regenerar tipos do frontend
 	@test -d $(FRONTEND_DIR) || (echo "Diretório $(FRONTEND_DIR) não encontrado" && exit 1)
