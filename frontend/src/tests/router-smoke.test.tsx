@@ -2681,7 +2681,7 @@ describe("frontend pilot router", () => {
     const { container } = renderRoute("/requisicoes/nova");
 
     expect(await screen.findByRole("heading", { name: "Nova requisição" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Próximo: itens" }));
+    // solicitante puro: step beneficiario é pulado, começa em itens
     expect(await screen.findByRole("heading", { name: "Itens" })).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Buscar material"), {
       target: { value: "papel" },
@@ -2734,12 +2734,10 @@ describe("frontend pilot router", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    renderRoute("/requisicoes/nova?etapa=beneficiario");
+    // solicitante puro: etapa=beneficiario é resolvida para itens antes de passar ao editor
+    renderRoute("/requisicoes/nova");
 
     expect(await screen.findByRole("heading", { name: "Nova requisição" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Beneficiário" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Próximo: itens" }));
-
     expect(await screen.findByRole("heading", { name: "Itens" })).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Buscar material"), {
       target: { value: "papel" },
@@ -2802,7 +2800,7 @@ describe("frontend pilot router", () => {
     renderRoute("/requisicoes/nova");
 
     expect(await screen.findByRole("heading", { name: "Nova requisição" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Próximo: itens" }));
+    // solicitante puro: começa em itens diretamente
     expect(await screen.findByRole("heading", { name: "Itens" })).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Buscar material"), {
       target: { value: "papel" },
@@ -3255,7 +3253,11 @@ describe("frontend pilot router", () => {
     renderRoute("/requisicoes/101");
 
     expect(await screen.findByRole("heading", { name: "Editar rascunho" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Enviar para autorização" }));
+
+    // solicitante puro: steps = itens → revisao → envio; navegar até envio
+    fireEvent.click(await screen.findByRole("button", { name: "Próximo: revisão" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Próximo: envio" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Enviar para autorização" }));
     const dialog = await screen.findByRole("dialog");
     expect(dialog).toHaveTextContent("Enviar rascunho para autorização?");
     expect(screen.getByRole("button", { name: "Voltar ao rascunho" })).toHaveFocus();
@@ -3405,7 +3407,7 @@ describe("frontend pilot router", () => {
     renderRoute("/requisicoes/nova");
 
     expect(await screen.findByRole("heading", { name: "Nova requisição" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Próximo: itens" }));
+    // solicitante puro: começa em itens diretamente
     expect(await screen.findByRole("heading", { name: "Itens" })).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Buscar material"), {
       target: { value: "caneta" },
