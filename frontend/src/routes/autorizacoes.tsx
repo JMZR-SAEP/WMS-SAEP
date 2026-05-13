@@ -9,6 +9,7 @@ import {
 } from "@tanstack/react-table";
 import { z } from "zod";
 
+import { trackEvent } from "../features/analytics/analytics";
 import { requireOperationalPapel } from "../features/auth/guards";
 import { authQueryKeys, isUnauthenticatedError, meQueryOptions } from "../features/auth/session";
 import {
@@ -31,8 +32,8 @@ import { calcSlaStatus, slaLabel, type SlaStatus } from "../features/requisition
 import {
   ResponsiveWorklistFrame,
   WorklistEmptyState,
-  WorklistErrorState,
 } from "../shared/ui/worklist";
+import { SupportErrorPanel } from "../shared/ui/support-error";
 
 const DEFAULT_PAGE_SIZE = 20;
 
@@ -216,6 +217,7 @@ function AutorizacoesPage() {
       });
     },
     onSuccess: async (_data, id) => {
+      trackEvent({ event_type: "authorization_total", screen: "autorizacoes", action: "quick_authorize" });
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: requisitionsQueryKeys.pendingApprovalsAll }),
         queryClient.invalidateQueries({ queryKey: requisitionsQueryKeys.detail(id) }),
@@ -413,9 +415,10 @@ function AutorizacoesPage() {
       {pushDiagnostic ? <PushStatusWarning diagnostic={pushDiagnostic} /> : null}
 
       {listQuery.isError ? (
-        <WorklistErrorState>
-          {queryErrorMessage(listQuery.error, "Não foi possível carregar autorizações pendentes.")}
-        </WorklistErrorState>
+        <SupportErrorPanel
+          error={listQuery.error}
+          fallback="Não foi possível carregar autorizações pendentes."
+        />
       ) : null}
 
       {!listQuery.isError ? (

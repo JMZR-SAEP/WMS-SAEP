@@ -3,9 +3,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 
+import { trackEvent } from "../../features/analytics/analytics";
 import { requireOperationalPapel, requireSession } from "../../features/auth/guards";
 import {
-  ApiError,
   authQueryKeys,
   isUnauthenticatedError,
   meQueryOptions,
@@ -20,7 +20,6 @@ import {
   formatQuantity,
   fulfillRequisition,
   isThirdPartyBeneficiary,
-  queryErrorMessage,
   refuseRequisition,
   requisitionDetailQueryOptions,
   requisitionsQueryKeys,
@@ -34,6 +33,7 @@ import {
   type RequisicaoRefuseInput,
   type RequisicaoTimelineEvent,
 } from "../../features/requisitions/requisitions";
+import { SupportErrorPanel } from "../../shared/ui/support-error";
 
 const detailSearchSchema = z.object({
   contexto: z.enum(["autorizacao", "atendimento"]).optional().catch(undefined),
@@ -96,24 +96,6 @@ function hasText(value: string | null | undefined) {
   return Boolean(value?.trim());
 }
 
-function traceIdFromError(error: unknown) {
-  if (!(error instanceof ApiError)) {
-    return null;
-  }
-
-  return error.payload?.error?.trace_id ?? null;
-}
-
-function supportDetailsFromError(error: unknown) {
-  const traceId = traceIdFromError(error);
-
-  if (!traceId) {
-    return null;
-  }
-
-  return `trace_id: ${traceId}`;
-}
-
 function DetailSkeleton() {
   return (
     <section aria-label="Carregando requisição" className="detail-skeleton" role="status">
@@ -154,69 +136,6 @@ function DetailErrorState({
       onRetry={onRetry}
       retryLabel="Tentar novamente"
     />
-  );
-}
-
-function SupportErrorPanel({
-  error,
-  fallback,
-  onRetry,
-  retryLabel,
-}: {
-  error: unknown;
-  fallback: string;
-  onRetry?: () => void;
-  retryLabel?: string;
-}) {
-  const [copyFeedback, setCopyFeedback] = useState("");
-  const supportDetails = supportDetailsFromError(error);
-  const canCopySupportDetails = Boolean(
-    supportDetails &&
-      navigator.clipboard &&
-      typeof navigator.clipboard.writeText === "function",
-  );
-
-  async function copySupportDetails() {
-    if (!supportDetails || !canCopySupportDetails) {
-      setCopyFeedback("Copie os detalhes manualmente.");
-      return;
-    }
-
-    try {
-      await navigator.clipboard.writeText(supportDetails);
-      setCopyFeedback("Detalhes copiados.");
-    } catch (copyError) {
-      console.error("Não foi possível copiar detalhes para suporte.", copyError);
-      setCopyFeedback("Não foi possível copiar.");
-    }
-  }
-
-  return (
-    <div className="error-panel compact-error detail-error-state" role="alert">
-      <p>{queryErrorMessage(error, fallback)}</p>
-      <div className="detail-error-actions">
-        {onRetry ? (
-          <button className="action-link compact-action" onClick={onRetry} type="button">
-            {retryLabel ?? "Tentar novamente"}
-          </button>
-        ) : null}
-        {canCopySupportDetails ? (
-          <button
-            className="action-link compact-action"
-            onClick={() => void copySupportDetails()}
-            type="button"
-          >
-            Copiar detalhes para suporte
-          </button>
-        ) : null}
-      </div>
-      {supportDetails && !canCopySupportDetails ? (
-        <p className="helper-text">
-          Copie estes detalhes para suporte: <code>{supportDetails}</code>
-        </p>
-      ) : null}
-      {copyFeedback ? <p className="helper-text">{copyFeedback}</p> : null}
-    </div>
   );
 }
 
@@ -494,7 +413,10 @@ function AuthorizationDecisionPanel({
     });
   }
 
-  async function afterDecisionSuccess() {
+  async function afterDecisionSuccess(
+    eventType: "authorization_total" | "authorization_partial" | "authorization_refused",
+  ) {
+    trackEvent({ event_type: eventType, screen: "requisicao_detalhe", action: "decision" });
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: requisitionsQueryKeys.pendingApprovalsAll }),
       queryClient.invalidateQueries({ queryKey: requisitionsQueryKeys.detail(requisicao.id) }),
@@ -510,12 +432,25 @@ function AuthorizationDecisionPanel({
   const authorizeMutation = useMutation({
     mutationFn: (input: RequisicaoAuthorizeInput) => authorizeRequisition(requisicao.id, input),
     onError: redirectToLoginAfterAuthError,
-    onSuccess: afterDecisionSuccess,
+    onSuccess: (_data, input) => {
+      const isTotal = input.itens.every((item) => {
+        const originalItem = requisicao.itens.find(
+          (requisitionItem) => requisitionItem.id === item.item_id,
+        );
+        if (!originalItem) {
+          return false;
+        }
+        const requested = quantityNumber(originalItem.quantidade_solicitada);
+        const authorized = quantityNumber(item.quantidade_autorizada);
+        return !Number.isNaN(requested) && !Number.isNaN(authorized) && requested === authorized;
+      });
+      return afterDecisionSuccess(isTotal ? "authorization_total" : "authorization_partial");
+    },
   });
   const refuseMutation = useMutation({
     mutationFn: (input: RequisicaoRefuseInput) => refuseRequisition(requisicao.id, input),
     onError: redirectToLoginAfterAuthError,
-    onSuccess: afterDecisionSuccess,
+    onSuccess: () => afterDecisionSuccess("authorization_refused"),
   });
   const pending = authorizeMutation.isPending || refuseMutation.isPending;
   const mutationError = authorizeMutation.error ?? refuseMutation.error;
@@ -1337,9 +1272,10 @@ function DetalheRequisicaoPage() {
     }
     if (sessionQuery.isError) {
       return (
-        <div className="error-panel">
-          {queryErrorMessage(sessionQuery.error, "Não foi possível carregar a sessão.")}
-        </div>
+        <SupportErrorPanel
+          error={sessionQuery.error}
+          fallback="Não foi possível carregar a sessão."
+        />
       );
     }
     if (!sessionQuery.data) {

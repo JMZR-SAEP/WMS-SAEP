@@ -1,7 +1,13 @@
 import { keepPreviousData, queryOptions } from "@tanstack/react-query";
 
-import { ApiError, isAuthError, type ErrorResponse } from "../auth/session";
+import { isAuthError } from "../auth/session";
 import { apiClient } from "../../shared/api/client";
+import {
+  ApiError,
+  messageFromErrorPayload,
+  queryErrorMessage as sharedQueryErrorMessage,
+  type ErrorResponse,
+} from "../../shared/api/errors";
 import type { components } from "../../shared/api/schema";
 
 export type RequisicaoListItem = components["schemas"]["RequisicaoListOutput"];
@@ -113,7 +119,7 @@ export const requisitionsQueryKeys = {
 };
 
 function messageFromError(error: ErrorResponse | undefined, fallback: string) {
-  return error?.error?.message || fallback;
+  return messageFromErrorPayload(error, fallback);
 }
 
 export async function fetchMyRequisitions(params: RequisicoesListParams) {
@@ -133,6 +139,7 @@ export async function fetchMyRequisitions(params: RequisicoesListParams) {
       messageFromError(error, "Não foi possível carregar requisições."),
       response.status,
       error,
+      "/api/v1/requisitions/mine/",
     );
   }
 
@@ -154,6 +161,7 @@ export async function fetchPendingApprovals(params: PendingApprovalsParams) {
       messageFromError(error, "Não foi possível carregar autorizações pendentes."),
       response.status,
       error,
+      "/api/v1/requisitions/pending-approvals/",
     );
   }
 
@@ -178,6 +186,7 @@ export async function fetchPendingFulfillments(params: PendingFulfillmentsParams
       messageFromError(error, "Não foi possível carregar atendimentos pendentes."),
       response.status,
       error,
+      "/api/v1/requisitions/pending-fulfillments/",
     );
   }
 
@@ -198,6 +207,7 @@ export async function fetchRequisitionDetail(id: number) {
       messageFromError(error, "Não foi possível carregar a requisição."),
       response.status,
       error,
+      "/api/v1/requisitions/{id}/",
     );
   }
 
@@ -219,6 +229,7 @@ export async function authorizeRequisition(id: number, input: RequisicaoAuthoriz
       messageFromError(error, "Não foi possível autorizar a requisição."),
       response.status,
       error,
+      "/api/v1/requisitions/{id}/authorize/",
     );
   }
 
@@ -240,6 +251,7 @@ export async function refuseRequisition(id: number, input: RequisicaoRefuseInput
       messageFromError(error, "Não foi possível recusar a requisição."),
       response.status,
       error,
+      "/api/v1/requisitions/{id}/refuse/",
     );
   }
 
@@ -261,6 +273,7 @@ export async function fulfillRequisition(id: number, input: RequisicaoFulfillInp
       messageFromError(error, "Não foi possível registrar atendimento."),
       response.status,
       error,
+      "/api/v1/requisitions/{id}/fulfill/",
     );
   }
 
@@ -282,6 +295,7 @@ export async function cancelAuthorizedRequisition(id: number, input: RequisicaoC
       messageFromError(error, "Não foi possível cancelar a requisição."),
       response.status,
       error,
+      "/api/v1/requisitions/{id}/cancel/",
     );
   }
 
@@ -303,6 +317,7 @@ export async function fetchMaterialsForDraft(search: string) {
       messageFromError(error, "Não foi possível buscar materiais."),
       response.status,
       error,
+      "/api/v1/materials/",
     );
   }
 
@@ -323,6 +338,7 @@ export async function fetchBeneficiariesForDraft(search: string) {
       messageFromError(error, "Não foi possível buscar beneficiários."),
       response.status,
       error,
+      "/api/v1/users/beneficiary-lookup/",
     );
   }
 
@@ -339,6 +355,7 @@ export async function createDraftRequisition(input: RequisicaoDraftInput) {
       messageFromError(error, "Não foi possível salvar o rascunho."),
       response.status,
       error,
+      "/api/v1/requisitions/",
     );
   }
 
@@ -360,6 +377,7 @@ export async function updateDraftRequisition(id: number, input: RequisicaoDraftI
       messageFromError(error, "Não foi possível atualizar o rascunho."),
       response.status,
       error,
+      "/api/v1/requisitions/{id}/draft/",
     );
   }
 
@@ -380,6 +398,7 @@ export async function submitDraftRequisition(id: number) {
       messageFromError(error, "Não foi possível enviar para autorização."),
       response.status,
       error,
+      "/api/v1/requisitions/{id}/submit/",
     );
   }
 
@@ -400,6 +419,7 @@ export async function discardDraftRequisition(id: number) {
       messageFromError(error, "Não foi possível descartar o rascunho."),
       response.status,
       error,
+      "/api/v1/requisitions/{id}/discard/",
     );
   }
 }
@@ -421,6 +441,7 @@ export async function cancelDraftRequisition(id: number) {
       messageFromError(error, "Não foi possível cancelar a requisição."),
       response.status,
       error,
+      "/api/v1/requisitions/{id}/cancel/",
     );
   }
 
@@ -520,11 +541,7 @@ export function formatQuantity(value: string) {
 }
 
 export function queryErrorMessage(error: unknown, fallback: string) {
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-
-  return fallback;
+  return sharedQueryErrorMessage(error, fallback);
 }
 
 export function tipoEventoLabel(tipoEvento: RequisicaoTimelineEventType) {

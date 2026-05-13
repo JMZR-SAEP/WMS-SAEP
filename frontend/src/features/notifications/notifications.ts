@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
-import { ApiError, type ErrorResponse } from "../auth/session";
 import { apiClient } from "../../shared/api/client";
+import { ApiError, messageFromErrorPayload, type ErrorResponse } from "../../shared/api/errors";
 import type { components } from "../../shared/api/schema";
 
 export type NotificationItem = components["schemas"]["NotificacaoOutput"];
@@ -30,7 +30,7 @@ export const notificationsQueryKeys = {
 };
 
 function messageFromError(error: ErrorResponse | undefined, fallback: string) {
-  return error?.error?.message || fallback;
+  return messageFromErrorPayload(error, fallback);
 }
 
 export async function fetchNotifications(params: NotificationListParams) {
@@ -48,6 +48,7 @@ export async function fetchNotifications(params: NotificationListParams) {
       messageFromError(error, "Não foi possível carregar notificações."),
       response.status,
       error,
+      "/api/v1/notifications/",
     );
   }
 
@@ -62,6 +63,7 @@ export async function fetchNotificationUnreadCount() {
       messageFromError(error, "Não foi possível carregar contador de notificações."),
       response.status,
       error,
+      "/api/v1/notifications/unread-count/",
     );
   }
 
@@ -80,6 +82,7 @@ export async function markNotificationRead(id: number) {
       messageFromError(error, "Não foi possível marcar notificação como lida."),
       response.status,
       error,
+      "/api/v1/notifications/{id}/mark-read/",
     );
   }
 

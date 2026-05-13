@@ -10,7 +10,9 @@ import { useFieldArray, useForm, useWatch, type FieldPath } from "react-hook-for
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 
+import { trackEvent } from "../analytics/analytics";
 import { authQueryKeys, isAuthError, type AuthSession } from "../auth/session";
+import { SupportErrorPanel } from "../../shared/ui/support-error";
 import type { DraftStep } from "./draftSteps";
 import {
   cancelDraftRequisition,
@@ -363,6 +365,8 @@ export function DraftRequisitionEditor({
   const cancelConfirmationButtonRef = useRef<HTMLButtonElement | null>(null);
   const pendingRef = useRef(false);
   const suppressNextPersistRef = useRef(false);
+  const activeStepRef = useRef<DraftStep>(activeStepProp);
+  const draftFlowClosedRef = useRef(Boolean(initialRequisition));
   const storageKey = draftStorageKey(session.id, initialRequisition?.id);
   const baseValues = useMemo(
     () => formValuesFromRequisition(initialRequisition, session),
@@ -411,6 +415,32 @@ export function DraftRequisitionEditor({
     ...draftMaterialsQueryOptions(materialSearch),
     enabled: materialSearch.length >= 2,
   });
+
+  useEffect(() => {
+    activeStepRef.current = activeStep;
+  }, [activeStep]);
+
+  useEffect(() => {
+    if (isEdit) {
+      return;
+    }
+
+    trackEvent({ event_type: "draft_started", screen: "nova_requisicao", action: "open" });
+
+    return () => {
+      if (draftFlowClosedRef.current) {
+        return;
+      }
+
+      trackEvent({
+        event_type: "draft_abandoned",
+        screen: "nova_requisicao",
+        draft_step: activeStepRef.current,
+        action: "leave",
+      });
+    };
+  }, [isEdit]);
+
   useEffect(() => {
     if (suppressNextPersistRef.current) {
       suppressNextPersistRef.current = false;
@@ -496,6 +526,13 @@ export function DraftRequisitionEditor({
         : createDraftRequisition(input),
     onSuccess: async (requisition) => {
       setFormError(null);
+      draftFlowClosedRef.current = true;
+      trackEvent({
+        event_type: "draft_saved",
+        screen: "nova_requisicao",
+        draft_step: activeStep,
+        action: initialRequisition ? "update" : "create",
+      });
       afterMutationSuccess(requisition);
       if (initialRequisition) {
         const currentItems = form.getValues("itens");
@@ -528,6 +565,13 @@ export function DraftRequisitionEditor({
     onSuccess: async (requisition) => {
       setFormError(null);
       setConfirmAction(null);
+      draftFlowClosedRef.current = true;
+      trackEvent({
+        event_type: "draft_submitted",
+        screen: "nova_requisicao",
+        draft_step: "envio",
+        action: initialRequisition ? "update_submit" : "create_submit",
+      });
       afterMutationSuccess(requisition);
       await navigate({ to: "/requisicoes/$id", params: { id: String(requisition.id) } });
     },
@@ -546,6 +590,7 @@ export function DraftRequisitionEditor({
     },
     onSuccess: async (requisition) => {
       setFormError(null);
+      draftFlowClosedRef.current = true;
       suppressNextPersistRef.current = true;
       clearDraftStorage();
       if (initialRequisition) {
@@ -562,6 +607,7 @@ export function DraftRequisitionEditor({
     onError: handleMutationError,
   });
   const pending = saveMutation.isPending || submitMutation.isPending || discardMutation.isPending;
+  const mutationError = saveMutation.error ?? submitMutation.error ?? discardMutation.error;
   const materials = materialsQuery.data?.results ?? [];
   const displayedMaterials = materialSearch ? materials : recentMaterials.length >= 2 ? recentMaterials : [];
   const beneficiaries = beneficiaryQuery.data ?? [];
@@ -898,7 +944,11 @@ export function DraftRequisitionEditor({
         </div>
       ) : null}
 
-      {formError ? <div className="error-panel">{formError}</div> : null}
+      {mutationError ? (
+        <SupportErrorPanel error={mutationError} fallback="Não foi possível concluir a ação." />
+      ) : formError ? (
+        <div className="error-panel">{formError}</div>
+      ) : null}
 
       <form
         className="draft-editor"

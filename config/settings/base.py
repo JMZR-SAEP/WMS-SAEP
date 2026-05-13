@@ -27,6 +27,7 @@ INSTALLED_APPS = [
     "apps.stock",
     "apps.requisitions",
     "apps.notifications",
+    "apps.analytics",
     "apps.core",
 ]
 
@@ -125,6 +126,10 @@ SPECTACULAR_SETTINGS = {
     "VERSION": "0.1.0",
     "SERVE_PERMISSIONS": ["rest_framework.permissions.IsAdminUser"],
     "CONTACT": {"email": "contato@saep.local"},
+    "ENUM_NAME_OVERRIDES": {
+        "FrontendAnalyticsEventTypeEnum": "apps.analytics.models.FrontendAnalyticsEventType",
+        "PushClientEventTypeEnum": "apps.notifications.models.PushClientEventType",
+    },
 }
 
 CORS_ALLOWED_ORIGINS = os.environ.get(

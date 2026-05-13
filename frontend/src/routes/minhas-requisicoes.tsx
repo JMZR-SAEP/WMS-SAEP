@@ -16,7 +16,6 @@ import {
   formatDateTime,
   isThirdPartyBeneficiary,
   myRequisitionsQueryOptions,
-  queryErrorMessage,
   statusLabel,
   STATUS_OPTIONS,
   type RequisicaoListItem,
@@ -25,8 +24,8 @@ import {
 import {
   ResponsiveWorklistFrame,
   WorklistEmptyState,
-  WorklistErrorState,
 } from "../shared/ui/worklist";
+import { SupportErrorPanel } from "../shared/ui/support-error";
 
 const DEFAULT_PAGE_SIZE = 20;
 
@@ -316,9 +315,7 @@ function MinhasRequisicoesPage() {
       </form>
 
       {listQuery.isError && !authError ? (
-        <WorklistErrorState>
-          {queryErrorMessage(listQuery.error, "Não foi possível carregar os dados.")}
-        </WorklistErrorState>
+        <SupportErrorPanel error={listQuery.error} fallback="Não foi possível carregar os dados." />
       ) : null}
 
       {!listQuery.isError || authError ? (

@@ -3,12 +3,13 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 
 import saepLogoUrl from "../assets/saep-logo.webp";
+import { trackEvent } from "../features/analytics/analytics";
 import {
-  ApiError,
   authQueryKeys,
   homePathForPapel,
   loginWithMatricula,
 } from "../features/auth/session";
+import { SupportErrorPanel } from "../shared/ui/support-error";
 
 function safeInternalRedirectPath(redirect: string | undefined) {
   if (!redirect || redirect.startsWith("//")) {
@@ -43,31 +44,25 @@ function LoginPage() {
   const { redirect } = Route.useSearch();
   const [matriculaFuncional, setMatriculaFuncional] = useState("");
   const [password, setPassword] = useState("");
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const loginMutation = useMutation({
     mutationFn: loginWithMatricula,
     retry: false,
     onSuccess: async (session) => {
       queryClient.setQueryData(authQueryKeys.me, session);
+      void Promise.resolve()
+        .then(() => trackEvent({ event_type: "login_success", screen: "login", action: "login" }))
+        .catch(() => undefined);
       // Trusted redirects win; otherwise fall back to the papel-derived home, including /unknown-role.
       await navigate({
         href: safeInternalRedirectPath(redirect) ?? homePathForPapel(session.papel),
         search: { redirect: undefined },
       });
     },
-    onError: (error) => {
-      if (error instanceof ApiError) {
-        setErrorMessage(error.payload?.error.message || error.message);
-        return;
-      }
-
-      setErrorMessage("Não foi possível entrar. Tente novamente.");
-    },
   });
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setErrorMessage(null);
+    loginMutation.reset();
     loginMutation.mutate({
       matricula_funcional: matriculaFuncional,
       password,
@@ -88,10 +83,11 @@ function LoginPage() {
       <aside className="glass-inset p-5">
         <p className="eyebrow">Identificação</p>
         <form className="preview-panel mt-4 space-y-4" onSubmit={handleSubmit}>
-          {errorMessage ? (
-            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
-              {errorMessage}
-            </div>
+          {loginMutation.error ? (
+            <SupportErrorPanel
+              error={loginMutation.error}
+              fallback="Não foi possível entrar. Tente novamente."
+            />
           ) : null}
           <label className="preview-label">
             Matrícula funcional

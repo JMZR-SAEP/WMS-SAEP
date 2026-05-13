@@ -4,6 +4,23 @@
  */
 
 export interface paths {
+    "/api/v1/analytics/events/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Registra evento interno de analytics do frontend sem PII. Usuário e papel são derivados da sessão autenticada. */
+        post: operations["analytics_events_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/csrf/": {
         parameters: {
             query?: never;
@@ -495,6 +512,8 @@ export interface components {
             readonly nome_completo: string;
             readonly setor: components["schemas"]["AuthSetorOutput"];
         };
+        /** @enum {unknown} */
+        BlankEnum: "";
         CsrfTokenOutput: {
             readonly csrf_token: string;
         };
@@ -507,6 +526,14 @@ export interface components {
          * @enum {string}
          */
         DiagnosticStatusEnum: "ativo" | "bloqueado" | "sem_suporte" | "requer_instalacao_pwa" | "requer_ativacao";
+        /**
+         * @description * `beneficiario` - Beneficiário
+         *     * `itens` - Itens
+         *     * `revisao` - Revisão
+         *     * `envio` - Envio
+         * @enum {string}
+         */
+        DraftStepEnum: "beneficiario" | "itens" | "revisao" | "envio";
         ErrorDetail: {
             code: string;
             message: string;
@@ -516,14 +543,41 @@ export interface components {
         ErrorResponse: {
             error: components["schemas"]["ErrorDetail"];
         };
+        FrontendAnalyticsEventInput: {
+            event_type: components["schemas"]["FrontendAnalyticsEventTypeEnum"];
+            screen?: components["schemas"]["ScreenEnum"] | components["schemas"]["BlankEnum"];
+            draft_step?: components["schemas"]["DraftStepEnum"] | components["schemas"]["BlankEnum"];
+            action?: string;
+            endpoint_key?: string;
+            http_status?: number;
+            error_code?: string;
+            trace_id?: string;
+        };
+        FrontendAnalyticsEventOutput: {
+            readonly event_type: components["schemas"]["FrontendAnalyticsEventTypeEnum"];
+            readonly screen: components["schemas"]["ScreenEnum"];
+            readonly draft_step: components["schemas"]["DraftStepEnum"];
+            readonly action: string;
+            readonly endpoint_key: string;
+            readonly http_status: number | null;
+            readonly error_code: string;
+            readonly trace_id: string;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
         /**
-         * @description * `push_permission_denied` - Push negado
-         *     * `push_unavailable` - Push indisponível
-         *     * `push_requires_pwa` - Push requer PWA instalado
-         *     * `push_badge_unavailable` - Badge indisponível
+         * @description * `login_success` - Login realizado
+         *     * `draft_started` - Criação iniciada
+         *     * `draft_saved` - Rascunho salvo
+         *     * `draft_submitted` - Rascunho enviado
+         *     * `draft_abandoned` - Rascunho abandonado
+         *     * `authorization_total` - Autorização total
+         *     * `authorization_partial` - Autorização parcial
+         *     * `authorization_refused` - Autorização recusada
+         *     * `api_error` - Erro de API
          * @enum {string}
          */
-        EventTypeEnum: "push_permission_denied" | "push_unavailable" | "push_requires_pwa" | "push_badge_unavailable";
+        FrontendAnalyticsEventTypeEnum: "login_success" | "draft_started" | "draft_saved" | "draft_submitted" | "draft_abandoned" | "authorization_total" | "authorization_partial" | "authorization_refused" | "api_error";
         /**
          * @description Serializer para listagem de materiais disponíveis.
          *
@@ -622,7 +676,7 @@ export interface components {
             readonly unread_count: number;
         };
         PushClientEventInput: {
-            event_type: components["schemas"]["EventTypeEnum"];
+            event_type: components["schemas"]["PushClientEventTypeEnum"];
             diagnostic_status: components["schemas"]["DiagnosticStatusEnum"];
             notification_supported: boolean;
             service_worker_supported: boolean;
@@ -631,7 +685,7 @@ export interface components {
             standalone_display: boolean;
         };
         PushClientEventOutput: {
-            readonly event_type: components["schemas"]["EventTypeEnum"];
+            readonly event_type: components["schemas"]["PushClientEventTypeEnum"];
             readonly diagnostic_status: components["schemas"]["DiagnosticStatusEnum"];
             readonly notification_supported: boolean;
             readonly service_worker_supported: boolean;
@@ -643,6 +697,14 @@ export interface components {
             /** Format: date-time */
             readonly updated_at: string;
         };
+        /**
+         * @description * `push_permission_denied` - Push negado
+         *     * `push_unavailable` - Push indisponível
+         *     * `push_requires_pwa` - Push requer PWA instalado
+         *     * `push_badge_unavailable` - Badge indisponível
+         * @enum {string}
+         */
+        PushClientEventTypeEnum: "push_permission_denied" | "push_unavailable" | "push_requires_pwa" | "push_badge_unavailable";
         PushConfigOutput: {
             readonly enabled: boolean;
             readonly vapid_public_key: string;
@@ -968,6 +1030,18 @@ export interface components {
             readonly nome_completo: string;
         };
         /**
+         * @description * `login` - Login
+         *     * `minhas_requisicoes` - Minhas requisições
+         *     * `nova_requisicao` - Nova requisição
+         *     * `requisicao_detalhe` - Detalhe da requisição
+         *     * `autorizacoes` - Autorizações
+         *     * `atendimentos` - Atendimentos
+         *     * `alertas` - Alertas
+         *     * `shell` - Shell
+         * @enum {string}
+         */
+        ScreenEnum: "login" | "minhas_requisicoes" | "nova_requisicao" | "requisicao_detalhe" | "autorizacoes" | "atendimentos" | "alertas" | "shell";
+        /**
          * @description * `rascunho` - Rascunho
          *     * `aguardando_autorizacao` - Aguardando Autorização
          *     * `recusada` - Recusada
@@ -1003,6 +1077,55 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    analytics_events_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FrontendAnalyticsEventInput"];
+                "application/x-www-form-urlencoded": components["schemas"]["FrontendAnalyticsEventInput"];
+                "multipart/form-data": components["schemas"]["FrontendAnalyticsEventInput"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FrontendAnalyticsEventOutput"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     auth_csrf: {
         parameters: {
             query?: never;

@@ -15,6 +15,28 @@ from apps.notifications.models import (
 
 REQUISICAO_APP_LABEL = "requisitions"
 REQUISICAO_MODEL = "requisicao"
+SENSITIVE_PUSH_CLIENT_EVENT_FIELD_NAMES = {
+    "beneficiario",
+    "beneficiario_id",
+    "details",
+    "endpoint",
+    "id",
+    "itens",
+    "material",
+    "material_id",
+    "mensagem",
+    "nome",
+    "numero",
+    "numero_publico",
+    "raw_url",
+    "requisicao",
+    "requisicao_id",
+    "text",
+    "user",
+    "user_id",
+    "usuario",
+    "usuario_id",
+}
 
 
 class NotificacaoDestinoOutputSerializer(serializers.Serializer):
@@ -165,6 +187,20 @@ class PushClientEventInputSerializer(serializers.Serializer):
     push_manager_supported = serializers.BooleanField()
     badging_supported = serializers.BooleanField()
     standalone_display = serializers.BooleanField()
+
+    def validate(self, attrs):
+        extra_fields = set(getattr(self, "initial_data", {})) - set(self.fields)
+        sensitive_fields = sorted(extra_fields & SENSITIVE_PUSH_CLIENT_EVENT_FIELD_NAMES)
+        if sensitive_fields:
+            raise serializers.ValidationError(
+                {
+                    "non_field_errors": [
+                        "Payload de diagnóstico push contém campos sensíveis não permitidos."
+                    ],
+                    "campos_sensiveis": sensitive_fields,
+                }
+            )
+        return attrs
 
 
 class PushClientEventOutputSerializer(serializers.ModelSerializer):

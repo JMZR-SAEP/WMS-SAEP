@@ -3,7 +3,7 @@ import { Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 
 import saepLogoUrl from "../../assets/saep-logo.webp";
-import { ApiError, authQueryKeys, logoutSession, meQueryOptions } from "../../features/auth/session";
+import { authQueryKeys, logoutSession, meQueryOptions } from "../../features/auth/session";
 import {
   formatNotificationDate,
   markNotificationRead,
@@ -25,30 +25,7 @@ import {
 import { PushStatusWarning } from "../../features/pwa/PushStatusWarning";
 import { pendingApprovalsQueryOptions } from "../../features/requisitions/requisitions";
 import { navigationItems } from "../../shared/config/navigation";
-
-function messageFromLogoutError(error: unknown) {
-  if (error instanceof ApiError) {
-    return error.payload?.error.message || error.message;
-  }
-
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-
-  return "Não foi possível sair. Tente novamente.";
-}
-
-function messageFromNotificationError(error: unknown) {
-  if (error instanceof ApiError) {
-    return error.payload?.error.message || error.message;
-  }
-
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-
-  return "Não foi possível carregar notificações.";
-}
+import { SupportErrorPanel } from "../../shared/ui/support-error";
 
 export function AppShell() {
   const location = useLocation();
@@ -218,11 +195,10 @@ export function AppShell() {
                   ) : null}
 
                   {notificationsQuery.isError || unreadCountQuery.isError ? (
-                    <p className="notifications-error">
-                      {messageFromNotificationError(
-                        notificationsQuery.error ?? unreadCountQuery.error,
-                      )}
-                    </p>
+                    <SupportErrorPanel
+                      error={notificationsQuery.error ?? unreadCountQuery.error}
+                      fallback="Não foi possível carregar notificações."
+                    />
                   ) : null}
 
                   {!notificationsQuery.isLoading &&
@@ -298,9 +274,10 @@ export function AppShell() {
                   ) : null}
 
                   {markReadMutation.isError ? (
-                    <p className="notifications-error">
-                      {messageFromNotificationError(markReadMutation.error)}
-                    </p>
+                    <SupportErrorPanel
+                      error={markReadMutation.error}
+                      fallback="Não foi possível marcar notificação como lida."
+                    />
                   ) : null}
                 </div>
                 <button
@@ -312,9 +289,10 @@ export function AppShell() {
                   {logoutMutation.isPending ? "Saindo..." : "Sair"}
                 </button>
                 {logoutMutation.isError ? (
-                  <p className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
-                    {messageFromLogoutError(logoutMutation.error)}
-                  </p>
+                  <SupportErrorPanel
+                    error={logoutMutation.error}
+                    fallback="Não foi possível sair. Tente novamente."
+                  />
                 ) : null}
               </div>
             ) : (

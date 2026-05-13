@@ -9,6 +9,82 @@
         }
     },
     "paths": {
+        "/api/v1/analytics/events/": {
+            "post": {
+                "operationId": "analytics_events_create",
+                "description": "Registra evento interno de analytics do frontend sem PII. Usuário e papel são derivados da sessão autenticada.",
+                "tags": [
+                    "analytics"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/FrontendAnalyticsEventInput"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/FrontendAnalyticsEventInput"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/FrontendAnalyticsEventInput"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/FrontendAnalyticsEventOutput"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "429": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/v1/auth/csrf/": {
             "get": {
                 "operationId": "auth_csrf",
@@ -2074,6 +2150,11 @@
                     "setor"
                 ]
             },
+            "BlankEnum": {
+                "enum": [
+                    ""
+                ]
+            },
             "CsrfTokenOutput": {
                 "type": "object",
                 "properties": {
@@ -2096,6 +2177,16 @@
                 ],
                 "type": "string",
                 "description": "* `ativo` - Ativo\n* `bloqueado` - Bloqueado\n* `sem_suporte` - Sem suporte\n* `requer_instalacao_pwa` - Requer instalação PWA\n* `requer_ativacao` - Requer ativação"
+            },
+            "DraftStepEnum": {
+                "enum": [
+                    "beneficiario",
+                    "itens",
+                    "revisao",
+                    "envio"
+                ],
+                "type": "string",
+                "description": "* `beneficiario` - Beneficiário\n* `itens` - Itens\n* `revisao` - Revisão\n* `envio` - Envio"
             },
             "ErrorDetail": {
                 "type": "object",
@@ -2130,15 +2221,141 @@
                     "error"
                 ]
             },
-            "EventTypeEnum": {
+            "FrontendAnalyticsEventInput": {
+                "type": "object",
+                "properties": {
+                    "event_type": {
+                        "$ref": "#/components/schemas/FrontendAnalyticsEventTypeEnum"
+                    },
+                    "screen": {
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/ScreenEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/BlankEnum"
+                            }
+                        ]
+                    },
+                    "draft_step": {
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/DraftStepEnum"
+                            },
+                            {
+                                "$ref": "#/components/schemas/BlankEnum"
+                            }
+                        ]
+                    },
+                    "action": {
+                        "type": "string",
+                        "maxLength": 60
+                    },
+                    "endpoint_key": {
+                        "type": "string",
+                        "maxLength": 120,
+                        "pattern": "^[a-z0-9_:/{}.-]+$"
+                    },
+                    "http_status": {
+                        "type": "integer",
+                        "maximum": 599,
+                        "minimum": 100
+                    },
+                    "error_code": {
+                        "type": "string",
+                        "maxLength": 80,
+                        "pattern": "^[a-z0-9_.-]+$"
+                    },
+                    "trace_id": {
+                        "type": "string",
+                        "maxLength": 120,
+                        "pattern": "^[A-Za-z0-9_.:-]+$"
+                    }
+                },
+                "required": [
+                    "event_type"
+                ]
+            },
+            "FrontendAnalyticsEventOutput": {
+                "type": "object",
+                "properties": {
+                    "event_type": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/FrontendAnalyticsEventTypeEnum"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "screen": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/ScreenEnum"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "draft_step": {
+                        "allOf": [
+                            {
+                                "$ref": "#/components/schemas/DraftStepEnum"
+                            }
+                        ],
+                        "readOnly": true
+                    },
+                    "action": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "endpoint_key": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "http_status": {
+                        "type": "integer",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "error_code": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "trace_id": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "action",
+                    "created_at",
+                    "draft_step",
+                    "endpoint_key",
+                    "error_code",
+                    "event_type",
+                    "http_status",
+                    "screen",
+                    "trace_id"
+                ]
+            },
+            "FrontendAnalyticsEventTypeEnum": {
                 "enum": [
-                    "push_permission_denied",
-                    "push_unavailable",
-                    "push_requires_pwa",
-                    "push_badge_unavailable"
+                    "login_success",
+                    "draft_started",
+                    "draft_saved",
+                    "draft_submitted",
+                    "draft_abandoned",
+                    "authorization_total",
+                    "authorization_partial",
+                    "authorization_refused",
+                    "api_error"
                 ],
                 "type": "string",
-                "description": "* `push_permission_denied` - Push negado\n* `push_unavailable` - Push indisponível\n* `push_requires_pwa` - Push requer PWA instalado\n* `push_badge_unavailable` - Badge indisponível"
+                "description": "* `login_success` - Login realizado\n* `draft_started` - Criação iniciada\n* `draft_saved` - Rascunho salvo\n* `draft_submitted` - Rascunho enviado\n* `draft_abandoned` - Rascunho abandonado\n* `authorization_total` - Autorização total\n* `authorization_partial` - Autorização parcial\n* `authorization_refused` - Autorização recusada\n* `api_error` - Erro de API"
             },
             "MaterialListOutput": {
                 "type": "object",
@@ -2449,7 +2666,7 @@
                 "type": "object",
                 "properties": {
                     "event_type": {
-                        "$ref": "#/components/schemas/EventTypeEnum"
+                        "$ref": "#/components/schemas/PushClientEventTypeEnum"
                     },
                     "diagnostic_status": {
                         "$ref": "#/components/schemas/DiagnosticStatusEnum"
@@ -2486,7 +2703,7 @@
                     "event_type": {
                         "allOf": [
                             {
-                                "$ref": "#/components/schemas/EventTypeEnum"
+                                "$ref": "#/components/schemas/PushClientEventTypeEnum"
                             }
                         ],
                         "readOnly": true
@@ -2541,6 +2758,16 @@
                     "standalone_display",
                     "updated_at"
                 ]
+            },
+            "PushClientEventTypeEnum": {
+                "enum": [
+                    "push_permission_denied",
+                    "push_unavailable",
+                    "push_requires_pwa",
+                    "push_badge_unavailable"
+                ],
+                "type": "string",
+                "description": "* `push_permission_denied` - Push negado\n* `push_unavailable` - Push indisponível\n* `push_requires_pwa` - Push requer PWA instalado\n* `push_badge_unavailable` - Badge indisponível"
             },
             "PushConfigOutput": {
                 "type": "object",
@@ -3475,6 +3702,20 @@
                     "matricula_funcional",
                     "nome_completo"
                 ]
+            },
+            "ScreenEnum": {
+                "enum": [
+                    "login",
+                    "minhas_requisicoes",
+                    "nova_requisicao",
+                    "requisicao_detalhe",
+                    "autorizacoes",
+                    "atendimentos",
+                    "alertas",
+                    "shell"
+                ],
+                "type": "string",
+                "description": "* `login` - Login\n* `minhas_requisicoes` - Minhas requisições\n* `nova_requisicao` - Nova requisição\n* `requisicao_detalhe` - Detalhe da requisição\n* `autorizacoes` - Autorizações\n* `atendimentos` - Atendimentos\n* `alertas` - Alertas\n* `shell` - Shell"
             },
             "StatusEnum": {
                 "enum": [
