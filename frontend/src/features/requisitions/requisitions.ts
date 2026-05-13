@@ -263,9 +263,22 @@ export async function fulfillRequisition(
   input: RequisicaoFulfillInput,
   idempotencyKey: string,
 ) {
+  if (typeof idempotencyKey !== "string") {
+    throw new ApiError(
+      "Idempotency-Key inválida para registrar atendimento.",
+      400,
+      undefined,
+      "/api/v1/requisitions/{id}/fulfill/",
+    );
+  }
   const normalizedIdempotencyKey = idempotencyKey.trim();
-  if (typeof idempotencyKey !== "string" || normalizedIdempotencyKey.length === 0 || normalizedIdempotencyKey.length > 128) {
-    throw new Error("Invalid idempotencyKey");
+  if (normalizedIdempotencyKey.length === 0 || normalizedIdempotencyKey.length > 128) {
+    throw new ApiError(
+      "Idempotency-Key inválida para registrar atendimento.",
+      400,
+      undefined,
+      "/api/v1/requisitions/{id}/fulfill/",
+    );
   }
   const { data, error, response } = await apiClient.POST("/api/v1/requisitions/{id}/fulfill/", {
     params: {
