@@ -73,6 +73,7 @@ export function AppShell() {
   const unreadCount = unreadCountQuery.data?.unread_count ?? 0;
   const pushDiagnostic =
     pushRole && pushConfigQuery.isSuccess ? getPushDiagnostic(pushConfigQuery.data) : null;
+  const pushUnsupported = pushDiagnostic?.status === "sem_suporte";
   const [notificationsOpen, setNotificationsOpen] = useState(true);
 
   useEffect(() => {
@@ -140,7 +141,15 @@ export function AppShell() {
 
           <nav className="space-y-2 px-4 py-4">
             {navigationItems
-              .filter((item) => !item.visibleFor || (session && item.visibleFor.includes(session.papel)))
+              .filter((item) => {
+                if (item.visibleFor && !(session && item.visibleFor.includes(session.papel))) {
+                  return false;
+                }
+                if (item.to === "/alertas" && pushUnsupported) {
+                  return false;
+                }
+                return true;
+              })
               .map((item) => {
                 const active = item.matches(location.pathname);
                 const className = active ? "nav-link nav-link-active" : "nav-link nav-link-idle";
@@ -157,20 +166,6 @@ export function AppShell() {
           <div className="border-t border-[var(--line-soft)] px-4 py-5 sm:px-6">
             {session ? (
               <div className="space-y-3">
-                <p className="text-xs font-bold uppercase text-[var(--ink-muted)]">
-                  Sessão atual
-                </p>
-                <div>
-                  <p className="text-sm font-semibold text-[var(--ink-strong)]">
-                    {session.nome_completo}
-                  </p>
-                  <p className="mt-1 text-xs font-bold uppercase text-[var(--ink-muted)]">
-                    {session.papel}
-                  </p>
-                  {session.setor ? (
-                    <p className="mt-2 text-sm text-[var(--ink-soft)]">{session.setor.nome}</p>
-                  ) : null}
-                </div>
                 {pushDiagnostic ? <PushStatusWarning diagnostic={pushDiagnostic} /> : null}
                 <div className="notifications-panel">
                   <button
@@ -293,20 +288,36 @@ export function AppShell() {
                     </div>
                   ) : null}
                 </div>
-                <button
-                  className="preview-button w-full"
-                  disabled={logoutMutation.isPending}
-                  onClick={() => logoutMutation.mutate()}
-                  type="button"
-                >
-                  {logoutMutation.isPending ? "Saindo..." : "Sair"}
-                </button>
-                {logoutMutation.isError ? (
-                  <SupportErrorPanel
-                    error={logoutMutation.error}
-                    fallback="Não foi possível sair. Tente novamente."
-                  />
-                ) : null}
+                <div className="session-footer">
+                  <div>
+                    <p className="text-xs font-bold uppercase text-[var(--ink-muted)]">
+                      Sessão atual
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-[var(--ink-strong)]">
+                      {session.nome_completo}
+                    </p>
+                    <p className="text-xs font-bold uppercase text-[var(--ink-muted)]">
+                      {session.papel}
+                    </p>
+                    {session.setor ? (
+                      <p className="mt-1 text-sm text-[var(--ink-soft)]">{session.setor.nome}</p>
+                    ) : null}
+                  </div>
+                  <button
+                    className="preview-button w-full"
+                    disabled={logoutMutation.isPending}
+                    onClick={() => logoutMutation.mutate()}
+                    type="button"
+                  >
+                    {logoutMutation.isPending ? "Saindo..." : "Sair"}
+                  </button>
+                  {logoutMutation.isError ? (
+                    <SupportErrorPanel
+                      error={logoutMutation.error}
+                      fallback="Não foi possível sair. Tente novamente."
+                    />
+                  ) : null}
+                </div>
               </div>
             ) : (
               <>
