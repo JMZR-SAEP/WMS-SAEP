@@ -174,8 +174,8 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('frontend/pnpm-lock.yaml') }}
-      - name: Install Playwright Chromium
-        run: cd frontend && ./node_modules/.bin/playwright install --with-deps chromium
+      - name: Install Playwright browsers
+        run: cd frontend && ./node_modules/.bin/playwright install --with-deps chromium webkit
       - name: Rebuild ephemeral schema/migrations
         run: make setup DATABASE_URL="$DATABASE_URL" DJANGO_SETTINGS_MODULE="$DJANGO_SETTINGS_MODULE" TEST_SETTINGS_MODULE="$TEST_SETTINGS_MODULE" SECRET_KEY="$SECRET_KEY"
       - name: Run frontend real E2E

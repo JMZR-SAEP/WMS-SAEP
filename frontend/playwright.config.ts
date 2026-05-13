@@ -5,24 +5,40 @@ export default defineConfig({
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
+  workers: 1,
   reporter: "html",
   use: {
     baseURL: "http://127.0.0.1:4173",
     trace: "on-first-retry",
+    serviceWorkers: "block",
   },
   projects: [
     {
-      name: "chromium",
+      name: "desktop-chromium",
       use: {
         ...devices["Desktop Chrome"],
+      },
+    },
+    {
+      name: "mobile-chrome",
+      grep: /@qa-final/,
+      use: {
+        ...devices["Pixel 5"],
+      },
+    },
+    {
+      name: "mobile-safari-webkit",
+      grep: /@qa-final/,
+      use: {
+        ...devices["iPhone 12"],
       },
     },
   ],
   webServer: [
     {
       name: "backend",
-      command: "uv run python manage.py runserver 127.0.0.1:8000 --noreload",
+      command:
+        "WEB_PUSH_VAPID_PUBLIC_KEY='BElxQaFinalMobilePilot_abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJK' uv run python manage.py runserver 127.0.0.1:8000 --noreload",
       cwd: "..",
       url: "http://127.0.0.1:8000/api/v1/auth/csrf/",
       reuseExistingServer: !process.env.CI,
