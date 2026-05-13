@@ -16,6 +16,7 @@ export function SupportErrorPanel({
   retryLabel,
 }: SupportErrorPanelProps) {
   const [copyFeedback, setCopyFeedback] = useState("");
+  const [copyFailed, setCopyFailed] = useState(false);
   const supportDetails = supportDetailsFromError(error);
   const canCopySupportDetails = Boolean(
     supportDetails &&
@@ -29,6 +30,7 @@ export function SupportErrorPanel({
     queueMicrotask(() => {
       if (isCurrent) {
         setCopyFeedback("");
+        setCopyFailed(false);
       }
     });
 
@@ -45,9 +47,11 @@ export function SupportErrorPanel({
 
     try {
       await navigator.clipboard.writeText(supportDetails);
+      setCopyFailed(false);
       setCopyFeedback("Detalhes copiados.");
     } catch (copyError) {
       console.error("Não foi possível copiar detalhes para suporte.", copyError);
+      setCopyFailed(true);
       setCopyFeedback("Não foi possível copiar.");
     }
   }
@@ -71,7 +75,7 @@ export function SupportErrorPanel({
           </button>
         ) : null}
       </div>
-      {supportDetails && !canCopySupportDetails ? (
+      {supportDetails && (!canCopySupportDetails || copyFailed) ? (
         <p className="helper-text">
           Copie estes detalhes para suporte: <code>{supportDetails}</code>
         </p>

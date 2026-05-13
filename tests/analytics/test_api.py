@@ -63,6 +63,8 @@ class TestFrontendAnalyticsAPI:
 
         assert client.login(username=usuario.matricula_funcional, password="senha-valida")
         csrf_response = client.get(reverse("auth-csrf"))
+        assert csrf_response.status_code == 200
+        assert "csrf_token" in csrf_response.data
         csrf_token = csrf_response.data["csrf_token"]
 
         response = client.post(

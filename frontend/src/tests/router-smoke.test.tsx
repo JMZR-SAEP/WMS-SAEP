@@ -2448,6 +2448,10 @@ describe("frontend pilot router", () => {
       );
     });
     expect(await screen.findByText("Não foi possível copiar.")).toBeInTheDocument();
+    expect(screen.getByText(/Copie estes detalhes para suporte:/)).toBeInTheDocument();
+    expect(screen.getByText(/status: 409/)).toBeInTheDocument();
+    expect(screen.getByText(/code: domain_conflict/)).toBeInTheDocument();
+    expect(screen.getByText(/trace_id: trace-domain/)).toBeInTheDocument();
   });
 
   it("shows support details when clipboard is unavailable", async () => {
