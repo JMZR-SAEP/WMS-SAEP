@@ -294,7 +294,18 @@ function AtendimentosPage() {
               </thead>
               <tbody>
                 {table.getRowModel().rows.map((row) => (
-                  <tr key={row.id}>
+                  <tr
+                    key={row.id}
+                    style={{ cursor: "pointer" }}
+                    onClick={(e) => {
+                      if ((e.target as HTMLElement).closest("button, a")) return;
+                      void navigate({
+                        to: "/requisicoes/$id",
+                        params: { id: String(row.original.id) },
+                        search: { contexto: "atendimento", page: currentPage === 1 ? undefined : currentPage },
+                      });
+                    }}
+                  >
                     {row.getVisibleCells().map((cell) => (
                       <td key={cell.id}>
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
