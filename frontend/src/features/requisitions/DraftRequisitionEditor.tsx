@@ -684,6 +684,23 @@ export function DraftRequisitionEditor({
     setLocalStep(step);
   }
 
+  async function navigateToStep(target: DraftStep) {
+    const currentIdx = stepIndex(activeStep, steps);
+    const targetIdx = stepIndex(target, steps);
+    if (targetIdx <= currentIdx) {
+      goToStep(target);
+      return;
+    }
+    for (let i = currentIdx; i < targetIdx; i++) {
+      const key = steps[i].key;
+      if (key === "beneficiario" || key === "itens") {
+        const valid = await validateDraftStep(key);
+        if (!valid) return;
+      }
+    }
+    goToStep(target);
+  }
+
   function storeRecentMaterial(material: MaterialListItem) {
     const nextMaterials = [
       material,
@@ -928,7 +945,7 @@ export function DraftRequisitionEditor({
             className={activeStep === step.key ? "draft-step active" : "draft-step"}
             disabled={pending}
             key={step.key}
-            onClick={() => goToStep(step.key)}
+            onClick={() => { void navigateToStep(step.key); }}
             type="button"
           >
             {step.label}
