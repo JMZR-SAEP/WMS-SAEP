@@ -35,7 +35,7 @@ from apps.requisitions.serializers import (
 from apps.requisitions.services import (
     ItemAutorizacaoData,
     ItemRascunhoData,
-    atender_requisicao,
+    atender_requisicao_idempotente,
     atualizar_rascunho_requisicao,
     autorizar_requisicao,
     cancelar_requisicao,
@@ -49,6 +49,22 @@ from apps.requisitions.services import (
 )
 
 User = get_user_model()
+IDEMPOTENCY_KEY_MAX_LENGTH = 128
+
+
+def _idempotency_key_from_request(request) -> str:
+    idempotency_key = request.headers.get("Idempotency-Key", "").strip()
+    if not idempotency_key:
+        raise ValidationError({"Idempotency-Key": ["Header Idempotency-Key é obrigatório."]})
+    if len(idempotency_key) > IDEMPOTENCY_KEY_MAX_LENGTH:
+        raise ValidationError(
+            {
+                "Idempotency-Key": [
+                    f"Header Idempotency-Key deve ter no máximo {IDEMPOTENCY_KEY_MAX_LENGTH} caracteres."
+                ]
+            }
+        )
+    return idempotency_key
 
 
 class RequisicaoViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, GenericViewSet):
@@ -391,6 +407,19 @@ class RequisicaoViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, Generi
     @extend_schema(
         operation_id="requisitions_fulfill",
         tags=["requisitions"],
+        parameters=[
+            OpenApiParameter(
+                name="Idempotency-Key",
+                description=(
+                    "Chave obrigatória para retries seguros do atendimento; escopada por "
+                    "usuário, endpoint, requisição e payload."
+                ),
+                required=True,
+                type={"type": "string", "minLength": 1, "maxLength": IDEMPOTENCY_KEY_MAX_LENGTH},
+                location=OpenApiParameter.HEADER,
+                allow_blank=False,
+            ),
+        ],
         request=RequisicaoFulfillInputSerializer,
         responses={
             200: RequisicaoDetailOutputSerializer(),
@@ -404,9 +433,10 @@ class RequisicaoViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, Generi
     def fulfill(self, request, pk=None):
         serializer = RequisicaoFulfillInputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        requisicao = atender_requisicao(
+        requisicao = atender_requisicao_idempotente(
             requisicao=self.get_object(),
             ator=request.user,
+            idempotency_key=_idempotency_key_from_request(request),
             itens=serializer.validated_data.get("itens"),
             retirante_fisico=serializer.validated_data["retirante_fisico"],
             observacao_atendimento=serializer.validated_data["observacao_atendimento"],

@@ -93,10 +93,14 @@ Contrato do atendimento de requisição autorizada:
 - autenticação: sessão Django padrão;
 - autorização geral: usuário autenticado;
 - autorização contextual: `queryset_requisicoes_visiveis()` na view e `pode_atender_requisicao()` no service;
+- header obrigatório: `Idempotency-Key`, string opaca não vazia com até 128 caracteres;
+- escopo da idempotência: usuário autenticado, endpoint `requisitions_fulfill`, requisição e hash canônico do payload validado;
 - entrada: `retirante_fisico` opcional, `observacao_atendimento` opcional e `itens` opcional;
 - sem `itens`: registra atendimento completo de todos os itens autorizados;
 - com `itens`: cada item autorizado deve ser informado com `item_id`, `quantidade_entregue` e, quando `quantidade_entregue < quantidade_autorizada`, `justificativa_atendimento_parcial`;
 - com `itens`, pelo menos um item autorizado deve ter `quantidade_entregue > 0`; payload com todos os itens zerados retorna `409 domain_conflict` e não transiciona a requisição;
+- retry com o mesmo `Idempotency-Key` e payload equivalente retorna `200` com o atendimento já concluído, sem duplicar baixa de estoque, liberação de reserva, timeline ou notificações;
+- reutilizar o mesmo `Idempotency-Key` com payload incompatível retorna `409 domain_conflict` e não altera estado;
 - saída: `200` com `RequisicaoDetailOutputSerializer`;
 - erros esperados: `400 validation_error`, `403 permission_denied`, `404 not_found` e `409 domain_conflict`;
 - efeitos de domínio: quando há ao menos uma entrega `> 0`, baixa física somente da quantidade entregue, consumo da reserva entregue, liberação da reserva não entregue e status `atendida` ou `atendida_parcialmente`.

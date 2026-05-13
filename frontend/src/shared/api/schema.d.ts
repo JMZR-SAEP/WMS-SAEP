@@ -1928,7 +1928,10 @@ export interface operations {
     requisitions_fulfill: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description Chave obrigatória para retries seguros do atendimento; escopada por usuário, endpoint, requisição e payload. */
+                "Idempotency-Key": string;
+            };
             path: {
                 /** @description Um valor inteiro único que identifica este Requisição. */
                 id: number;

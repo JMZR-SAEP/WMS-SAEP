@@ -313,6 +313,18 @@ type FulfillmentItemForm = {
   justification: string;
 };
 
+type FulfillmentMutationInput = {
+  idempotencyKey: string;
+  input: RequisicaoFulfillInput;
+};
+
+function createIdempotencyKey() {
+  if (typeof globalThis.crypto?.randomUUID === "function") {
+    return globalThis.crypto.randomUUID();
+  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
+
 function quantityNumber(value: string) {
   const normalizedValue = value.replace(",", ".").trim();
   if (!normalizedValue) {
@@ -682,6 +694,7 @@ function FulfillmentDecisionPanel({
   const [motivoCancelamento, setMotivoCancelamento] = useState("");
   const [validationError, setValidationError] = useState("");
   const [confirmCancellation, setConfirmCancellation] = useState(false);
+  const fulfillmentIdempotencyRef = useRef<{ key: string; payloadSignature: string } | null>(null);
   const queryClient = useQueryClient();
   const navigate = useNavigate({ from: "/requisicoes/$id" });
 
@@ -717,7 +730,8 @@ function FulfillmentDecisionPanel({
   }
 
   const fulfillMutation = useMutation({
-    mutationFn: (input: RequisicaoFulfillInput) => fulfillRequisition(requisicao.id, input),
+    mutationFn: ({ idempotencyKey, input }: FulfillmentMutationInput) =>
+      fulfillRequisition(requisicao.id, input, idempotencyKey),
     onError: redirectToLoginAfterAuthError,
     onSuccess: afterDecisionSuccess,
   });
@@ -766,6 +780,17 @@ function FulfillmentDecisionPanel({
     };
   }
 
+  function idempotencyKeyForPayload(input: RequisicaoFulfillInput) {
+    const payloadSignature = JSON.stringify(input);
+    if (fulfillmentIdempotencyRef.current?.payloadSignature === payloadSignature) {
+      return fulfillmentIdempotencyRef.current.key;
+    }
+
+    const key = createIdempotencyKey();
+    fulfillmentIdempotencyRef.current = { key, payloadSignature };
+    return key;
+  }
+
   function validateFulfillment(nextItems: FulfillmentItemForm[]) {
     const deliveredQuantities = nextItems.map((item) => quantityNumber(item.deliveredQuantity));
 
@@ -808,7 +833,11 @@ function FulfillmentDecisionPanel({
       return;
     }
 
-    fulfillMutation.mutate(payloadFromItems(items));
+    const input = payloadFromItems(items);
+    fulfillMutation.mutate({
+      idempotencyKey: idempotencyKeyForPayload(input),
+      input,
+    });
   }
 
   function cancel(event: FormEvent<HTMLFormElement>) {

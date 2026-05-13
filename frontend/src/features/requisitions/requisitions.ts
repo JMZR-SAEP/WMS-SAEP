@@ -258,9 +258,16 @@ export async function refuseRequisition(id: number, input: RequisicaoRefuseInput
   return data;
 }
 
-export async function fulfillRequisition(id: number, input: RequisicaoFulfillInput) {
+export async function fulfillRequisition(
+  id: number,
+  input: RequisicaoFulfillInput,
+  idempotencyKey: string,
+) {
   const { data, error, response } = await apiClient.POST("/api/v1/requisitions/{id}/fulfill/", {
     params: {
+      header: {
+        "Idempotency-Key": idempotencyKey,
+      },
       path: {
         id,
       },

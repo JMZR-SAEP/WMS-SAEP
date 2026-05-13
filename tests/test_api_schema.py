@@ -496,6 +496,7 @@ class TestOpenAPISchema:
                 "success_codes": {"200"},
                 "success_ref": "#/components/schemas/RequisicaoDetailOutput",
                 "error_codes": {"400", "403", "404", "409"},
+                "required_parameters": {"Idempotency-Key"},
             },
             ("/api/v1/requisitions/pending-approvals/", "get"): {
                 "request_body": False,
@@ -516,6 +517,14 @@ class TestOpenAPISchema:
         for (path, method), expectation in expected_operations.items():
             operation = paths[path][method]
             responses = operation["responses"]
+
+            if expectation.get("required_parameters"):
+                parameters = {param["name"]: param for param in operation["parameters"]}
+                for parameter_name in expectation["required_parameters"]:
+                    assert parameters[parameter_name]["required"] is True
+                    if parameter_name == "Idempotency-Key":
+                        assert parameters[parameter_name]["schema"]["minLength"] == 1
+                        assert parameters[parameter_name]["schema"]["maxLength"] == 128
 
             if expectation["request_body"]:
                 assert "requestBody" in operation
