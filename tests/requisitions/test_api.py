@@ -6,7 +6,7 @@ from django.urls import reverse
 from rest_framework.test import APIClient
 
 from apps.materials.models import GrupoMaterial, Material, SubgrupoMaterial
-from apps.notifications.models import Notificacao, TipoNotificacao
+from apps.notifications.models import Notificacao
 from apps.requisitions.models import EventoTimeline, Requisicao, StatusRequisicao, TipoEvento
 from apps.requisitions.policies import (
     pode_visualizar_requisicao,
@@ -2218,10 +2218,7 @@ class TestRequisicaoAPI:
         )
         movement_count = MovimentacaoEstoque.objects.filter(requisicao=requisicao).count()
         timeline_count = EventoTimeline.objects.filter(requisicao=requisicao).count()
-        notification_count = Notificacao.objects.filter(
-            tipo=TipoNotificacao.REQUISICAO_ATENDIDA,
-            object_id=requisicao.id,
-        ).count()
+        notification_count = Notificacao.objects.filter(object_id=requisicao.id).count()
 
         retry_response = client.post(
             reverse("requisicao-fulfill", args=[requisicao.id]),
@@ -2235,13 +2232,7 @@ class TestRequisicaoAPI:
         assert retry_response.data["status"] == StatusRequisicao.ATENDIDA_PARCIALMENTE
         assert MovimentacaoEstoque.objects.filter(requisicao=requisicao).count() == movement_count
         assert EventoTimeline.objects.filter(requisicao=requisicao).count() == timeline_count
-        assert (
-            Notificacao.objects.filter(
-                tipo=TipoNotificacao.REQUISICAO_ATENDIDA,
-                object_id=requisicao.id,
-            ).count()
-            == notification_count
-        )
+        assert Notificacao.objects.filter(object_id=requisicao.id).count() == notification_count
         material.estoque.refresh_from_db()
         assert material.estoque.saldo_fisico == Decimal("6")
         assert material.estoque.saldo_reservado == Decimal("0")
@@ -2304,6 +2295,7 @@ class TestRequisicaoAPI:
         )
         movement_count = MovimentacaoEstoque.objects.filter(requisicao=requisicao).count()
         timeline_count = EventoTimeline.objects.filter(requisicao=requisicao).count()
+        notification_count = Notificacao.objects.filter(object_id=requisicao.id).count()
 
         conflict_response = client.post(
             reverse("requisicao-fulfill", args=[requisicao.id]),
@@ -2317,6 +2309,7 @@ class TestRequisicaoAPI:
         assert conflict_response.data["error"]["code"] == "domain_conflict"
         assert MovimentacaoEstoque.objects.filter(requisicao=requisicao).count() == movement_count
         assert EventoTimeline.objects.filter(requisicao=requisicao).count() == timeline_count
+        assert Notificacao.objects.filter(object_id=requisicao.id).count() == notification_count
         material.estoque.refresh_from_db()
         assert material.estoque.saldo_fisico == Decimal("6")
         assert material.estoque.saldo_reservado == Decimal("0")

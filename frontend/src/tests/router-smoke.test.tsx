@@ -1868,7 +1868,9 @@ describe("frontend pilot router", () => {
     fireEvent.click(primaryAction);
 
     await waitFor(() => {
-      expect(fulfillIdempotencyKey).toEqual(expect.any(String));
+      expect(typeof fulfillIdempotencyKey).toBe("string");
+      expect((fulfillIdempotencyKey as string).length).toBeGreaterThan(0);
+      expect((fulfillIdempotencyKey as string).length).toBeLessThanOrEqual(128);
       expect(fulfillPayload).toEqual({
         retirante_fisico: "Joao da Silva",
         observacao_atendimento: "Retirada no balcão",

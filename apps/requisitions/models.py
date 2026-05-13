@@ -310,6 +310,10 @@ class RequisicaoIdempotencyKey(models.Model):
                 condition=Q(payload_hash__regex=r"^[0-9a-f]{64}$"),
                 name="req_idempotency_payload_hash_sha256",
             ),
+            models.CheckConstraint(
+                condition=Q(endpoint__gt=""),
+                name="req_idempotency_endpoint_nao_vazio",
+            ),
         ]
 
     def __str__(self):

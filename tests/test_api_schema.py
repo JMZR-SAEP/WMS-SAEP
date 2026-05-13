@@ -523,6 +523,7 @@ class TestOpenAPISchema:
                 for parameter_name in expectation["required_parameters"]:
                     assert parameters[parameter_name]["required"] is True
                     if parameter_name == "Idempotency-Key":
+                        assert parameters[parameter_name]["in"] == "header"
                         assert parameters[parameter_name]["schema"]["minLength"] == 1
                         assert parameters[parameter_name]["schema"]["maxLength"] == 128
 
