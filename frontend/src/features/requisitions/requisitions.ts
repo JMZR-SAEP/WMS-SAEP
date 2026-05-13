@@ -258,9 +258,33 @@ export async function refuseRequisition(id: number, input: RequisicaoRefuseInput
   return data;
 }
 
-export async function fulfillRequisition(id: number, input: RequisicaoFulfillInput) {
+export async function fulfillRequisition(
+  id: number,
+  input: RequisicaoFulfillInput,
+  idempotencyKey: string,
+) {
+  if (typeof idempotencyKey !== "string") {
+    throw new ApiError(
+      "Idempotency-Key inválida para registrar atendimento.",
+      400,
+      undefined,
+      "/api/v1/requisitions/{id}/fulfill/",
+    );
+  }
+  const normalizedIdempotencyKey = idempotencyKey.trim();
+  if (normalizedIdempotencyKey.length === 0 || normalizedIdempotencyKey.length > 128) {
+    throw new ApiError(
+      "Idempotency-Key inválida para registrar atendimento.",
+      400,
+      undefined,
+      "/api/v1/requisitions/{id}/fulfill/",
+    );
+  }
   const { data, error, response } = await apiClient.POST("/api/v1/requisitions/{id}/fulfill/", {
     params: {
+      header: {
+        "Idempotency-Key": normalizedIdempotencyKey,
+      },
       path: {
         id,
       },

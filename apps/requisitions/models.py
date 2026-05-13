@@ -39,6 +39,11 @@ class TipoEvento(models.TextChoices):
     ESTORNO = "estorno", "Estorno"
 
 
+class StatusIdempotencia(models.TextChoices):
+    IN_PROGRESS = "in_progress", "Em processamento"
+    COMPLETED = "completed", "Concluída"
+
+
 class SequenciaNumeroRequisicao(models.Model):
     ano = models.PositiveIntegerField(unique=True)
     ultimo_numero = models.PositiveIntegerField(default=0)
@@ -252,6 +257,67 @@ class Requisicao(models.Model):
                     raise ValidationError(errors)
 
         super().save(*args, **kwargs)
+
+
+class RequisicaoIdempotencyKey(models.Model):
+    usuario = models.ForeignKey(
+        "users.User",
+        on_delete=models.PROTECT,
+        related_name="requisicoes_idempotency_keys",
+        help_text="Usuário dono da chave de idempotência",
+    )
+    requisicao = models.ForeignKey(
+        Requisicao,
+        on_delete=models.PROTECT,
+        related_name="idempotency_keys",
+        help_text="Requisição alvo da operação idempotente",
+    )
+    endpoint = models.CharField(
+        max_length=64,
+        help_text="Operação protegida pela chave",
+    )
+    key = models.CharField(
+        max_length=128,
+        help_text="Chave de idempotência enviada pelo cliente",
+    )
+    payload_hash = models.CharField(
+        max_length=64,
+        help_text="Hash SHA-256 do payload canônico validado",
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=StatusIdempotencia.choices,
+        default=StatusIdempotencia.IN_PROGRESS,
+        help_text="Status do processamento idempotente",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Chave de idempotência de requisição"
+        verbose_name_plural = "Chaves de idempotência de requisição"
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["usuario", "endpoint", "requisicao", "key"],
+                name="req_idempotency_key_unica_por_usuario_endpoint_requisicao",
+            ),
+            models.CheckConstraint(
+                condition=Q(key__gt=""),
+                name="req_idempotency_key_nao_vazia",
+            ),
+            models.CheckConstraint(
+                condition=Q(payload_hash__regex=r"^[0-9a-f]{64}$"),
+                name="req_idempotency_payload_hash_sha256",
+            ),
+            models.CheckConstraint(
+                condition=Q(endpoint__gt=""),
+                name="req_idempotency_endpoint_nao_vazio",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.endpoint}:{self.requisicao_id}:{self.usuario_id}:{self.key}"
 
 
 class ItemRequisicao(models.Model):

@@ -1320,6 +1320,17 @@
                 "operationId": "requisitions_fulfill",
                 "parameters": [
                     {
+                        "in": "header",
+                        "name": "Idempotency-Key",
+                        "schema": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 128
+                        },
+                        "description": "Chave obrigatória para retries seguros do atendimento; escopada por usuário, endpoint, requisição e payload.",
+                        "required": true
+                    },
+                    {
                         "in": "path",
                         "name": "id",
                         "schema": {

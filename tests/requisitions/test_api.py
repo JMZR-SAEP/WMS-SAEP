@@ -6,6 +6,7 @@ from django.urls import reverse
 from rest_framework.test import APIClient
 
 from apps.materials.models import GrupoMaterial, Material, SubgrupoMaterial
+from apps.notifications.models import Notificacao
 from apps.requisitions.models import EventoTimeline, Requisicao, StatusRequisicao, TipoEvento
 from apps.requisitions.policies import (
     pode_visualizar_requisicao,
@@ -108,6 +109,10 @@ class TestRequisicaoAPI:
                 }
             ]
         }
+
+    @staticmethod
+    def _idempotency_header(key: str = "fulfill-test-key") -> dict[str, str]:
+        return {"HTTP_IDEMPOTENCY_KEY": key}
 
     @staticmethod
     def _criar_requisicao_com_item(
@@ -2099,6 +2104,7 @@ class TestRequisicaoAPI:
                 "observacao_atendimento": "Entrega no balcão",
             },
             format="json",
+            **self._idempotency_header("fulfill-completo"),
         )
 
         assert response.status_code == 200
@@ -2113,6 +2119,199 @@ class TestRequisicaoAPI:
         assert requisicao.eventos.filter(tipo_evento=TipoEvento.ATENDIMENTO).exists()
         assert item.quantidade_entregue == Decimal("3")
         assert material.estoque.saldo_fisico == Decimal("4")
+        assert material.estoque.saldo_reservado == Decimal("0")
+
+    def test_fulfill_sem_idempotency_key_retorna_validation_error(self):
+        setor = self._criar_setor("Manutencao Sem Chave", "90132")
+        solicitante = self._criar_usuario("10133", "Solicitante Sem Chave", setor=setor)
+        almoxarife = self._criar_usuario(
+            "10134",
+            "Auxiliar Sem Chave",
+            papel=PapelChoices.AUXILIAR_ALMOXARIFADO,
+            setor=setor,
+        )
+        material = self._criar_material_com_estoque(
+            "001.001.131",
+            saldo_fisico=Decimal("7"),
+            saldo_reservado=Decimal("3"),
+        )
+        requisicao = Requisicao.objects.create(
+            criador=solicitante,
+            beneficiario=solicitante,
+            setor_beneficiario=setor,
+            numero_publico="REQ-2026-000602",
+            status=StatusRequisicao.AUTORIZADA,
+            data_envio_autorizacao="2026-04-30T10:00:00Z",
+            data_autorizacao_ou_recusa="2026-04-30T11:00:00Z",
+        )
+        requisicao.itens.create(
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal("3"),
+            quantidade_autorizada=Decimal("3"),
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=almoxarife)
+        response = client.post(
+            reverse("requisicao-fulfill", args=[requisicao.id]),
+            {},
+            format="json",
+        )
+
+        assert response.status_code == 400
+        assert response.data["error"]["code"] == "validation_error"
+        assert "Idempotency-Key" in response.data["error"]["details"]
+        requisicao.refresh_from_db()
+        material.estoque.refresh_from_db()
+        assert requisicao.status == StatusRequisicao.AUTORIZADA
+        assert material.estoque.saldo_fisico == Decimal("7")
+        assert material.estoque.saldo_reservado == Decimal("3")
+
+    def test_fulfill_retry_mesma_chave_retorna_sucesso_sem_duplicar_efeitos(self):
+        setor = self._criar_setor("Manutencao Idempotente", "90139")
+        solicitante = self._criar_usuario("10144", "Solicitante Idempotente", setor=setor)
+        almoxarife = self._criar_usuario(
+            "10145",
+            "Auxiliar Idempotente",
+            papel=PapelChoices.AUXILIAR_ALMOXARIFADO,
+            setor=setor,
+        )
+        material = self._criar_material_com_estoque(
+            "001.001.136",
+            saldo_fisico=Decimal("7"),
+            saldo_reservado=Decimal("3"),
+        )
+        requisicao = Requisicao.objects.create(
+            criador=solicitante,
+            beneficiario=solicitante,
+            setor_beneficiario=setor,
+            numero_publico="REQ-2026-000607",
+            status=StatusRequisicao.AUTORIZADA,
+            data_envio_autorizacao="2026-04-30T10:00:00Z",
+            data_autorizacao_ou_recusa="2026-04-30T11:00:00Z",
+        )
+        item = requisicao.itens.create(
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal("3"),
+            quantidade_autorizada=Decimal("3"),
+        )
+        payload = {
+            "retirante_fisico": "Servidor Idempotente",
+            "itens": [
+                {
+                    "item_id": item.id,
+                    "quantidade_entregue": "1.000",
+                    "justificativa_atendimento_parcial": "Saldo físico divergente",
+                }
+            ],
+        }
+
+        client = APIClient()
+        client.force_authenticate(user=almoxarife)
+        first_response = client.post(
+            reverse("requisicao-fulfill", args=[requisicao.id]),
+            payload,
+            format="json",
+            **self._idempotency_header("retry-sucesso"),
+        )
+        movement_count = MovimentacaoEstoque.objects.filter(requisicao=requisicao).count()
+        timeline_count = EventoTimeline.objects.filter(requisicao=requisicao).count()
+        notification_count = Notificacao.objects.filter(object_id=requisicao.id).count()
+
+        retry_response = client.post(
+            reverse("requisicao-fulfill", args=[requisicao.id]),
+            payload,
+            format="json",
+            **self._idempotency_header("retry-sucesso"),
+        )
+
+        assert first_response.status_code == 200
+        assert retry_response.status_code == 200
+        assert retry_response.data["status"] == StatusRequisicao.ATENDIDA_PARCIALMENTE
+        assert MovimentacaoEstoque.objects.filter(requisicao=requisicao).count() == movement_count
+        assert EventoTimeline.objects.filter(requisicao=requisicao).count() == timeline_count
+        assert Notificacao.objects.filter(object_id=requisicao.id).count() == notification_count
+        material.estoque.refresh_from_db()
+        assert material.estoque.saldo_fisico == Decimal("6")
+        assert material.estoque.saldo_reservado == Decimal("0")
+
+    def test_fulfill_mesma_chave_payload_diferente_retorna_domain_conflict_sem_efeitos(self):
+        setor = self._criar_setor("Manutencao Chave Conflito", "90140")
+        solicitante = self._criar_usuario("10146", "Solicitante Chave Conflito", setor=setor)
+        almoxarife = self._criar_usuario(
+            "10147",
+            "Auxiliar Chave Conflito",
+            papel=PapelChoices.AUXILIAR_ALMOXARIFADO,
+            setor=setor,
+        )
+        material = self._criar_material_com_estoque(
+            "001.001.137",
+            saldo_fisico=Decimal("7"),
+            saldo_reservado=Decimal("3"),
+        )
+        requisicao = Requisicao.objects.create(
+            criador=solicitante,
+            beneficiario=solicitante,
+            setor_beneficiario=setor,
+            numero_publico="REQ-2026-000608",
+            status=StatusRequisicao.AUTORIZADA,
+            data_envio_autorizacao="2026-04-30T10:00:00Z",
+            data_autorizacao_ou_recusa="2026-04-30T11:00:00Z",
+        )
+        item = requisicao.itens.create(
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal("3"),
+            quantidade_autorizada=Decimal("3"),
+        )
+        first_payload = {
+            "itens": [
+                {
+                    "item_id": item.id,
+                    "quantidade_entregue": "1.000",
+                    "justificativa_atendimento_parcial": "Saldo físico divergente",
+                }
+            ],
+        }
+        conflicting_payload = {
+            "itens": [
+                {
+                    "item_id": item.id,
+                    "quantidade_entregue": "2.000",
+                    "justificativa_atendimento_parcial": "Nova retirada",
+                }
+            ],
+        }
+
+        client = APIClient()
+        client.force_authenticate(user=almoxarife)
+        first_response = client.post(
+            reverse("requisicao-fulfill", args=[requisicao.id]),
+            first_payload,
+            format="json",
+            **self._idempotency_header("payload-conflitante"),
+        )
+        movement_count = MovimentacaoEstoque.objects.filter(requisicao=requisicao).count()
+        timeline_count = EventoTimeline.objects.filter(requisicao=requisicao).count()
+        notification_count = Notificacao.objects.filter(object_id=requisicao.id).count()
+
+        conflict_response = client.post(
+            reverse("requisicao-fulfill", args=[requisicao.id]),
+            conflicting_payload,
+            format="json",
+            **self._idempotency_header("payload-conflitante"),
+        )
+
+        assert first_response.status_code == 200
+        assert conflict_response.status_code == 409
+        assert conflict_response.data["error"]["code"] == "domain_conflict"
+        assert MovimentacaoEstoque.objects.filter(requisicao=requisicao).count() == movement_count
+        assert EventoTimeline.objects.filter(requisicao=requisicao).count() == timeline_count
+        assert Notificacao.objects.filter(object_id=requisicao.id).count() == notification_count
+        material.estoque.refresh_from_db()
+        assert material.estoque.saldo_fisico == Decimal("6")
         assert material.estoque.saldo_reservado == Decimal("0")
 
     def test_fulfill_com_itens_registra_atendimento_parcial_e_libera_reserva(self):
@@ -2160,6 +2359,7 @@ class TestRequisicaoAPI:
                 ],
             },
             format="json",
+            **self._idempotency_header("fulfill-parcial"),
         )
 
         assert response.status_code == 200
@@ -2244,6 +2444,7 @@ class TestRequisicaoAPI:
                 ],
             },
             format="json",
+            **self._idempotency_header("fulfill-multi-item"),
         )
 
         assert response.status_code == 200
@@ -2310,6 +2511,7 @@ class TestRequisicaoAPI:
             reverse("requisicao-fulfill", args=[requisicao.id]),
             {"itens": [{"item_id": item.id, "quantidade_entregue": "1.000"}]},
             format="json",
+            **self._idempotency_header("fulfill-sem-justificativa"),
         )
 
         assert response.status_code == 409
@@ -2365,6 +2567,7 @@ class TestRequisicaoAPI:
                 ]
             },
             format="json",
+            **self._idempotency_header("fulfill-excesso"),
         )
 
         assert response.status_code == 409
@@ -2420,6 +2623,7 @@ class TestRequisicaoAPI:
                 ]
             },
             format="json",
+            **self._idempotency_header("fulfill-zero-total"),
         )
 
         assert response.status_code == 409
@@ -2754,6 +2958,7 @@ class TestRequisicaoAPI:
             reverse("requisicao-fulfill", args=[requisicao.id]),
             {"itens": [{"item_id": item_a.id, "quantidade_entregue": "2.000"}]},
             format="json",
+            **self._idempotency_header("fulfill-payload-incompleto"),
         )
 
         assert response.status_code == 400
@@ -2786,7 +2991,11 @@ class TestRequisicaoAPI:
 
         client = APIClient()
         client.force_authenticate(user=solicitante)
-        response = client.post(reverse("requisicao-fulfill", args=[requisicao.id]), {})
+        response = client.post(
+            reverse("requisicao-fulfill", args=[requisicao.id]),
+            {},
+            **self._idempotency_header("fulfill-sem-permissao"),
+        )
 
         assert response.status_code == 403
         assert response.data["error"]["code"] == "permission_denied"
@@ -2819,7 +3028,11 @@ class TestRequisicaoAPI:
 
         client = APIClient()
         client.force_authenticate(user=usuario_externo)
-        response = client.post(reverse("requisicao-fulfill", args=[requisicao.id]), {})
+        response = client.post(
+            reverse("requisicao-fulfill", args=[requisicao.id]),
+            {},
+            **self._idempotency_header("fulfill-fora-escopo"),
+        )
 
         assert response.status_code == 404
 
@@ -2860,6 +3073,7 @@ class TestRequisicaoAPI:
             reverse("requisicao-fulfill", args=[requisicao.id]),
             {"itens": [{"item_id": item.id, "quantidade_entregue": "2.000"}]},
             format="json",
+            **self._idempotency_header("fulfill-superuser"),
         )
 
         assert response.status_code == 403
@@ -2897,7 +3111,11 @@ class TestRequisicaoAPI:
 
         client = APIClient()
         client.force_authenticate(user=usuario_inativo)
-        response = client.post(reverse("requisicao-fulfill", args=[requisicao.id]), {})
+        response = client.post(
+            reverse("requisicao-fulfill", args=[requisicao.id]),
+            {},
+            **self._idempotency_header("fulfill-inativo"),
+        )
 
         assert response.status_code == 404
 
@@ -2927,7 +3145,11 @@ class TestRequisicaoAPI:
 
         client = APIClient()
         client.force_authenticate(user=almoxarife)
-        response = client.post(reverse("requisicao-fulfill", args=[requisicao.id]), {})
+        response = client.post(
+            reverse("requisicao-fulfill", args=[requisicao.id]),
+            {},
+            **self._idempotency_header("fulfill-status-invalido"),
+        )
 
         assert response.status_code == 409
         assert response.data["error"]["code"] == "domain_conflict"

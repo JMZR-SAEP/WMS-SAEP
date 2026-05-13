@@ -1,3 +1,5 @@
+import hashlib
+import json
 from dataclasses import dataclass, replace
 from decimal import Decimal
 
@@ -20,7 +22,9 @@ from apps.requisitions.models import (
     EventoTimeline,
     ItemRequisicao,
     Requisicao,
+    RequisicaoIdempotencyKey,
     SequenciaNumeroRequisicao,
+    StatusIdempotencia,
     StatusRequisicao,
     TipoEvento,
 )
@@ -46,6 +50,7 @@ from apps.users.policies import (
 )
 
 User = get_user_model()
+IDEMPOTENCY_ENDPOINT_FULFILL = "requisitions_fulfill"
 
 
 @dataclass(frozen=True)
@@ -70,6 +75,36 @@ class ItemAtendimentoData:
 
 
 ItemAtendimentoPayload = ItemAtendimentoData | dict[str, object]
+
+
+def _decimal_canonico(value: Decimal) -> str:
+    return format(value.normalize(), "f")
+
+
+def _hash_payload_atendimento(
+    *,
+    itens: list[ItemAtendimentoData] | None,
+    retirante_fisico: str,
+    observacao_atendimento: str,
+) -> str:
+    payload: dict[str, object] = {
+        "itens": None,
+        "observacao_atendimento": observacao_atendimento.strip(),
+        "retirante_fisico": retirante_fisico.strip(),
+    }
+    if itens is not None:
+        payload["itens"] = [
+            {
+                "item_id": item.item_id,
+                "justificativa_atendimento_parcial": (
+                    item.justificativa_atendimento_parcial.strip()
+                ),
+                "quantidade_entregue": _decimal_canonico(item.quantidade_entregue),
+            }
+            for item in sorted(itens, key=lambda item: item.item_id)
+        ]
+    payload_json = json.dumps(payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+    return hashlib.sha256(payload_json.encode()).hexdigest()
 
 
 def _normalizar_itens_atendimento(
@@ -406,6 +441,46 @@ def _recarregar_requisicao_para_atendimento(requisicao: Requisicao) -> Requisica
         .prefetch_related("itens__material__estoque", "eventos__usuario")
         .get(pk=requisicao.pk)
     )
+
+
+def _recarregar_requisicao_detalhe(requisicao_id: int) -> Requisicao:
+    return (
+        Requisicao.objects.select_related(
+            "criador",
+            "beneficiario",
+            "setor_beneficiario",
+            "chefe_autorizador",
+            "responsavel_atendimento",
+        )
+        .prefetch_related("itens__material__estoque", "eventos__usuario")
+        .get(pk=requisicao_id)
+    )
+
+
+def _obter_registro_idempotencia_atendimento(
+    *,
+    requisicao: Requisicao,
+    ator: User,
+    idempotency_key: str,
+    payload_hash: str,
+) -> tuple[RequisicaoIdempotencyKey, bool]:
+    lookup = {
+        "usuario": ator,
+        "requisicao": requisicao,
+        "endpoint": IDEMPOTENCY_ENDPOINT_FULFILL,
+        "key": idempotency_key,
+    }
+    try:
+        with transaction.atomic():
+            return RequisicaoIdempotencyKey.objects.select_for_update().get_or_create(
+                **lookup,
+                defaults={
+                    "payload_hash": payload_hash,
+                    "status": StatusIdempotencia.IN_PROGRESS,
+                },
+            )
+    except IntegrityError:
+        return RequisicaoIdempotencyKey.objects.select_for_update().get(**lookup), False
 
 
 def _travar_estoques_dos_itens(
@@ -1075,6 +1150,61 @@ def atender_requisicao(
         retirante_fisico=retirante_fisico,
         observacao_atendimento=observacao_atendimento,
     )
+
+
+def atender_requisicao_idempotente(
+    *,
+    requisicao: Requisicao,
+    ator: User,
+    idempotency_key: str,
+    itens: list[ItemAtendimentoPayload] | None = None,
+    retirante_fisico: str = "",
+    observacao_atendimento: str = "",
+) -> Requisicao:
+    itens_normalizados = _normalizar_itens_atendimento(itens)
+    payload_hash = _hash_payload_atendimento(
+        itens=itens_normalizados,
+        retirante_fisico=retirante_fisico,
+        observacao_atendimento=observacao_atendimento,
+    )
+
+    with transaction.atomic():
+        registro, criado = _obter_registro_idempotencia_atendimento(
+            requisicao=requisicao,
+            ator=ator,
+            idempotency_key=idempotency_key,
+            payload_hash=payload_hash,
+        )
+
+        if not criado:
+            if registro.payload_hash != payload_hash:
+                raise DomainConflict(
+                    "Chave de idempotência já usada com payload diferente.",
+                    details={
+                        "idempotency_key": idempotency_key,
+                        "endpoint": IDEMPOTENCY_ENDPOINT_FULFILL,
+                    },
+                )
+            if registro.status == StatusIdempotencia.COMPLETED:
+                return _recarregar_requisicao_detalhe(requisicao.id)
+            raise DomainConflict(
+                "Atendimento com esta chave de idempotência ainda está em processamento.",
+                details={
+                    "idempotency_key": idempotency_key,
+                    "endpoint": IDEMPOTENCY_ENDPOINT_FULFILL,
+                },
+            )
+
+        requisicao_atendida = atender_requisicao(
+            requisicao=requisicao,
+            ator=ator,
+            itens=itens_normalizados,
+            retirante_fisico=retirante_fisico,
+            observacao_atendimento=observacao_atendimento,
+        )
+        registro.status = StatusIdempotencia.COMPLETED
+        registro.save(update_fields=["status", "updated_at"])
+        return requisicao_atendida
 
 
 def atender_requisicao_completa(

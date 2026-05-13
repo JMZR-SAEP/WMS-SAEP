@@ -1823,6 +1823,7 @@ describe("frontend pilot router", () => {
   });
 
   it("fulfills all authorized items from fulfillment context", async () => {
+    let fulfillIdempotencyKey: string | null = null;
     let fulfillPayload: unknown;
     const fetchMock = vi.fn(async (request: Request) => {
       if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
@@ -1834,6 +1835,7 @@ describe("frontend pilot router", () => {
       }
 
       if (requestUrl(request).endsWith("/api/v1/requisitions/101/fulfill/")) {
+        fulfillIdempotencyKey = request.headers.get("Idempotency-Key");
         fulfillPayload = await request.json();
         return requisitionDetailResponse({
           quantidade_autorizada: "1.000",
@@ -1866,6 +1868,9 @@ describe("frontend pilot router", () => {
     fireEvent.click(primaryAction);
 
     await waitFor(() => {
+      expect(typeof fulfillIdempotencyKey).toBe("string");
+      expect((fulfillIdempotencyKey as string).length).toBeGreaterThan(0);
+      expect((fulfillIdempotencyKey as string).length).toBeLessThanOrEqual(128);
       expect(fulfillPayload).toEqual({
         retirante_fisico: "Joao da Silva",
         observacao_atendimento: "Retirada no balcão",
@@ -1984,6 +1989,59 @@ describe("frontend pilot router", () => {
     expect(await screen.findByText("Somente requisições autorizadas podem ser atendidas.")).toBeInTheDocument();
     expect(container.ownerDocument.location.pathname).toBe("/requisicoes/101");
     expect(container.ownerDocument.location.search).toBe("?contexto=atendimento");
+  });
+
+  it("reuses fulfillment idempotency key until the payload changes", async () => {
+    const idempotencyKeys: Array<string | null> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((request: Request) => {
+        if (requestUrl(request).endsWith("/api/v1/auth/me/")) {
+          return sessionResponse(warehouseSession());
+        }
+
+        if (requestUrl(request).endsWith("/api/v1/requisitions/101/")) {
+          return requisitionDetailResponse({ quantidade_autorizada: "1.000" });
+        }
+
+        if (requestUrl(request).endsWith("/api/v1/requisitions/101/fulfill/")) {
+          idempotencyKeys.push(request.headers.get("Idempotency-Key"));
+          return new Response(
+            JSON.stringify({
+              error: {
+                code: "domain_conflict",
+                message: "Falha transiente simulada.",
+                details: {},
+                trace_id: "trace-domain",
+              },
+            }),
+            { status: 409, headers: jsonHeaders },
+          );
+        }
+
+        const notificationsResponse = maybeNotificationsRequest(request);
+        if (notificationsResponse) return notificationsResponse;
+        throw new Error(`Unexpected request: ${requestUrl(request)}`);
+      }),
+    );
+
+    renderRoute("/requisicoes/101?contexto=atendimento");
+
+    expect(await screen.findByRole("heading", { name: "REQ-2026-000101" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Preencher entrega completa" }));
+    fireEvent.click(screen.getByRole("button", { name: "Registrar atendimento" }));
+    await waitFor(() => expect(idempotencyKeys).toHaveLength(1));
+
+    fireEvent.click(screen.getByRole("button", { name: "Registrar atendimento" }));
+    await waitFor(() => expect(idempotencyKeys).toHaveLength(2));
+    expect(idempotencyKeys[1]).toBe(idempotencyKeys[0]);
+
+    fireEvent.change(screen.getByLabelText("Observação do atendimento"), {
+      target: { value: "Payload alterado" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Registrar atendimento" }));
+    await waitFor(() => expect(idempotencyKeys).toHaveLength(3));
+    expect(idempotencyKeys[2]).not.toBe(idempotencyKeys[0]);
   });
 
   it("redirects to login when fulfillment action returns 401", async () => {
