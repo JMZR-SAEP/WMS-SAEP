@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 import saepLogoUrl from "../../assets/saep-logo.webp";
 import { authQueryKeys, logoutSession, meQueryOptions } from "../../features/auth/session";
@@ -73,6 +73,7 @@ export function AppShell() {
   const unreadCount = unreadCountQuery.data?.unread_count ?? 0;
   const pushDiagnostic =
     pushRole && pushConfigQuery.isSuccess ? getPushDiagnostic(pushConfigQuery.data) : null;
+  const [notificationsOpen, setNotificationsOpen] = useState(true);
 
   useEffect(() => {
     if (
@@ -172,101 +173,124 @@ export function AppShell() {
                 </div>
                 {pushDiagnostic ? <PushStatusWarning diagnostic={pushDiagnostic} /> : null}
                 <div className="notifications-panel">
-                  <div className="notifications-header">
-                    <p className="text-xs font-bold uppercase text-[var(--ink-muted)]">
+                  <button
+                    aria-expanded={notificationsOpen}
+                    className="notifications-header"
+                    onClick={() => setNotificationsOpen((o) => !o)}
+                    type="button"
+                  >
+                    <p className="notifications-header-label text-xs font-bold uppercase text-[var(--ink-muted)]">
                       Notificações
                     </p>
-                    <span className="notifications-count">{unreadCount}</span>
-                  </div>
+                    <div className="flex items-center gap-2">
+                      <span className="notifications-count">{unreadCount}</span>
+                      <svg
+                        aria-hidden="true"
+                        className={notificationsOpen ? "notifications-chevron open" : "notifications-chevron"}
+                        fill="none"
+                        height="12"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                        viewBox="0 0 12 12"
+                        width="12"
+                      >
+                        <path d="M2 4l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </div>
+                  </button>
 
-                  {notificationsQuery.isLoading || unreadCountQuery.isLoading ? (
-                    <p className="notifications-empty">Carregando notificações...</p>
-                  ) : null}
+                  {notificationsOpen ? (
+                    <div className="mt-2">
+                      {notificationsQuery.isLoading || unreadCountQuery.isLoading ? (
+                        <p className="notifications-empty">Carregando notificações...</p>
+                      ) : null}
 
-                  {notificationsQuery.isError || unreadCountQuery.isError ? (
-                    <SupportErrorPanel
-                      error={notificationsQuery.error ?? unreadCountQuery.error}
-                      fallback="Não foi possível carregar notificações."
-                    />
-                  ) : null}
+                      {notificationsQuery.isError || unreadCountQuery.isError ? (
+                        <SupportErrorPanel
+                          error={notificationsQuery.error ?? unreadCountQuery.error}
+                          fallback="Não foi possível carregar notificações."
+                        />
+                      ) : null}
 
-                  {!notificationsQuery.isLoading &&
-                  !unreadCountQuery.isLoading &&
-                  !notificationsQuery.isError &&
-                  !unreadCountQuery.isError &&
-                  notifications.length === 0 ? (
-                    <p className="notifications-empty">Sem notificações no momento.</p>
-                  ) : null}
+                      {!notificationsQuery.isLoading &&
+                      !unreadCountQuery.isLoading &&
+                      !notificationsQuery.isError &&
+                      !unreadCountQuery.isError &&
+                      notifications.length === 0 ? (
+                        <p className="notifications-empty">Sem notificações no momento.</p>
+                      ) : null}
 
-                  {!notificationsQuery.isLoading &&
-                  !unreadCountQuery.isLoading &&
-                  !notificationsQuery.isError &&
-                  !unreadCountQuery.isError &&
-                  notifications.length > 0 ? (
-                    <ul className="notifications-list">
-                      {notifications.map((notification) => {
-                        const relatedObject = notification.objeto_relacionado;
-                        const context = notificationOperationalContext(notification.tipo);
-                        const contextLabel = notificationOperationalLabel(notification.tipo);
+                      {!notificationsQuery.isLoading &&
+                      !unreadCountQuery.isLoading &&
+                      !notificationsQuery.isError &&
+                      !unreadCountQuery.isError &&
+                      notifications.length > 0 ? (
+                        <ul className="notifications-list">
+                          {notifications.map((notification) => {
+                            const relatedObject = notification.objeto_relacionado;
+                            const context = notificationOperationalContext(notification.tipo);
+                            const contextLabel = notificationOperationalLabel(notification.tipo);
 
-                        return (
-                          <li className="notification-item" key={notification.id}>
-                            <div className="notification-meta">
-                              <strong>{notification.titulo}</strong>
-                              <span>{formatNotificationDate(notification.created_at)}</span>
-                            </div>
-                            <p className="notification-message">{notification.mensagem}</p>
+                            return (
+                              <li className="notification-item" key={notification.id}>
+                                <div className="notification-meta">
+                                  <strong>{notification.titulo}</strong>
+                                  <span>{formatNotificationDate(notification.created_at)}</span>
+                                </div>
+                                <p className="notification-message">{notification.mensagem}</p>
 
-                            {notification.destino.tipo === "papel" ? (
-                              <span className="notification-badge">Aviso coletivo</span>
-                            ) : null}
-
-                            {relatedObject?.tipo === "requisicao" ? (
-                              <div className="notification-links">
-                                <Link
-                                  className="notification-link"
-                                  params={{ id: String(relatedObject.id) }}
-                                  search={
-                                    context
-                                      ? {
-                                          contexto: context,
-                                        }
-                                      : undefined
-                                  }
-                                  to="/requisicoes/$id"
-                                >
-                                  Abrir requisição
-                                </Link>
-                                {contextLabel ? (
-                                  <span className="notification-context">{contextLabel}</span>
+                                {notification.destino.tipo === "papel" ? (
+                                  <span className="notification-badge">Aviso coletivo</span>
                                 ) : null}
-                              </div>
-                            ) : null}
 
-                            {notification.leitura_suportada && !notification.lida ? (
-                              <button
-                                className="notification-read-button"
-                                disabled={markReadMutation.isPending}
-                                onClick={() => {
-                                  markReadMutation.reset();
-                                  markReadMutation.mutate(notification.id);
-                                }}
-                                type="button"
-                              >
-                                Marcar como lida
-                              </button>
-                            ) : null}
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  ) : null}
+                                {relatedObject?.tipo === "requisicao" ? (
+                                  <div className="notification-links">
+                                    <Link
+                                      className="notification-link"
+                                      params={{ id: String(relatedObject.id) }}
+                                      search={
+                                        context
+                                          ? {
+                                              contexto: context,
+                                            }
+                                          : undefined
+                                      }
+                                      to="/requisicoes/$id"
+                                    >
+                                      Abrir requisição
+                                    </Link>
+                                    {contextLabel ? (
+                                      <span className="notification-context">{contextLabel}</span>
+                                    ) : null}
+                                  </div>
+                                ) : null}
 
-                  {markReadMutation.isError ? (
-                    <SupportErrorPanel
-                      error={markReadMutation.error}
-                      fallback="Não foi possível marcar notificação como lida."
-                    />
+                                {notification.leitura_suportada && !notification.lida ? (
+                                  <button
+                                    className="notification-read-button"
+                                    disabled={markReadMutation.isPending}
+                                    onClick={() => {
+                                      markReadMutation.reset();
+                                      markReadMutation.mutate(notification.id);
+                                    }}
+                                    type="button"
+                                  >
+                                    Marcar como lida
+                                  </button>
+                                ) : null}
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      ) : null}
+
+                      {markReadMutation.isError ? (
+                        <SupportErrorPanel
+                          error={markReadMutation.error}
+                          fallback="Não foi possível marcar notificação como lida."
+                        />
+                      ) : null}
+                    </div>
                   ) : null}
                 </div>
                 <button
