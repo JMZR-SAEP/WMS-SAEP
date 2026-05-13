@@ -263,13 +263,14 @@ export async function fulfillRequisition(
   input: RequisicaoFulfillInput,
   idempotencyKey: string,
 ) {
-  if (typeof idempotencyKey !== "string" || idempotencyKey.trim().length === 0 || idempotencyKey.length > 128) {
+  const normalizedIdempotencyKey = idempotencyKey.trim();
+  if (typeof idempotencyKey !== "string" || normalizedIdempotencyKey.length === 0 || normalizedIdempotencyKey.length > 128) {
     throw new Error("Invalid idempotencyKey");
   }
   const { data, error, response } = await apiClient.POST("/api/v1/requisitions/{id}/fulfill/", {
     params: {
       header: {
-        "Idempotency-Key": idempotencyKey,
+        "Idempotency-Key": normalizedIdempotencyKey,
       },
       path: {
         id,
