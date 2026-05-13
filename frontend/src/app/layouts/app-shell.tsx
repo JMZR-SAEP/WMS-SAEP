@@ -138,30 +138,19 @@ export function AppShell() {
           </div>
 
           <nav className="space-y-2 px-4 py-4">
-            {navigationItems.map((item) => {
-              const active = item.matches(location.pathname);
-              const className = active ? "nav-link nav-link-active" : "nav-link nav-link-idle";
-              const linkProps = item.params ? { to: item.to, params: item.params } : { to: item.to };
-              const navContent = (
-                <>
-                  <div>
-                    <p className="text-[0.75rem] font-bold uppercase text-[var(--ink-muted)]">
-                      {item.tag}
-                    </p>
-                    <p className="mt-1 text-base font-semibold text-[var(--ink-strong)]">
+            {navigationItems
+              .filter((item) => !item.visibleFor || (session && item.visibleFor.includes(session.papel)))
+              .map((item) => {
+                const active = item.matches(location.pathname);
+                const className = active ? "nav-link nav-link-active" : "nav-link nav-link-idle";
+                return (
+                  <Link key={item.label} to={item.to} className={className}>
+                    <p className="text-base font-semibold text-[var(--ink-strong)]">
                       {item.label}
                     </p>
-                  </div>
-                  <span className="text-sm text-[var(--ink-soft)]">{item.hint}</span>
-                </>
-              );
-
-              return (
-                <Link key={item.label} {...linkProps} className={className}>
-                  {navContent}
-                </Link>
-              );
-            })}
+                  </Link>
+                );
+              })}
           </nav>
 
           <div className="border-t border-[var(--line-soft)] px-4 py-5 sm:px-6">
