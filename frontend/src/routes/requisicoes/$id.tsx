@@ -1049,6 +1049,7 @@ function PickupPanel({
       void queryClient.invalidateQueries({
         queryKey: requisitionsQueryKeys.pendingFulfillmentsAll,
       });
+      void navigate({ to: "/atendimentos" });
     },
   });
 

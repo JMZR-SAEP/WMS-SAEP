@@ -64,7 +64,7 @@ async function loginAs(
 
 function expectDetailContextUrl(
   rawUrl: string,
-  contexto: "autorizacao" | "atendimento",
+  contexto: "autorizacao" | "atendimento" | "retirada",
   allowPageParam = true,
 ) {
   const url = new URL(rawUrl);
@@ -319,8 +319,15 @@ test("fulfills authorized requisition from worklist", async ({ page }) => {
   await expect(page).toHaveURL(/\/requisicoes\/\d+\?/);
   expectDetailContextUrl(page.url(), "atendimento");
   await page.getByRole("button", { name: "Preencher entrega completa" }).click();
-  await page.getByLabel("Retirante físico").fill("Servidor piloto E2E");
   await page.getByRole("button", { name: "Registrar atendimento" }).click();
+  await expect(page).toHaveURL(/\/atendimentos(?:\?.*)?$/);
+  await expect(page.getByRole("heading", { name: "Fila de atendimento" })).toBeVisible();
+
+  await page.locator(".operational-table tbody tr").first().click();
+  await expect(page).toHaveURL(/\/requisicoes\/\d+\?/);
+  expectDetailContextUrl(page.url(), "retirada");
+  await page.getByLabel("Retirante físico").fill("Servidor piloto E2E");
+  await page.getByRole("button", { name: "Registrar retirada" }).click();
   await expect(page).toHaveURL(/\/atendimentos(?:\?.*)?$/);
   await expect(page.getByRole("heading", { name: "Fila de atendimento" })).toBeVisible();
 });
