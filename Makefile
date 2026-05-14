@@ -121,6 +121,10 @@ test: ## Rodar testes com settings de teste
 seed-pilot-minimo: ## Carregar seed minima oficial do piloto
 	DJANGO_SETTINGS_MODULE=$(DJANGO_SETTINGS_MODULE) $(DJANGO_ADMIN) seed_pilot_minimo
 
+resetdb: resetpostgres ## Recriar schema do banco do zero sem apagar migrations locais (usado por E2E)
+	DJANGO_SETTINGS_MODULE=$(DJANGO_SETTINGS_MODULE) $(DJANGO_ADMIN) makemigrations
+	DJANGO_SETTINGS_MODULE=$(DJANGO_SETTINGS_MODULE) $(DJANGO_ADMIN) migrate --run-syncdb
+
 run: ## Subir servidor de desenvolvimento
 	DJANGO_SETTINGS_MODULE=$(DJANGO_SETTINGS_MODULE) $(DJANGO_ADMIN) runserver
 
@@ -158,8 +162,8 @@ frontend-lint: frontend-gen-api ## Rodar lint e typecheck do frontend
 frontend-test: frontend-gen-api ## Rodar smoke tests unitários/integration do frontend
 	cd $(FRONTEND_DIR) && ./node_modules/.bin/vitest run
 
-frontend-e2e: frontend-gen-api seed-pilot-minimo ## Rodar E2E real do frontend com Playwright + backend seedado
+frontend-e2e: frontend-gen-api resetdb seed-pilot-minimo ## Rodar E2E real do frontend com Playwright + backend seedado
 	cd $(FRONTEND_DIR) && ./node_modules/.bin/playwright test
 
-.PHONY: help prepare init setup clean cleanall veryclean test seed-pilot-minimo run resetdb resetpostgres frontend-deps frontend-init frontend-gen-api frontend-dev frontend-build frontend-lint frontend-test frontend-e2e
+.PHONY: help prepare init setup clean cleanall veryclean test seed-pilot-minimo resetdb run resetpostgres frontend-deps frontend-init frontend-gen-api frontend-dev frontend-build frontend-lint frontend-test frontend-e2e
 .EXPORT_ALL_VARIABLES:

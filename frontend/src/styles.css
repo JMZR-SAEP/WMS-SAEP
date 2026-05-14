@@ -666,8 +666,8 @@ button:disabled {
 .col-updated { width: 12rem; }
 .col-actions { width: 6.75rem; }
 
-.operational-table td:last-child,
-.operational-table th:last-child {
+.worklist-page .operational-table td:last-child,
+.worklist-page .operational-table th:last-child {
   text-align: right;
 }
 

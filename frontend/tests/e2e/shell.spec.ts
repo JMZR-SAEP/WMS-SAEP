@@ -143,6 +143,12 @@ test("creates draft and submits to authorization using seed scenario", async ({ 
   await expect(page).toHaveURL(/\/requisicoes\/\d+\?etapa=itens$/);
   await expect(page.getByRole("heading", { name: "Editar rascunho" })).toBeVisible();
 
+  await page.getByRole("button", { name: /Próximo: revisão/i }).click();
+  await expect(page).toHaveURL(/\/requisicoes\/\d+\?etapa=revisao$/);
+
+  await page.getByRole("button", { name: /Próximo: envio/i }).click();
+  await expect(page).toHaveURL(/\/requisicoes\/\d+\?etapa=envio$/);
+
   await page.getByRole("button", { name: "Enviar para autorização" }).click();
   await page.getByRole("button", { name: "Confirmar envio" }).click();
 
@@ -255,7 +261,7 @@ test("qa final push denied warning does not block authorization queue @qa-final"
   });
 
   await expect(page.getByRole("heading", { name: "Fila de autorizações" })).toBeVisible();
-  await expect(page.getByRole("status").first()).toContainText(/Bloqueado|Sem suporte|Requer instalação PWA/);
+  await expect(page.getByRole("status").first()).toContainText(/sem suporte/i);
   await expect(page.getByRole("link", { name: "Abrir" }).first()).toBeVisible();
   await expectNoHorizontalOverflow(page);
 });
