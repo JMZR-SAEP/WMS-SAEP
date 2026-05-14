@@ -331,13 +331,12 @@ function AutorizacoesPage() {
                 </button>
               ) : null}
               <Link
-                className="action-link compact-action"
+                aria-label={`Abrir ${row.original.numero_publico}`}
+                className="sr-only focus:not-sr-only"
                 params={{ id: String(row.original.id) }}
                 search={{ contexto: "autorizacao", page: currentPage === 1 ? undefined : currentPage }}
                 to="/requisicoes/$id"
-              >
-                Abrir
-              </Link>
+              />
             </div>
           );
         },
@@ -438,7 +437,18 @@ function AutorizacoesPage() {
               </thead>
               <tbody>
                 {table.getRowModel().rows.map((row) => (
-                  <tr key={row.id}>
+                  <tr
+                    key={row.id}
+                    style={{ cursor: "pointer" }}
+                    onClick={(e) => {
+                      if ((e.target as HTMLElement).closest("button, a")) return;
+                      void navigate({
+                        to: "/requisicoes/$id",
+                        params: { id: String(row.original.id) },
+                        search: { contexto: "autorizacao", page: currentPage === 1 ? undefined : currentPage },
+                      });
+                    }}
+                  >
                     {row.getVisibleCells().map((cell) => (
                       <td key={cell.id}>
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}

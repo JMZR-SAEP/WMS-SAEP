@@ -117,7 +117,7 @@ test("opens minhas requisicoes and canonical detail with real data", async ({ pa
   await loginAs(page, "solicitante1", /\/minhas-requisicoes(?:\?.*)?$/);
 
   await expect(page.getByRole("heading", { name: "Minhas requisições" })).toBeVisible();
-  await page.getByRole("link", { name: "Abrir" }).first().click();
+  await page.getByRole("link", { name: /Abrir/ }).first().click();
 
   await expect(page).toHaveURL(/\/requisicoes\/\d+$/);
   await expect(page.getByRole("heading", { name: /REQ-\d{4}-\d+/ })).toBeVisible();
@@ -172,7 +172,7 @@ test("qa final keeps P0 mobile worklists without horizontal overflow @qa-final",
   await loginAs(page, "solicitante1", /\/minhas-requisicoes(?:\?.*)?$/);
   await expect(page.getByRole("heading", { name: "Minhas requisições" })).toBeVisible();
   await expectNoHorizontalOverflow(page);
-  await expect(page.getByRole("link", { name: "Abrir" }).first()).toBeVisible();
+  await expect(page.getByRole("link", { name: /Abrir/ }).first()).toBeVisible();
 
   await page.getByRole("button", { name: "Sair" }).click();
   await loginAs(page, "chefe-setor", /\/autorizacoes(?:\?.*)?$/, {
@@ -180,13 +180,13 @@ test("qa final keeps P0 mobile worklists without horizontal overflow @qa-final",
   });
   await expect(page.getByRole("heading", { name: "Fila de autorizações" })).toBeVisible();
   await expectNoHorizontalOverflow(page);
-  await expect(page.getByRole("link", { name: "Abrir" }).first()).toBeVisible();
+  await expect(page.getByRole("link", { name: /Abrir/ }).first()).toBeVisible();
 
   await page.getByRole("button", { name: "Sair" }).click();
   await loginAs(page, "auxiliar-almox", /\/atendimentos(?:\?.*)?$/);
   await expect(page.getByRole("heading", { name: "Fila de atendimento" })).toBeVisible();
   await expectNoHorizontalOverflow(page);
-  await expect(page.getByRole("link", { name: "Abrir" }).first()).toBeVisible();
+  await expect(page.getByRole("link", { name: /Abrir/ }).first()).toBeVisible();
 });
 
 test("qa final preserves local draft after failed save @qa-final", async ({ page }) => {
@@ -240,7 +240,7 @@ test("qa final opens authorization detail from deep link @qa-final", async ({ pa
   });
 
   await expect(page.getByRole("heading", { name: "Fila de autorizações" })).toBeVisible();
-  await page.getByRole("link", { name: "Abrir" }).first().click();
+  await page.getByRole("link", { name: /Abrir/ }).first().click();
   await expect(page).toHaveURL(/\/requisicoes\/\d+\?/);
   await expect(page.getByRole("heading", { name: /REQ-\d{4}-\d+/ })).toBeVisible();
   const deepLink = page.url();
@@ -262,7 +262,7 @@ test("qa final push denied warning does not block authorization queue @qa-final"
 
   await expect(page.getByRole("heading", { name: "Fila de autorizações" })).toBeVisible();
   await expect(page.getByRole("status").first()).toContainText(/sem suporte/i);
-  await expect(page.getByRole("link", { name: "Abrir" }).first()).toBeVisible();
+  await expect(page.getByRole("link", { name: /Abrir/ }).first()).toBeVisible();
   await expectNoHorizontalOverflow(page);
 });
 
@@ -301,7 +301,7 @@ test("authorizes pending requisition from worklist", async ({ page }) => {
   });
 
   await expect(page.getByRole("heading", { name: "Fila de autorizações" })).toBeVisible();
-  await page.getByRole("link", { name: "Abrir" }).first().click();
+  await page.getByRole("link", { name: /Abrir/ }).first().click();
 
   await expect(page).toHaveURL(/\/requisicoes\/\d+\?/);
   expectDetailContextUrl(page.url(), "autorizacao");
@@ -314,7 +314,7 @@ test("fulfills authorized requisition from worklist", async ({ page }) => {
   await loginAs(page, "auxiliar-almox", /\/atendimentos(?:\?.*)?$/);
 
   await expect(page.getByRole("heading", { name: "Fila de atendimento" })).toBeVisible();
-  await page.getByRole("link", { name: "Abrir" }).first().click();
+  await page.getByRole("link", { name: /Abrir/ }).first().click();
 
   await expect(page).toHaveURL(/\/requisicoes\/\d+\?/);
   expectDetailContextUrl(page.url(), "atendimento");

@@ -155,6 +155,13 @@ function AtendimentosPage() {
         header: "Requisição",
         cell: ({ row }) => (
           <div className="min-w-[11rem]">
+            <Link
+              aria-label={`Abrir ${row.original.numero_publico ?? `#${row.original.id}`}`}
+              className="sr-only focus:not-sr-only"
+              params={{ id: String(row.original.id) }}
+              search={{ contexto: "atendimento", page: currentPage === 1 ? undefined : currentPage }}
+              to="/requisicoes/$id"
+            />
             <span className="font-semibold text-[var(--ink-strong)]">
               {row.original.numero_publico ?? `#${row.original.id}`}
             </span>
@@ -197,20 +204,6 @@ function AtendimentosPage() {
           <span className="text-sm text-[var(--ink-soft)]">
             {formatDateTime(row.original.data_autorizacao_ou_recusa)}
           </span>
-        ),
-      },
-      {
-        id: "actions",
-        header: "",
-        cell: ({ row }) => (
-          <Link
-            className="action-link compact-action"
-            params={{ id: String(row.original.id) }}
-            search={{ contexto: "atendimento", page: currentPage === 1 ? undefined : currentPage }}
-            to="/requisicoes/$id"
-          >
-            Abrir
-          </Link>
         ),
       },
     ],
@@ -294,7 +287,18 @@ function AtendimentosPage() {
               </thead>
               <tbody>
                 {table.getRowModel().rows.map((row) => (
-                  <tr key={row.id}>
+                  <tr
+                    key={row.id}
+                    style={{ cursor: "pointer" }}
+                    onClick={(e) => {
+                      if ((e.target as HTMLElement).closest("button, a")) return;
+                      void navigate({
+                        to: "/requisicoes/$id",
+                        params: { id: String(row.original.id) },
+                        search: { contexto: "atendimento", page: currentPage === 1 ? undefined : currentPage },
+                      });
+                    }}
+                  >
                     {row.getVisibleCells().map((cell) => (
                       <td key={cell.id}>
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}

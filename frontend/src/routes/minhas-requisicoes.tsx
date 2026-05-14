@@ -159,6 +159,12 @@ function MinhasRequisicoesPage() {
         header: "Requisição",
         cell: ({ row }) => (
           <div>
+            <Link
+              aria-label={`Abrir ${row.original.numero_publico ?? "rascunho"}`}
+              className="sr-only focus:not-sr-only"
+              params={{ id: String(row.original.id) }}
+              to="/requisicoes/$id"
+            />
             <IdentifierCell requisicao={row.original} />
             <p className="mt-1 text-xs font-bold uppercase text-[var(--ink-muted)]">
               {row.original.total_itens} {row.original.total_itens === 1 ? "item" : "itens"}
@@ -198,19 +204,6 @@ function MinhasRequisicoesPage() {
               criada em {formatDateTime(row.original.data_criacao)}
             </p>
           </div>
-        ),
-      },
-      {
-        id: "actions",
-        header: "",
-        cell: ({ row }) => (
-          <Link
-            className="action-link compact-action"
-            params={{ id: String(row.original.id) }}
-            to="/requisicoes/$id"
-          >
-            Abrir
-          </Link>
         ),
       },
     ],
@@ -340,7 +333,6 @@ function MinhasRequisicoesPage() {
                   <col className="col-status" />
                   <col />
                   <col className="col-updated" />
-                  <col className="col-actions" />
                 </colgroup>
                 <thead>
                   {table.getHeaderGroups().map((headerGroup) => (
@@ -355,7 +347,17 @@ function MinhasRequisicoesPage() {
                 </thead>
                 <tbody>
                   {table.getRowModel().rows.map((row) => (
-                    <tr key={row.id}>
+                    <tr
+                      key={row.id}
+                      style={{ cursor: "pointer" }}
+                      onClick={(e) => {
+                        if ((e.target as HTMLElement).closest("button, a")) return;
+                        void navigate({
+                          to: "/requisicoes/$id",
+                          params: { id: String(row.original.id) },
+                        });
+                      }}
+                    >
                       {row.getVisibleCells().map((cell) => (
                         <td key={cell.id}>
                           {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -380,7 +382,7 @@ function MinhasRequisicoesPage() {
           />
         ) : null}
 
-        {!authError ? (
+        {!authError && !listQuery.isError ? (
           <div className="pagination-bar">
             <button
               className="action-link compact-action"
