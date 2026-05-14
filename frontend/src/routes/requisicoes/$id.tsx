@@ -1007,6 +1007,11 @@ function FulfillmentDecisionPanel({
 }
 
 
+type PickupMutationArgs = {
+  input: { retirante_fisico: string };
+  idempotencyKey: string;
+};
+
 function PickupPanel({
   requisicao,
   fulfillmentPage,
@@ -1020,7 +1025,7 @@ function PickupPanel({
   const pickupIdempotencyRef = useRef<{ key: string; payloadSignature: string } | null>(null);
 
   const pickupMutation = useMutation({
-    mutationFn: ({ input, idempotencyKey }: { input: { retirante_fisico: string }; idempotencyKey: string }) =>
+    mutationFn: ({ input, idempotencyKey }: PickupMutationArgs) =>
       pickupRequisition(requisicao.id, input, idempotencyKey),
     onSuccess: (data) => {
       queryClient.setQueryData(requisitionDetailQueryOptions(requisicao.id).queryKey, data);

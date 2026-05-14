@@ -1460,15 +1460,6 @@ def retirar_requisicao(
                 "Usuário sem permissão para registrar retirada desta requisição."
             )
 
-        if requisicao.status not in (
-            StatusRequisicao.PRONTA_PARA_RETIRADA,
-            StatusRequisicao.PRONTA_PARA_RETIRADA_PARCIAL,
-        ):
-            raise DomainConflict(
-                "Somente requisições prontas para retirada podem ser encerradas.",
-                details={"status_atual": requisicao.status},
-            )
-
         _apply_requisicao_transition(
             requisicao=requisicao,
             transition_name="retirar",
