@@ -1390,6 +1390,7 @@ describe("frontend pilot router", () => {
   });
 
   it("opens canonical requisition detail from authorization queue with context", async () => {
+    mockWorklistViewport(true);
     vi.stubGlobal(
       "fetch",
       vi.fn((request: Request) => {
@@ -1481,6 +1482,7 @@ describe("frontend pilot router", () => {
   });
 
   it("opens canonical requisition detail from fulfillment queue with context", async () => {
+    mockWorklistViewport(true);
     vi.stubGlobal(
       "fetch",
       vi.fn((request: Request) => {
@@ -1518,6 +1520,7 @@ describe("frontend pilot router", () => {
   });
 
   it("opens canonical requisition detail from the list", async () => {
+    mockWorklistViewport(true);
     vi.stubGlobal(
       "fetch",
       vi.fn((request: Request) => {
@@ -3674,6 +3677,9 @@ describe("frontend pilot router", () => {
   });
 
   it("leva chefe ao onboarding de alertas no primeiro acesso aplicavel", async () => {
+    vi.stubGlobal("Notification", { permission: "default", requestPermission: vi.fn() });
+    vi.stubGlobal("PushManager", function PushManager() {});
+    Object.defineProperty(navigator, "serviceWorker", { configurable: true, value: {} });
     vi.stubGlobal("fetch", (request: Request) => {
       if (requestUrl(request).includes("/api/v1/auth/me/")) {
         return Promise.resolve(sessionResponse(chefeSession()));
@@ -3698,6 +3704,7 @@ describe("frontend pilot router", () => {
   });
 
   it("mostra aviso persistente quando push esta bloqueado sem bloquear fila", async () => {
+    mockWorklistViewport(true);
     vi.stubGlobal("Notification", {
       permission: "denied",
       requestPermission: vi.fn(),
