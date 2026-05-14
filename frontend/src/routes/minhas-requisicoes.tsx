@@ -331,7 +331,7 @@ function MinhasRequisicoesPage() {
           />
         ) : null}
 
-        {!listQuery.isError || authError ? (
+        {!listQuery.isError && !authError ? (
           <ResponsiveWorklistFrame
             desktop={
               <table className="operational-table">
@@ -355,29 +355,7 @@ function MinhasRequisicoesPage() {
                 </thead>
                 <tbody>
                   {table.getRowModel().rows.map((row) => (
-                    <tr
-                      key={row.id}
-                      style={{ cursor: "pointer" }}
-                      tabIndex={0}
-                      onClick={(e) => {
-                        if ((e.target as HTMLElement).closest("button, a")) return;
-                        void navigate({
-                          to: "/requisicoes/$id",
-                          params: { id: String(row.original.id) },
-                        });
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          if (!((e.target as HTMLElement).closest("button, a"))) {
-                            e.preventDefault();
-                            void navigate({
-                              to: "/requisicoes/$id",
-                              params: { id: String(row.original.id) },
-                            });
-                          }
-                        }
-                      }}
-                    >
+                    <tr key={row.id}>
                       {row.getVisibleCells().map((cell) => (
                         <td key={cell.id}>
                           {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -402,31 +380,33 @@ function MinhasRequisicoesPage() {
           />
         ) : null}
 
-        <div className="pagination-bar">
-          <button
-            className="action-link compact-action"
-            disabled={currentPage <= 1 || listQuery.isPending}
-            onClick={() => void goToPage(currentPage - 1)}
-            type="button"
-          >
-            Anterior
-          </button>
-          <span>
-            Página {listQuery.data?.page ?? currentPage} de {listQuery.data?.total_pages ?? 1}
-          </span>
-          <button
-            className="action-link compact-action"
-            disabled={
-              listQuery.isPending ||
-              !listQuery.data ||
-              currentPage >= listQuery.data.total_pages
-            }
-            onClick={() => void goToPage(currentPage + 1)}
-            type="button"
-          >
-            Próxima
-          </button>
-        </div>
+        {!authError ? (
+          <div className="pagination-bar">
+            <button
+              className="action-link compact-action"
+              disabled={currentPage <= 1 || listQuery.isPending}
+              onClick={() => void goToPage(currentPage - 1)}
+              type="button"
+            >
+              Anterior
+            </button>
+            <span>
+              Página {listQuery.data?.page ?? currentPage} de {listQuery.data?.total_pages ?? 1}
+            </span>
+            <button
+              className="action-link compact-action"
+              disabled={
+                listQuery.isPending ||
+                !listQuery.data ||
+                currentPage >= listQuery.data.total_pages
+              }
+              onClick={() => void goToPage(currentPage + 1)}
+              type="button"
+            >
+              Próxima
+            </button>
+          </div>
+        ) : null}
       </div>
     </section>
   );

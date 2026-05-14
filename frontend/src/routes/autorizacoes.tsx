@@ -438,31 +438,7 @@ function AutorizacoesPage() {
               </thead>
               <tbody>
                 {table.getRowModel().rows.map((row) => (
-                  <tr
-                    key={row.id}
-                    style={{ cursor: "pointer" }}
-                    tabIndex={0}
-                    onClick={(e) => {
-                      if ((e.target as HTMLElement).closest("button, a")) return;
-                      void navigate({
-                        to: "/requisicoes/$id",
-                        params: { id: String(row.original.id) },
-                        search: { contexto: "autorizacao", page: currentPage === 1 ? undefined : currentPage },
-                      });
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        if (!((e.target as HTMLElement).closest("button, a"))) {
-                          e.preventDefault();
-                          void navigate({
-                            to: "/requisicoes/$id",
-                            params: { id: String(row.original.id) },
-                            search: { contexto: "autorizacao", page: currentPage === 1 ? undefined : currentPage },
-                          });
-                        }
-                      }
-                    }}
-                  >
+                  <tr key={row.id}>
                     {row.getVisibleCells().map((cell) => (
                       <td key={cell.id}>
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
