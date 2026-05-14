@@ -3729,7 +3729,7 @@ describe("frontend pilot router", () => {
 
     renderRoute("/autorizacoes");
 
-    await waitFor(() => expect(screen.getAllByText("Alertas: Bloqueado").length).toBeGreaterThan(0));
+    await waitFor(() => expect(screen.getAllByText("Alertas sem suporte").length).toBeGreaterThan(0));
     expect(screen.getByRole("heading", { name: "Fila de autorizações" })).toBeInTheDocument();
     expect(screen.getAllByRole("link", { name: "Abrir" })[0]).toBeInTheDocument();
   });
