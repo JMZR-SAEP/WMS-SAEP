@@ -22,7 +22,6 @@ import {
   reportPushDiagnosticIfNeeded,
   updateAppBadge,
 } from "../../features/pwa/push";
-import { PushStatusWarning } from "../../features/pwa/PushStatusWarning";
 import { pendingApprovalsQueryOptions } from "../../features/requisitions/requisitions";
 import { navigationItems } from "../../shared/config/navigation";
 import { SupportErrorPanel } from "../../shared/ui/support-error";
@@ -176,8 +175,7 @@ export function AppShell() {
           <div className="border-t border-[var(--line-soft)] px-3 py-3 sm:px-4 sm:py-4">
             {session ? (
               <div className="space-y-3">
-                {pushDiagnostic ? <PushStatusWarning diagnostic={pushDiagnostic} /> : null}
-                <div className="notifications-panel">
+<div className="notifications-panel">
                   <button
                     aria-expanded={notificationsOpen}
                     className="notifications-header"
