@@ -30,6 +30,7 @@ from apps.requisitions.serializers import (
     RequisicaoPendingApprovalPaginatedSerializer,
     RequisicaoPendingFulfillmentOutputSerializer,
     RequisicaoPendingFulfillmentPaginatedSerializer,
+    RequisicaoPickupInputSerializer,
     RequisicaoRefuseInputSerializer,
 )
 from apps.requisitions.services import (
@@ -45,6 +46,7 @@ from apps.requisitions.services import (
     listar_fila_atendimento,
     listar_fila_autorizacao,
     recusar_requisicao,
+    retirar_requisicao_idempotente,
     retornar_para_rascunho,
 )
 
@@ -438,8 +440,44 @@ class RequisicaoViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, Generi
             ator=request.user,
             idempotency_key=_idempotency_key_from_request(request),
             itens=serializer.validated_data.get("itens"),
-            retirante_fisico=serializer.validated_data["retirante_fisico"],
             observacao_atendimento=serializer.validated_data["observacao_atendimento"],
+        )
+        return Response(RequisicaoDetailOutputSerializer(requisicao).data)
+
+    @extend_schema(
+        operation_id="requisitions_pickup",
+        tags=["requisitions"],
+        parameters=[
+            OpenApiParameter(
+                name="Idempotency-Key",
+                description=(
+                    "Chave obrigatória para retries seguros da retirada; escopada por "
+                    "usuário, endpoint, requisição e payload."
+                ),
+                required=True,
+                type={"type": "string", "minLength": 1, "maxLength": IDEMPOTENCY_KEY_MAX_LENGTH},
+                location=OpenApiParameter.HEADER,
+                allow_blank=False,
+            ),
+        ],
+        request=RequisicaoPickupInputSerializer,
+        responses={
+            200: RequisicaoDetailOutputSerializer(),
+            400: ErrorResponseSerializer(),
+            403: ErrorResponseSerializer(),
+            404: ErrorResponseSerializer(),
+            409: ErrorResponseSerializer(),
+        },
+    )
+    @action(detail=True, methods=["post"], url_path="pickup")
+    def pickup(self, request, pk=None):
+        serializer = RequisicaoPickupInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        requisicao = retirar_requisicao_idempotente(
+            requisicao=self.get_object(),
+            ator=request.user,
+            idempotency_key=_idempotency_key_from_request(request),
+            retirante_fisico=serializer.validated_data["retirante_fisico"],
         )
         return Response(RequisicaoDetailOutputSerializer(requisicao).data)
 
