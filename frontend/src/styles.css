@@ -92,7 +92,7 @@ button:disabled {
 
 .brand-logo {
   display: block;
-  width: min(100%, 16rem);
+  width: min(100%, 10rem);
   height: auto;
 }
 
@@ -130,29 +130,36 @@ button:disabled {
 .nav-link {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  min-height: 44px;
-  border-radius: 8px;
-  padding: 0.85rem 0.95rem;
+  gap: 0.75rem;
+  min-height: 40px;
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
   transition:
-    border-color 150ms ease,
-    background-color 150ms ease;
+    background-color 150ms ease,
+    box-shadow 150ms ease;
 }
 
 .nav-link-idle {
-  border: 1px solid transparent;
   background: transparent;
 }
 
 .nav-link-idle:hover {
-  border-color: var(--line-soft);
   background: var(--panel-strong);
 }
 
+.nav-link-idle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .nav-link-active {
-  border: 1px solid var(--accent);
   background: var(--accent-soft);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.nav-link-active:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .action-link {
@@ -269,7 +276,7 @@ button:disabled {
   width: 100%;
   background: none;
   border: none;
-  padding: 0;
+  padding: 0.2rem 0;
   text-align: left;
   cursor: pointer;
 }
@@ -290,14 +297,60 @@ button:disabled {
 
 .notifications-count {
   display: inline-flex;
-  min-width: 1.7rem;
+  min-width: 1.3rem;
   justify-content: center;
   border-radius: 999px;
   background: var(--accent-soft);
-  padding: 0.1rem 0.5rem;
-  font-size: 0.75rem;
+  padding: 0.05rem 0.3rem;
+  font-size: 0.68rem;
   font-weight: 700;
   color: var(--accent);
+}
+
+.session-footer {
+  border-top: 1px solid var(--line-soft);
+  padding-top: 0.65rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.session-role-badge {
+  display: inline-block;
+  border-radius: 4px;
+  background: var(--panel-strong);
+  border: 1px solid var(--line-soft);
+  padding: 0.1rem 0.4rem;
+  font-size: 0.67rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  letter-spacing: 0.02em;
+}
+
+.sidebar-logout {
+  width: 100%;
+  border-radius: 999px;
+  border: 1px solid var(--line-soft);
+  background: transparent;
+  min-height: 36px;
+  padding: 0.4rem 1rem;
+  color: var(--ink-muted);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.sidebar-logout:hover:not(:disabled) {
+  border-color: var(--line-strong);
+  color: var(--ink-soft);
+}
+
+.sidebar-logout:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .notifications-list {
@@ -404,13 +457,12 @@ button:disabled {
 
 .push-warning {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  border-radius: 8px;
+  flex-direction: column;
+  gap: 0.35rem;
+  border-radius: 6px;
   border: 1px solid #f3d48c;
   background: #fff8e1;
-  padding: 0.75rem;
+  padding: 0.5rem 0.6rem;
 }
 
 .worklist-header,

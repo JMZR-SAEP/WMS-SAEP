@@ -27,6 +27,14 @@ import { pendingApprovalsQueryOptions } from "../../features/requisitions/requis
 import { navigationItems } from "../../shared/config/navigation";
 import { SupportErrorPanel } from "../../shared/ui/support-error";
 
+const PAPEL_LABEL: Record<string, string> = {
+  solicitante: "Solicitante",
+  auxiliar_setor: "Auxiliar de setor",
+  chefe_setor: "Chefe de setor",
+  auxiliar_almoxarifado: "Auxiliar de almoxarifado",
+  chefe_almoxarifado: "Chefe de almoxarifado",
+};
+
 export function AppShell() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -131,15 +139,15 @@ export function AppShell() {
     <div className="min-h-screen bg-[var(--page-bg)] text-[var(--ink-strong)]">
       <div className="mx-auto flex min-h-screen max-w-[1440px] flex-col gap-4 px-3 py-3 sm:px-4 lg:flex-row lg:px-6">
         <aside className="glass-panel mb-4 w-full shrink-0 overflow-hidden lg:mb-0 lg:w-[320px]">
-          <div className="border-b border-[var(--line-soft)] px-4 py-5 sm:px-6">
+          <div className="border-b border-[var(--line-soft)] px-4 py-3 sm:px-6 sm:py-5">
             <img className="brand-logo" src={saepLogoUrl} alt="SAEP" />
-            <h1 className="mt-4 text-2xl font-bold leading-tight">WMS-SAEP</h1>
-            <p className="mt-2 max-w-[30ch] text-sm text-[var(--ink-soft)]">
+            <h1 className="mt-3 text-xl font-bold leading-tight sm:text-2xl">WMS-SAEP</h1>
+            <p className="mt-1 hidden max-w-[30ch] text-sm text-[var(--ink-soft)] sm:block">
               Almoxarifado do piloto para requisições, autorizações e atendimento.
             </p>
           </div>
 
-          <nav className="space-y-2 px-4 py-4">
+          <nav className="space-y-1 px-3 py-3 sm:px-4" aria-label="Navegação principal">
             {navigationItems
               .filter((item) => {
                 if (item.visibleFor && !(session && item.visibleFor.includes(session.papel))) {
@@ -154,16 +162,21 @@ export function AppShell() {
                 const active = item.matches(location.pathname);
                 const className = active ? "nav-link nav-link-active" : "nav-link nav-link-idle";
                 return (
-                  <Link key={item.label} to={item.to} className={className}>
-                    <p className="text-base font-semibold text-[var(--ink-strong)]">
+                  <Link
+                    key={item.label}
+                    to={item.to}
+                    className={className}
+                    aria-current={active ? "page" : undefined}
+                  >
+                    <span className="text-sm font-semibold text-[var(--ink-strong)]">
                       {item.label}
-                    </p>
+                    </span>
                   </Link>
                 );
               })}
           </nav>
 
-          <div className="border-t border-[var(--line-soft)] px-4 py-5 sm:px-6">
+          <div className="border-t border-[var(--line-soft)] px-3 py-3 sm:px-4 sm:py-4">
             {session ? (
               <div className="space-y-3">
                 {pushDiagnostic ? <PushStatusWarning diagnostic={pushDiagnostic} /> : null}
@@ -296,15 +309,17 @@ export function AppShell() {
                     <p className="mt-1 text-sm font-semibold text-[var(--ink-strong)]">
                       {session.nome_completo}
                     </p>
-                    <p className="text-xs font-bold uppercase text-[var(--ink-muted)]">
-                      {session.papel}
-                    </p>
-                    {session.setor ? (
-                      <p className="mt-1 text-sm text-[var(--ink-soft)]">{session.setor.nome}</p>
-                    ) : null}
+                    <div className="mt-1 flex flex-wrap items-center gap-1">
+                      <span className="session-role-badge">
+                        {PAPEL_LABEL[session.papel] ?? session.papel}
+                      </span>
+                      {session.setor ? (
+                        <span className="text-xs text-[var(--ink-muted)]">{session.setor.nome}</span>
+                      ) : null}
+                    </div>
                   </div>
                   <button
-                    className="preview-button w-full"
+                    className="sidebar-logout"
                     disabled={logoutMutation.isPending}
                     onClick={() => logoutMutation.mutate()}
                     type="button"
