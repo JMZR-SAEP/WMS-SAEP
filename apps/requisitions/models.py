@@ -9,16 +9,16 @@ class StatusRequisicao(models.TextChoices):
     AGUARDANDO_AUTORIZACAO = "aguardando_autorizacao", "Aguardando Autorização"
     RECUSADA = "recusada", "Recusada"
     AUTORIZADA = "autorizada", "Autorizada"
-    ATENDIDA_PARCIALMENTE = "atendida_parcialmente", "Atendida Parcialmente"
-    ATENDIDA = "atendida", "Atendida"
+    PRONTA_PARA_RETIRADA_PARCIAL = "pronta_para_retirada_parcial", "Pronta para Retirada (Parcial)"
+    PRONTA_PARA_RETIRADA = "pronta_para_retirada", "Pronta para Retirada"
+    RETIRADA = "retirada", "Retirada"
     CANCELADA = "cancelada", "Cancelada"
     ESTORNADA = "estornada", "Estornada"
 
     @classmethod
     def estados_finais(cls):
         return [
-            cls.ATENDIDA_PARCIALMENTE,
-            cls.ATENDIDA,
+            cls.RETIRADA,
             cls.CANCELADA,
             cls.ESTORNADA,
             cls.RECUSADA,
@@ -35,6 +35,7 @@ class TipoEvento(models.TextChoices):
     RECUSA = "recusa", "Recusa"
     ATENDIMENTO_PARCIAL = "atendimento_parcial", "Atendimento Parcial"
     ATENDIMENTO = "atendimento", "Atendimento"
+    RETIRADA = "retirada", "Retirada"
     CANCELAMENTO = "cancelamento", "Cancelamento"
     ESTORNO = "estorno", "Estorno"
 
@@ -147,6 +148,11 @@ class Requisicao(models.Model):
         blank=True,
         default="",
         help_text="Nome de quem retirou (diferente do beneficiário)",
+    )
+    data_retirada = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Data e hora da retirada física dos materiais",
     )
     motivo_cancelamento = models.TextField(
         blank=True,
