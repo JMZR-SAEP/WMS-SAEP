@@ -9,13 +9,13 @@ export function PushStatusWarning({ diagnostic }: { diagnostic: PushDiagnostic }
 
   return (
     <div className="push-warning" role="status">
-      <div>
-        <p className="text-xs font-bold uppercase text-[var(--warning)]">
-          Alertas: {diagnostic.label}
-        </p>
-        <p className="mt-1 text-sm text-[var(--ink-soft)]">{diagnostic.nextAction}</p>
-      </div>
-      <Link className="notification-link" to="/alertas">
+      <p className="text-xs font-bold uppercase text-[var(--warning)]">
+        Alertas sem suporte
+      </p>
+      <p className="text-xs text-[var(--ink-soft)]">
+        Use Chrome Android ou Safari iOS com PWA instalado.
+      </p>
+      <Link className="notification-link text-xs" to="/alertas">
         Ver diagnóstico
       </Link>
     </div>

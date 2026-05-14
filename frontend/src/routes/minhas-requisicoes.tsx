@@ -53,18 +53,27 @@ function StatusBadge({ status }: { status: RequisicaoStatus }) {
 
 function IdentifierCell({ requisicao }: { requisicao: RequisicaoListItem }) {
   if (requisicao.numero_publico) {
-    return <span className="font-semibold text-[var(--ink-strong)]">{requisicao.numero_publico}</span>;
+    return <span className="req-identifier">{requisicao.numero_publico}</span>;
   }
 
   return <span className="draft-badge">Rascunho</span>;
 }
 
-function EmptyState() {
+function EmptyState({ hasFilters }: { hasFilters: boolean }) {
+  if (hasFilters) {
+    return (
+      <WorklistEmptyState
+        description="Ajuste busca ou status para voltar à lista operacional."
+        eyebrow="Sem resultados"
+        title="Nenhuma requisição encontrada"
+      />
+    );
+  }
   return (
     <WorklistEmptyState
-      description="Ajuste busca ou status para voltar à lista operacional."
-      eyebrow="Sem resultados"
-      title="Nenhuma requisição encontrada"
+      description="Requisições criadas por você ou em que você é beneficiário aparecerão aqui."
+      eyebrow="Lista vazia"
+      title="Você ainda não possui requisições"
     />
   );
 }
@@ -77,7 +86,7 @@ function MinhasRequisicoesCard({ requisicao }: { requisicao: RequisicaoListItem 
       <div className="worklist-card-main">
         <div>
           <IdentifierCell requisicao={requisicao} />
-          <p className="mt-2 text-xs font-bold uppercase text-[var(--ink-muted)]">
+          <p className="mt-1 text-xs font-bold uppercase text-[var(--ink-muted)]">
             {requisicao.total_itens} {requisicao.total_itens === 1 ? "item" : "itens"}
           </p>
         </div>
@@ -142,15 +151,22 @@ function MinhasRequisicoesPage() {
   }, [currentSearch]);
 
   const rows = listQuery.data?.results ?? [];
+  const hasFilters = !!currentSearch.trim() || !!searchParams.status;
   const columns = useMemo<ColumnDef<RequisicaoListItem>[]>(
     () => [
       {
         id: "identifier",
         header: "Requisição",
         cell: ({ row }) => (
-          <div className="min-w-[11rem]">
+          <div>
+            <Link
+              aria-label={`Abrir ${row.original.numero_publico ?? "rascunho"}`}
+              className="sr-only focus:not-sr-only"
+              params={{ id: String(row.original.id) }}
+              to="/requisicoes/$id"
+            />
             <IdentifierCell requisicao={row.original} />
-            <p className="mt-2 text-xs font-bold uppercase text-[var(--ink-muted)]">
+            <p className="mt-1 text-xs font-bold uppercase text-[var(--ink-muted)]">
               {row.original.total_itens} {row.original.total_itens === 1 ? "item" : "itens"}
             </p>
           </div>
@@ -188,19 +204,6 @@ function MinhasRequisicoesPage() {
               criada em {formatDateTime(row.original.data_criacao)}
             </p>
           </div>
-        ),
-      },
-      {
-        id: "actions",
-        header: "",
-        cell: ({ row }) => (
-          <Link
-            className="action-link compact-action"
-            params={{ id: String(row.original.id) }}
-            to="/requisicoes/$id"
-          >
-            Abrir
-          </Link>
         ),
       },
     ],
@@ -255,19 +258,18 @@ function MinhasRequisicoesPage() {
   }, [authError, navigate, queryClient]);
 
   return (
-    <section className="space-y-6">
+    <section className="worklist-page">
       <div className="worklist-header">
         <div>
           <p className="eyebrow">Worklist operacional</p>
-          <h1>Minhas requisições</h1>
+          <div className="page-title-row">
+            <h1>Minhas requisições</h1>
+            <span className="records-count">{recordsLabel}</span>
+          </div>
           <p>
             Lista única de rascunhos e requisições formais criadas por você ou em que você é
             beneficiário.
           </p>
-        </div>
-        <div className="status-chip">
-          <span className="status-dot" />
-          {recordsLabel}
         </div>
       </div>
 
@@ -314,39 +316,59 @@ function MinhasRequisicoesPage() {
         </button>
       </form>
 
-      {listQuery.isError && !authError ? (
-        <SupportErrorPanel error={listQuery.error} fallback="Não foi possível carregar os dados." />
-      ) : null}
+      <div className="list-frame-group">
+        {listQuery.isError && !authError ? (
+          <SupportErrorPanel
+            error={listQuery.error}
+            fallback="Não foi possível carregar os dados."
+          />
+        ) : null}
 
-      {!listQuery.isError || authError ? (
-        <ResponsiveWorklistFrame
-          desktop={
-            <table className="operational-table">
-              <thead>
-                {table.getHeaderGroups().map((headerGroup) => (
-                  <tr key={headerGroup.id}>
-                    {headerGroup.headers.map((header) => (
-                      <th key={header.id}>
-                        {flexRender(header.column.columnDef.header, header.getContext())}
-                      </th>
-                    ))}
-                  </tr>
-                ))}
-              </thead>
-              <tbody>
-                {table.getRowModel().rows.map((row) => (
-                  <tr key={row.id}>
-                    {row.getVisibleCells().map((cell) => (
-                      <td key={cell.id}>
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {!listQuery.isError && !authError ? (
+          <ResponsiveWorklistFrame
+            desktop={
+              <table className="operational-table">
+                <colgroup>
+                  <col className="col-identifier" />
+                  <col className="col-status" />
+                  <col />
+                  <col className="col-updated" />
+                </colgroup>
+                <thead>
+                  {table.getHeaderGroups().map((headerGroup) => (
+                    <tr key={headerGroup.id}>
+                      {headerGroup.headers.map((header) => (
+                        <th key={header.id}>
+                          {flexRender(header.column.columnDef.header, header.getContext())}
+                        </th>
+                      ))}
+                    </tr>
+                  ))}
+                </thead>
+                <tbody>
+                  {table.getRowModel().rows.map((row) => (
+                    <tr
+                      key={row.id}
+                      style={{ cursor: "pointer" }}
+                      onClick={(e) => {
+                        if ((e.target as HTMLElement).closest("button, a")) return;
+                        void navigate({
+                          to: "/requisicoes/$id",
+                          params: { id: String(row.original.id) },
+                        });
+                      }}
+                    >
+                      {row.getVisibleCells().map((cell) => (
+                        <td key={cell.id}>
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
           }
-          empty={<EmptyState />}
+          empty={<EmptyState hasFilters={hasFilters} />}
           isEmpty={rows.length === 0}
           isPending={listQuery.isPending}
           mobile={
@@ -357,33 +379,36 @@ function MinhasRequisicoesPage() {
             </div>
           }
           skeletonLabel="Carregando requisições"
-        />
-      ) : null}
+          />
+        ) : null}
 
-      <div className="pagination-bar">
-        <button
-          className="action-link compact-action"
-          disabled={currentPage <= 1 || listQuery.isPending}
-          onClick={() => void goToPage(currentPage - 1)}
-          type="button"
-        >
-          Anterior
-        </button>
-        <span>
-          Página {listQuery.data?.page ?? currentPage} de {listQuery.data?.total_pages ?? 1}
-        </span>
-        <button
-          className="action-link compact-action"
-          disabled={
-            listQuery.isPending ||
-            !listQuery.data ||
-            currentPage >= listQuery.data.total_pages
-          }
-          onClick={() => void goToPage(currentPage + 1)}
-          type="button"
-        >
-          Próxima
-        </button>
+        {!authError && !listQuery.isError ? (
+          <div className="pagination-bar">
+            <button
+              className="action-link compact-action"
+              disabled={currentPage <= 1 || listQuery.isPending}
+              onClick={() => void goToPage(currentPage - 1)}
+              type="button"
+            >
+              Anterior
+            </button>
+            <span>
+              Página {listQuery.data?.page ?? currentPage} de {listQuery.data?.total_pages ?? 1}
+            </span>
+            <button
+              className="action-link compact-action"
+              disabled={
+                listQuery.isPending ||
+                !listQuery.data ||
+                currentPage >= listQuery.data.total_pages
+              }
+              onClick={() => void goToPage(currentPage + 1)}
+              type="button"
+            >
+              Próxima
+            </button>
+          </div>
+        ) : null}
       </div>
     </section>
   );

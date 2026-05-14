@@ -5,7 +5,7 @@ import { z } from "zod";
 import { requireSession } from "../../features/auth/guards";
 import { meQueryOptions } from "../../features/auth/session";
 import { DraftRequisitionEditor } from "../../features/requisitions/DraftRequisitionEditor";
-import { draftStepSchema, type DraftStep } from "../../features/requisitions/draftSteps";
+import { canRequestForThirdParty, draftStepSchema, type DraftStep } from "../../features/requisitions/draftSteps";
 import { SupportErrorPanel } from "../../shared/ui/support-error";
 
 const draftSearchSchema = z.object({
@@ -47,9 +47,12 @@ function NovaRequisicaoPage() {
     return <div className="error-panel">Sessão indisponível.</div>;
   }
 
+  const resolvedEtapa =
+    etapa === "beneficiario" && !canRequestForThirdParty(sessionQuery.data) ? "itens" : etapa;
+
   return (
     <DraftRequisitionEditor
-      activeStep={etapa}
+      activeStep={resolvedEtapa}
       onStepChange={handleStepChange}
       session={sessionQuery.data}
     />

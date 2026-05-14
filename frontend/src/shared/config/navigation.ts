@@ -1,81 +1,44 @@
+import type { PapelOperacional } from "../../features/auth/session";
+
 type NavigationItem = {
   to:
-    | "/"
-    | "/login"
     | "/alertas"
-    | "/minhas-requisicoes"
-    | "/requisicoes/nova"
-    | "/requisicoes/$id"
+    | "/atendimentos"
     | "/autorizacoes"
-    | "/atendimentos";
+    | "/minhas-requisicoes"
+    | "/requisicoes/nova";
   label: string;
-  hint: string;
-  tag: string;
-  params?: {
-    id: string;
-  };
+  visibleFor?: PapelOperacional[];
   matches: (pathname: string) => boolean;
 };
 
 export const navigationItems: NavigationItem[] = [
   {
-    to: "/",
-    label: "Início",
-    hint: "shell",
-    tag: "Principal",
-    matches: (pathname: string) => pathname === "/",
-  },
-  {
-    to: "/login",
-    label: "Login",
-    hint: "#37",
-    tag: "Auth",
-    matches: (pathname: string) => pathname === "/login",
-  },
-  {
     to: "/minhas-requisicoes",
     label: "Minhas requisições",
-    hint: "#38",
-    tag: "Lista",
-    matches: (pathname: string) => pathname === "/minhas-requisicoes",
+    matches: (pathname) => pathname === "/minhas-requisicoes",
   },
   {
     to: "/requisicoes/nova",
     label: "Nova requisição",
-    hint: "#39",
-    tag: "Draft",
-    matches: (pathname: string) => pathname === "/requisicoes/nova",
-  },
-  {
-    to: "/requisicoes/$id",
-    params: {
-      id: "9001",
-    },
-    label: "Detalhe canônico",
-    hint: "#38",
-    tag: "Detail",
-    matches: (pathname: string) =>
-      pathname !== "/requisicoes/nova" && /^\/requisicoes\/[^/]+$/.test(pathname),
+    matches: (pathname) => pathname === "/requisicoes/nova",
   },
   {
     to: "/autorizacoes",
     label: "Fila de autorizações",
-    hint: "#40",
-    tag: "Queue",
-    matches: (pathname: string) => pathname === "/autorizacoes",
-  },
-  {
-    to: "/alertas",
-    label: "Alertas",
-    hint: "#67",
-    tag: "Push",
-    matches: (pathname: string) => pathname === "/alertas",
+    visibleFor: ["chefe_setor", "chefe_almoxarifado"],
+    matches: (pathname) => pathname === "/autorizacoes",
   },
   {
     to: "/atendimentos",
     label: "Fila de atendimento",
-    hint: "#41",
-    tag: "Queue",
-    matches: (pathname: string) => pathname === "/atendimentos",
+    visibleFor: ["auxiliar_almoxarifado", "chefe_almoxarifado"],
+    matches: (pathname) => pathname === "/atendimentos",
+  },
+  {
+    to: "/alertas",
+    label: "Alertas",
+    visibleFor: ["chefe_setor", "chefe_almoxarifado"],
+    matches: (pathname) => pathname === "/alertas",
   },
 ];

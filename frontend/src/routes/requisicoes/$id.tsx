@@ -11,7 +11,7 @@ import {
   meQueryOptions,
 } from "../../features/auth/session";
 import { DraftRequisitionEditor } from "../../features/requisitions/DraftRequisitionEditor";
-import { draftStepSchema, type DraftStep } from "../../features/requisitions/draftSteps";
+import { canRequestForThirdParty, draftStepSchema, type DraftStep } from "../../features/requisitions/draftSteps";
 import {
   authorizeRequisition,
   cancelAuthorizedRequisition,
@@ -70,19 +70,19 @@ export const Route = createFileRoute("/requisicoes/$id")({
 function QuantityBlock({ item }: { item: RequisicaoActionItem }) {
   return (
     <div className="quantity-grid">
-      <span>
+      <span className="quantity-solicitada">
         Solicitado
         <strong>
           {formatQuantity(item.quantidade_solicitada)} {item.unidade_medida}
         </strong>
       </span>
-      <span>
+      <span className="quantity-autorizada">
         Autorizado
         <strong>
           {formatQuantity(item.quantidade_autorizada)} {item.unidade_medida}
         </strong>
       </span>
-      <span>
+      <span className="quantity-entregue">
         Entregue
         <strong>
           {formatQuantity(item.quantidade_entregue)} {item.unidade_medida}
@@ -1310,9 +1310,12 @@ function DetalheRequisicaoPage() {
     if (!sessionQuery.data) {
       return <div className="error-panel">Sessão indisponível.</div>;
     }
+    const resolvedEtapa =
+      etapa === "beneficiario" && !canRequestForThirdParty(sessionQuery.data) ? "itens" : etapa;
+
     return (
       <DraftRequisitionEditor
-        activeStep={etapa}
+        activeStep={resolvedEtapa}
         initialRequisition={requisicao}
         onStepChange={handleDraftStepChange}
         session={sessionQuery.data}

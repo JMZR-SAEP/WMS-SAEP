@@ -1,9 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 import saepLogoUrl from "../../assets/saep-logo.webp";
-import { authQueryKeys, logoutSession, meQueryOptions } from "../../features/auth/session";
+import { authQueryKeys, isPapelOperacional, logoutSession, meQueryOptions } from "../../features/auth/session";
 import {
   formatNotificationDate,
   markNotificationRead,
@@ -22,10 +22,17 @@ import {
   reportPushDiagnosticIfNeeded,
   updateAppBadge,
 } from "../../features/pwa/push";
-import { PushStatusWarning } from "../../features/pwa/PushStatusWarning";
 import { pendingApprovalsQueryOptions } from "../../features/requisitions/requisitions";
 import { navigationItems } from "../../shared/config/navigation";
 import { SupportErrorPanel } from "../../shared/ui/support-error";
+
+const PAPEL_LABEL: Record<string, string> = {
+  solicitante: "Solicitante",
+  auxiliar_setor: "Auxiliar de setor",
+  chefe_setor: "Chefe de setor",
+  auxiliar_almoxarifado: "Auxiliar de almoxarifado",
+  chefe_almoxarifado: "Chefe de almoxarifado",
+};
 
 export function AppShell() {
   const location = useLocation();
@@ -73,17 +80,21 @@ export function AppShell() {
   const unreadCount = unreadCountQuery.data?.unread_count ?? 0;
   const pushDiagnostic =
     pushRole && pushConfigQuery.isSuccess ? getPushDiagnostic(pushConfigQuery.data) : null;
+  const pushUnsupported = pushDiagnostic?.status === "sem_suporte";
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
 
   useEffect(() => {
     if (
       session &&
       isPushOnboardingPapel(session.papel) &&
       location.pathname !== "/alertas" &&
-      !hasSeenPushOnboarding(session)
+      !hasSeenPushOnboarding(session) &&
+      pushConfigQuery.isSuccess &&
+      !pushUnsupported
     ) {
       void navigate({ to: "/alertas" });
     }
-  }, [location.pathname, navigate, session]);
+  }, [location.pathname, navigate, session, pushUnsupported, pushConfigQuery.isSuccess]);
 
   useEffect(() => {
     if (!session || !pushDiagnostic || pushDiagnostic.status === "ativo") {
@@ -129,171 +140,196 @@ export function AppShell() {
     <div className="min-h-screen bg-[var(--page-bg)] text-[var(--ink-strong)]">
       <div className="mx-auto flex min-h-screen max-w-[1440px] flex-col gap-4 px-3 py-3 sm:px-4 lg:flex-row lg:px-6">
         <aside className="glass-panel mb-4 w-full shrink-0 overflow-hidden lg:mb-0 lg:w-[320px]">
-          <div className="border-b border-[var(--line-soft)] px-4 py-5 sm:px-6">
-            <img className="brand-logo" src={saepLogoUrl} alt="SAEP" />
-            <h1 className="mt-4 text-2xl font-bold leading-tight">WMS-SAEP</h1>
-            <p className="mt-2 max-w-[30ch] text-sm text-[var(--ink-soft)]">
-              Almoxarifado do piloto para requisições, autorizações e atendimento.
-            </p>
+          <div className="border-b border-[var(--line-soft)] px-4 py-3 sm:px-6 sm:py-5">
+            <img className="brand-logo mx-auto" src={saepLogoUrl} alt="SAEP" />
+            <h1 className="mt-3 text-center text-xl font-bold leading-tight sm:text-2xl">WMS-SAEP</h1>
           </div>
 
-          <nav className="space-y-2 px-4 py-4">
-            {navigationItems.map((item) => {
-              const active = item.matches(location.pathname);
-              const className = active ? "nav-link nav-link-active" : "nav-link nav-link-idle";
-              const linkProps = item.params ? { to: item.to, params: item.params } : { to: item.to };
-              const navContent = (
-                <>
-                  <div>
-                    <p className="text-[0.75rem] font-bold uppercase text-[var(--ink-muted)]">
-                      {item.tag}
-                    </p>
-                    <p className="mt-1 text-base font-semibold text-[var(--ink-strong)]">
+          <nav className="space-y-1 px-3 py-3 sm:px-4" aria-label="Navegação principal">
+            {navigationItems
+              .filter((item) => {
+                if (item.visibleFor && !(session && isPapelOperacional(session.papel) && item.visibleFor.includes(session.papel))) {
+                  return false;
+                }
+                if (item.to === "/alertas" && pushUnsupported) {
+                  return false;
+                }
+                return true;
+              })
+              .map((item) => {
+                const active = item.matches(location.pathname);
+                const className = active ? "nav-link nav-link-active" : "nav-link nav-link-idle";
+                return (
+                  <Link
+                    key={item.label}
+                    to={item.to}
+                    className={className}
+                    aria-current={active ? "page" : undefined}
+                  >
+                    <span className="text-sm font-semibold text-[var(--ink-strong)]">
                       {item.label}
-                    </p>
-                  </div>
-                  <span className="text-sm text-[var(--ink-soft)]">{item.hint}</span>
-                </>
-              );
-
-              return (
-                <Link key={item.label} {...linkProps} className={className}>
-                  {navContent}
-                </Link>
-              );
-            })}
+                    </span>
+                  </Link>
+                );
+              })}
           </nav>
 
-          <div className="border-t border-[var(--line-soft)] px-4 py-5 sm:px-6">
+          <div className="border-t border-[var(--line-soft)] px-3 py-3 sm:px-4 sm:py-4">
             {session ? (
               <div className="space-y-3">
-                <p className="text-xs font-bold uppercase text-[var(--ink-muted)]">
-                  Sessão atual
-                </p>
-                <div>
-                  <p className="text-sm font-semibold text-[var(--ink-strong)]">
-                    {session.nome_completo}
-                  </p>
-                  <p className="mt-1 text-xs font-bold uppercase text-[var(--ink-muted)]">
-                    {session.papel}
-                  </p>
-                  {session.setor ? (
-                    <p className="mt-2 text-sm text-[var(--ink-soft)]">{session.setor.nome}</p>
-                  ) : null}
-                </div>
-                {pushDiagnostic ? <PushStatusWarning diagnostic={pushDiagnostic} /> : null}
-                <div className="notifications-panel">
-                  <div className="notifications-header">
-                    <p className="text-xs font-bold uppercase text-[var(--ink-muted)]">
+<div className="notifications-panel">
+                  <button
+                    aria-expanded={notificationsOpen}
+                    className="notifications-header"
+                    onClick={() => setNotificationsOpen((o) => !o)}
+                    type="button"
+                  >
+                    <p className="notifications-header-label text-xs font-bold uppercase text-[var(--ink-muted)]">
                       Notificações
                     </p>
-                    <span className="notifications-count">{unreadCount}</span>
-                  </div>
+                    <div className="flex items-center gap-2">
+                      <span className="notifications-count">{unreadCount}</span>
+                      <svg
+                        aria-hidden="true"
+                        className={notificationsOpen ? "notifications-chevron open" : "notifications-chevron"}
+                        fill="none"
+                        height="12"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                        viewBox="0 0 12 12"
+                        width="12"
+                      >
+                        <path d="M2 4l4 4 4-4" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </div>
+                  </button>
 
-                  {notificationsQuery.isLoading || unreadCountQuery.isLoading ? (
-                    <p className="notifications-empty">Carregando notificações...</p>
-                  ) : null}
+                  {notificationsOpen ? (
+                    <div className="mt-2">
+                      {notificationsQuery.isLoading || unreadCountQuery.isLoading ? (
+                        <p className="notifications-empty">Carregando notificações...</p>
+                      ) : null}
 
-                  {notificationsQuery.isError || unreadCountQuery.isError ? (
-                    <SupportErrorPanel
-                      error={notificationsQuery.error ?? unreadCountQuery.error}
-                      fallback="Não foi possível carregar notificações."
-                    />
-                  ) : null}
+                      {notificationsQuery.isError || unreadCountQuery.isError ? (
+                        <SupportErrorPanel
+                          error={notificationsQuery.error ?? unreadCountQuery.error}
+                          fallback="Não foi possível carregar notificações."
+                        />
+                      ) : null}
 
-                  {!notificationsQuery.isLoading &&
-                  !unreadCountQuery.isLoading &&
-                  !notificationsQuery.isError &&
-                  !unreadCountQuery.isError &&
-                  notifications.length === 0 ? (
-                    <p className="notifications-empty">Sem notificações no momento.</p>
-                  ) : null}
+                      {!notificationsQuery.isLoading &&
+                      !unreadCountQuery.isLoading &&
+                      !notificationsQuery.isError &&
+                      !unreadCountQuery.isError &&
+                      notifications.length === 0 ? (
+                        <p className="notifications-empty">Sem notificações no momento.</p>
+                      ) : null}
 
-                  {!notificationsQuery.isLoading &&
-                  !unreadCountQuery.isLoading &&
-                  !notificationsQuery.isError &&
-                  !unreadCountQuery.isError &&
-                  notifications.length > 0 ? (
-                    <ul className="notifications-list">
-                      {notifications.map((notification) => {
-                        const relatedObject = notification.objeto_relacionado;
-                        const context = notificationOperationalContext(notification.tipo);
-                        const contextLabel = notificationOperationalLabel(notification.tipo);
+                      {!notificationsQuery.isLoading &&
+                      !unreadCountQuery.isLoading &&
+                      !notificationsQuery.isError &&
+                      !unreadCountQuery.isError &&
+                      notifications.length > 0 ? (
+                        <ul className="notifications-list">
+                          {notifications.map((notification) => {
+                            const relatedObject = notification.objeto_relacionado;
+                            const context = notificationOperationalContext(notification.tipo);
+                            const contextLabel = notificationOperationalLabel(notification.tipo);
 
-                        return (
-                          <li className="notification-item" key={notification.id}>
-                            <div className="notification-meta">
-                              <strong>{notification.titulo}</strong>
-                              <span>{formatNotificationDate(notification.created_at)}</span>
-                            </div>
-                            <p className="notification-message">{notification.mensagem}</p>
+                            return (
+                              <li className="notification-item" key={notification.id}>
+                                <div className="notification-meta">
+                                  <strong>{notification.titulo}</strong>
+                                  <span>{formatNotificationDate(notification.created_at)}</span>
+                                </div>
+                                <p className="notification-message">{notification.mensagem}</p>
 
-                            {notification.destino.tipo === "papel" ? (
-                              <span className="notification-badge">Aviso coletivo</span>
-                            ) : null}
-
-                            {relatedObject?.tipo === "requisicao" ? (
-                              <div className="notification-links">
-                                <Link
-                                  className="notification-link"
-                                  params={{ id: String(relatedObject.id) }}
-                                  search={
-                                    context
-                                      ? {
-                                          contexto: context,
-                                        }
-                                      : undefined
-                                  }
-                                  to="/requisicoes/$id"
-                                >
-                                  Abrir requisição
-                                </Link>
-                                {contextLabel ? (
-                                  <span className="notification-context">{contextLabel}</span>
+                                {notification.destino.tipo === "papel" ? (
+                                  <span className="notification-badge">Aviso coletivo</span>
                                 ) : null}
-                              </div>
-                            ) : null}
 
-                            {notification.leitura_suportada && !notification.lida ? (
-                              <button
-                                className="notification-read-button"
-                                disabled={markReadMutation.isPending}
-                                onClick={() => {
-                                  markReadMutation.reset();
-                                  markReadMutation.mutate(notification.id);
-                                }}
-                                type="button"
-                              >
-                                Marcar como lida
-                              </button>
-                            ) : null}
-                          </li>
-                        );
-                      })}
-                    </ul>
+                                {relatedObject?.tipo === "requisicao" ? (
+                                  <div className="notification-links">
+                                    <Link
+                                      className="notification-link"
+                                      params={{ id: String(relatedObject.id) }}
+                                      search={
+                                        context
+                                          ? {
+                                              contexto: context,
+                                            }
+                                          : undefined
+                                      }
+                                      to="/requisicoes/$id"
+                                    >
+                                      Abrir requisição
+                                    </Link>
+                                    {contextLabel ? (
+                                      <span className="notification-context">{contextLabel}</span>
+                                    ) : null}
+                                  </div>
+                                ) : null}
+
+                                {notification.leitura_suportada && !notification.lida ? (
+                                  <button
+                                    className="notification-read-button"
+                                    disabled={markReadMutation.isPending}
+                                    onClick={() => {
+                                      markReadMutation.reset();
+                                      markReadMutation.mutate(notification.id);
+                                    }}
+                                    type="button"
+                                  >
+                                    Marcar como lida
+                                  </button>
+                                ) : null}
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      ) : null}
+
+                      {markReadMutation.isError ? (
+                        <SupportErrorPanel
+                          error={markReadMutation.error}
+                          fallback="Não foi possível marcar notificação como lida."
+                        />
+                      ) : null}
+                    </div>
                   ) : null}
-
-                  {markReadMutation.isError ? (
+                </div>
+                <div className="session-footer">
+                  <div>
+                    <p className="text-xs font-bold uppercase text-[var(--ink-muted)]">
+                      Sessão atual
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-[var(--ink-strong)]">
+                      {session.nome_completo}
+                    </p>
+                    <div className="mt-1 flex flex-wrap items-center gap-1">
+                      <span className="session-role-badge">
+                        {PAPEL_LABEL[session.papel] ?? session.papel}
+                      </span>
+                      {session.setor ? (
+                        <span className="text-xs text-[var(--ink-muted)]">{session.setor.nome}</span>
+                      ) : null}
+                    </div>
+                  </div>
+                  <button
+                    className="sidebar-logout"
+                    disabled={logoutMutation.isPending}
+                    onClick={() => logoutMutation.mutate()}
+                    type="button"
+                  >
+                    {logoutMutation.isPending ? "Saindo..." : "Sair"}
+                  </button>
+                  {logoutMutation.isError ? (
                     <SupportErrorPanel
-                      error={markReadMutation.error}
-                      fallback="Não foi possível marcar notificação como lida."
+                      error={logoutMutation.error}
+                      fallback="Não foi possível sair. Tente novamente."
                     />
                   ) : null}
                 </div>
-                <button
-                  className="preview-button w-full"
-                  disabled={logoutMutation.isPending}
-                  onClick={() => logoutMutation.mutate()}
-                  type="button"
-                >
-                  {logoutMutation.isPending ? "Saindo..." : "Sair"}
-                </button>
-                {logoutMutation.isError ? (
-                  <SupportErrorPanel
-                    error={logoutMutation.error}
-                    fallback="Não foi possível sair. Tente novamente."
-                  />
-                ) : null}
               </div>
             ) : (
               <>
