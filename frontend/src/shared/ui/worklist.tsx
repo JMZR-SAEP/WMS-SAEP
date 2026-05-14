@@ -43,7 +43,7 @@ export function WorklistEmptyState({
     <div className="empty-state">
       <p className="eyebrow">{eyebrow}</p>
       <h2>{title}</h2>
-      <p>{description}</p>
+      <p className="empty-state-description">{description}</p>
     </div>
   );
 }

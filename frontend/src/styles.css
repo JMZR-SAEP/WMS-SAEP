@@ -475,9 +475,9 @@ button:disabled {
 
 .worklist-header h1,
 .detail-hero h1 {
-  margin-top: 0.75rem;
+  margin-top: 0.5rem;
   font-family: inherit;
-  font-size: 2.25rem;
+  font-size: 1.8rem;
   line-height: 1.1;
   color: var(--ink-strong);
 }
@@ -486,6 +486,27 @@ button:disabled {
 .detail-hero p {
   max-width: 52ch;
   color: var(--ink-soft);
+}
+
+.page-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-top: 0.3rem;
+}
+
+.page-title-row h1 {
+  margin-top: 0;
+}
+
+.records-count {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+  letter-spacing: 0;
+  white-space: nowrap;
 }
 
 .filters-bar {
@@ -497,6 +518,15 @@ button:disabled {
 
 .filters-submit {
   min-width: 9rem;
+  background: #ffffff;
+  border: 1px solid var(--line-soft);
+  color: var(--ink-soft);
+}
+
+.filters-submit:hover:not(:disabled) {
+  background: var(--panel-strong);
+  border-color: var(--line-strong);
+  color: var(--ink-strong);
 }
 
 .table-frame,
@@ -554,6 +584,13 @@ button:disabled {
   text-transform: uppercase;
 }
 
+.req-identifier {
+  font-size: 0.97rem;
+  font-weight: 800;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
 .draft-badge {
   background: #edf2f7;
   color: var(--ink-soft);
@@ -579,12 +616,14 @@ button:disabled {
 .req-status-autorizada {
   background: #fff8e1;
   color: var(--warning);
+  border-color: #f0d79c;
 }
 
 .req-status-atendida,
 .req-status-atendida_parcialmente {
   background: #e6f4ee;
   color: var(--success);
+  border-color: #b2d9c5;
 }
 
 .req-status-recusada,
@@ -592,6 +631,7 @@ button:disabled {
 .req-status-estornada {
   background: #fff1f1;
   color: var(--danger);
+  border-color: #f1caca;
 }
 
 .compact-action {
@@ -606,12 +646,36 @@ button:disabled {
   opacity: 0.45;
 }
 
+.worklist-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.list-frame-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.col-identifier { width: 13rem; }
+.col-status { width: 10rem; }
+.col-updated { width: 12rem; }
+.col-actions { width: 6.75rem; }
+
+.operational-table td:last-child,
+.operational-table th:last-child {
+  text-align: right;
+}
+
 .pagination-bar {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 1rem;
   color: var(--ink-soft);
+  border-top: 1px solid var(--line-soft);
+  padding-top: 0.6rem;
 }
 
 .loading-state,
@@ -621,11 +685,20 @@ button:disabled {
   color: var(--ink-soft);
 }
 
+.table-frame .empty-state {
+  text-align: center;
+}
+
 .empty-state h2,
 .empty-state h3 {
   margin-top: 0.55rem;
   font-size: 1.35rem;
   color: var(--ink-strong);
+}
+
+.empty-state-description {
+  margin-top: 0.35rem;
+  font-size: 0.88rem;
 }
 
 .error-panel {
@@ -1167,8 +1240,7 @@ button:disabled {
   }
 
   .worklist-header,
-  .detail-hero,
-  .pagination-bar {
+  .detail-hero {
     align-items: stretch;
     flex-direction: column;
   }
