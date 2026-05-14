@@ -117,7 +117,7 @@ test("opens minhas requisicoes and canonical detail with real data", async ({ pa
   await loginAs(page, "solicitante1", /\/minhas-requisicoes(?:\?.*)?$/);
 
   await expect(page.getByRole("heading", { name: "Minhas requisições" })).toBeVisible();
-  await page.getByRole("link", { name: /Abrir/ }).first().click();
+  await page.locator(".operational-table tbody tr").first().click();
 
   await expect(page).toHaveURL(/\/requisicoes\/\d+$/);
   await expect(page.getByRole("heading", { name: /REQ-\d{4}-\d+/ })).toBeVisible();
@@ -301,7 +301,7 @@ test("authorizes pending requisition from worklist", async ({ page }) => {
   });
 
   await expect(page.getByRole("heading", { name: "Fila de autorizações" })).toBeVisible();
-  await page.getByRole("link", { name: /Abrir/ }).first().click();
+  await page.locator(".operational-table tbody tr").first().click();
 
   await expect(page).toHaveURL(/\/requisicoes\/\d+\?/);
   expectDetailContextUrl(page.url(), "autorizacao");
@@ -314,7 +314,7 @@ test("fulfills authorized requisition from worklist", async ({ page }) => {
   await loginAs(page, "auxiliar-almox", /\/atendimentos(?:\?.*)?$/);
 
   await expect(page.getByRole("heading", { name: "Fila de atendimento" })).toBeVisible();
-  await page.getByRole("link", { name: /Abrir/ }).first().click();
+  await page.locator(".operational-table tbody tr").first().click();
 
   await expect(page).toHaveURL(/\/requisicoes\/\d+\?/);
   expectDetailContextUrl(page.url(), "atendimento");
