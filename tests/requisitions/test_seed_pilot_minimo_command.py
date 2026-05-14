@@ -94,17 +94,17 @@ class TestSeedPilotMinimoCommand:
             StatusRequisicao.RASCUNHO,
             StatusRequisicao.AGUARDANDO_AUTORIZACAO,
             StatusRequisicao.AUTORIZADA,
-            StatusRequisicao.ATENDIDA_PARCIALMENTE,
+            StatusRequisicao.PRONTA_PARA_RETIRADA_PARCIAL,
             StatusRequisicao.RASCUNHO,
             StatusRequisicao.AGUARDANDO_AUTORIZACAO,
             StatusRequisicao.RASCUNHO,
             StatusRequisicao.AGUARDANDO_AUTORIZACAO,
             StatusRequisicao.AUTORIZADA,
-            StatusRequisicao.ATENDIDA_PARCIALMENTE,
+            StatusRequisicao.PRONTA_PARA_RETIRADA_PARCIAL,
             StatusRequisicao.RASCUNHO,
             StatusRequisicao.AGUARDANDO_AUTORIZACAO,
             StatusRequisicao.AUTORIZADA,
-            StatusRequisicao.ATENDIDA,
+            StatusRequisicao.PRONTA_PARA_RETIRADA,
         ]
 
         (
@@ -166,17 +166,17 @@ class TestSeedPilotMinimoCommand:
             StatusRequisicao.RASCUNHO,
             StatusRequisicao.AGUARDANDO_AUTORIZACAO,
             StatusRequisicao.AUTORIZADA,
-            StatusRequisicao.ATENDIDA_PARCIALMENTE,
+            StatusRequisicao.PRONTA_PARA_RETIRADA_PARCIAL,
             StatusRequisicao.RASCUNHO,
             StatusRequisicao.AGUARDANDO_AUTORIZACAO,
             StatusRequisicao.RASCUNHO,
             StatusRequisicao.AGUARDANDO_AUTORIZACAO,
             StatusRequisicao.AUTORIZADA,
-            StatusRequisicao.ATENDIDA_PARCIALMENTE,
+            StatusRequisicao.PRONTA_PARA_RETIRADA_PARCIAL,
             StatusRequisicao.RASCUNHO,
             StatusRequisicao.AGUARDANDO_AUTORIZACAO,
             StatusRequisicao.AUTORIZADA,
-            StatusRequisicao.ATENDIDA,
+            StatusRequisicao.PRONTA_PARA_RETIRADA,
         ]
 
     def test_seed_reconcilia_beneficiario_do_cenario_secundario_terceiro(self):

@@ -328,8 +328,7 @@ export async function pickupRequisition(
       "/api/v1/requisitions/{id}/pickup/",
     );
   }
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error, response } = await (apiClient as any).POST(
+  const { data, error, response } = await apiClient.POST(
     "/api/v1/requisitions/{id}/pickup/",
     {
       params: {

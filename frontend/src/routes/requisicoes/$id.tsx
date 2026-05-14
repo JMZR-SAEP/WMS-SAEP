@@ -364,7 +364,7 @@ function buildRequisicaoRedirect({
   id,
 }: {
   sourcePage: number | undefined;
-  contexto: "autorizacao" | "atendimento" | undefined;
+  contexto: "autorizacao" | "atendimento" | "retirada" | undefined;
   etapa?: DraftStep;
   id: string;
 }) {
@@ -1014,10 +1014,8 @@ type PickupMutationArgs = {
 
 function PickupPanel({
   requisicao,
-  fulfillmentPage,
 }: {
   requisicao: RequisicaoDetail;
-  fulfillmentPage: number | undefined;
 }) {
   const queryClient = useQueryClient();
   const [retiranteFisico, setRetiranteFisico] = useState("");
@@ -1029,8 +1027,8 @@ function PickupPanel({
       pickupRequisition(requisicao.id, input, idempotencyKey),
     onSuccess: (data) => {
       queryClient.setQueryData(requisitionDetailQueryOptions(requisicao.id).queryKey, data);
-      queryClient.invalidateQueries({
-        queryKey: requisitionsQueryKeys.pendingFulfillments(fulfillmentPage),
+      void queryClient.invalidateQueries({
+        queryKey: requisitionsQueryKeys.pendingFulfillmentsAll,
       });
     },
   });
@@ -1108,7 +1106,7 @@ function DetailHeader({
   sourcePage,
 }: {
   backTo: "/autorizacoes" | "/atendimentos" | "/minhas-requisicoes";
-  contexto: "autorizacao" | "atendimento" | undefined;
+  contexto: "autorizacao" | "atendimento" | "retirada" | undefined;
   requisicao: RequisicaoDetail;
   sourcePage: number | undefined;
 }) {
@@ -1297,7 +1295,7 @@ function ContextualActionPanel({
   requisicao,
   sourcePage,
 }: {
-  contexto: "autorizacao" | "atendimento" | undefined;
+  contexto: "autorizacao" | "atendimento" | "retirada" | undefined;
   requisicao: RequisicaoDetail;
   sourcePage: number | undefined;
 }) {
@@ -1330,7 +1328,6 @@ function ContextualActionPanel({
   ) {
     return (
       <PickupPanel
-        fulfillmentPage={sourcePage}
         key={requisicao.id}
         requisicao={requisicao}
       />
