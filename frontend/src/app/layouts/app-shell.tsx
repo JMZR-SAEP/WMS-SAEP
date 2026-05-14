@@ -89,11 +89,12 @@ export function AppShell() {
       isPushOnboardingPapel(session.papel) &&
       location.pathname !== "/alertas" &&
       !hasSeenPushOnboarding(session) &&
+      pushConfigQuery.isSuccess &&
       !pushUnsupported
     ) {
       void navigate({ to: "/alertas" });
     }
-  }, [location.pathname, navigate, session, pushUnsupported]);
+  }, [location.pathname, navigate, session, pushUnsupported, pushConfigQuery.isSuccess]);
 
   useEffect(() => {
     if (!session || !pushDiagnostic || pushDiagnostic.status === "ativo") {

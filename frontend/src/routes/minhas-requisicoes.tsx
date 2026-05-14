@@ -368,8 +368,8 @@ function MinhasRequisicoesPage() {
                       }}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
                           if (!((e.target as HTMLElement).closest("button, a"))) {
+                            e.preventDefault();
                             void navigate({
                               to: "/requisicoes/$id",
                               params: { id: String(row.original.id) },

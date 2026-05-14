@@ -567,6 +567,9 @@ button:disabled {
 .operational-table tbody tr:hover,
 .operational-table tbody tr:focus-visible {
   background: var(--panel-strong);
+}
+
+.operational-table tbody tr:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
 }

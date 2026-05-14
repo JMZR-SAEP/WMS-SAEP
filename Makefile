@@ -122,7 +122,7 @@ seed-pilot-minimo: ## Carregar seed minima oficial do piloto
 	DJANGO_SETTINGS_MODULE=$(DJANGO_SETTINGS_MODULE) $(DJANGO_ADMIN) seed_pilot_minimo
 
 resetdb: resetpostgres ## Recriar schema do banco do zero sem apagar migrations locais (usado por E2E)
-	DJANGO_SETTINGS_MODULE=$(DJANGO_SETTINGS_MODULE) $(DJANGO_ADMIN) makemigrations
+	DJANGO_SETTINGS_MODULE=$(DJANGO_SETTINGS_MODULE) $(DJANGO_ADMIN) makemigrations --check --dry-run
 	DJANGO_SETTINGS_MODULE=$(DJANGO_SETTINGS_MODULE) $(DJANGO_ADMIN) migrate --run-syncdb
 
 run: ## Subir servidor de desenvolvimento
