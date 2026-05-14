@@ -1,3 +1,5 @@
+import type { PapelOperacional } from "../../features/auth/session";
+
 type NavigationItem = {
   to:
     | "/alertas"
@@ -6,7 +8,7 @@ type NavigationItem = {
     | "/minhas-requisicoes"
     | "/requisicoes/nova";
   label: string;
-  visibleFor?: string[];
+  visibleFor?: PapelOperacional[];
   matches: (pathname: string) => boolean;
 };
 

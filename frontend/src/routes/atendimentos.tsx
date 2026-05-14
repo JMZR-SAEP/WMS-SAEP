@@ -297,6 +297,7 @@ function AtendimentosPage() {
                   <tr
                     key={row.id}
                     style={{ cursor: "pointer" }}
+                    tabIndex={0}
                     onClick={(e) => {
                       if ((e.target as HTMLElement).closest("button, a")) return;
                       void navigate({
@@ -304,6 +305,18 @@ function AtendimentosPage() {
                         params: { id: String(row.original.id) },
                         search: { contexto: "atendimento", page: currentPage === 1 ? undefined : currentPage },
                       });
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        if (!((e.target as HTMLElement).closest("button, a"))) {
+                          void navigate({
+                            to: "/requisicoes/$id",
+                            params: { id: String(row.original.id) },
+                            search: { contexto: "atendimento", page: currentPage === 1 ? undefined : currentPage },
+                          });
+                        }
+                      }
                     }}
                   >
                     {row.getVisibleCells().map((cell) => (

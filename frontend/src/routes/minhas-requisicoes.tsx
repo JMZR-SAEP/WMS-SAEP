@@ -358,12 +358,24 @@ function MinhasRequisicoesPage() {
                     <tr
                       key={row.id}
                       style={{ cursor: "pointer" }}
+                      tabIndex={0}
                       onClick={(e) => {
                         if ((e.target as HTMLElement).closest("button, a")) return;
                         void navigate({
                           to: "/requisicoes/$id",
                           params: { id: String(row.original.id) },
                         });
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          if (!((e.target as HTMLElement).closest("button, a"))) {
+                            void navigate({
+                              to: "/requisicoes/$id",
+                              params: { id: String(row.original.id) },
+                            });
+                          }
+                        }
                       }}
                     >
                       {row.getVisibleCells().map((cell) => (

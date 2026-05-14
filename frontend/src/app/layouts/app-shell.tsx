@@ -3,7 +3,7 @@ import { Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
 import saepLogoUrl from "../../assets/saep-logo.webp";
-import { authQueryKeys, logoutSession, meQueryOptions } from "../../features/auth/session";
+import { authQueryKeys, isPapelOperacional, logoutSession, meQueryOptions } from "../../features/auth/session";
 import {
   formatNotificationDate,
   markNotificationRead,
@@ -88,11 +88,12 @@ export function AppShell() {
       session &&
       isPushOnboardingPapel(session.papel) &&
       location.pathname !== "/alertas" &&
-      !hasSeenPushOnboarding(session)
+      !hasSeenPushOnboarding(session) &&
+      !pushUnsupported
     ) {
       void navigate({ to: "/alertas" });
     }
-  }, [location.pathname, navigate, session]);
+  }, [location.pathname, navigate, session, pushUnsupported]);
 
   useEffect(() => {
     if (!session || !pushDiagnostic || pushDiagnostic.status === "ativo") {
@@ -146,7 +147,7 @@ export function AppShell() {
           <nav className="space-y-1 px-3 py-3 sm:px-4" aria-label="Navegação principal">
             {navigationItems
               .filter((item) => {
-                if (item.visibleFor && !(session && item.visibleFor.includes(session.papel))) {
+                if (item.visibleFor && !(session && isPapelOperacional(session.papel) && item.visibleFor.includes(session.papel))) {
                   return false;
                 }
                 if (item.to === "/alertas" && pushUnsupported) {

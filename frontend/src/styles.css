@@ -564,8 +564,11 @@ button:disabled {
   border-bottom: 0;
 }
 
-.operational-table tbody tr:hover {
+.operational-table tbody tr:hover,
+.operational-table tbody tr:focus-visible {
   background: var(--panel-strong);
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
 .req-status,
