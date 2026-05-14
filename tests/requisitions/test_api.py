@@ -2117,6 +2117,17 @@ class TestRequisicaoAPI:
         material.estoque.refresh_from_db()
         assert requisicao.eventos.filter(tipo_evento=TipoEvento.ATENDIMENTO).exists()
         assert item.quantidade_entregue == Decimal("3")
+        assert material.estoque.saldo_fisico == Decimal("7")
+        assert material.estoque.saldo_reservado == Decimal("3")
+
+        pickup_response = client.post(
+            reverse("requisicao-pickup", args=[requisicao.id]),
+            {"retirante_fisico": "Servidor Retirador"},
+            format="json",
+            **self._idempotency_header("pickup-completo-test-fulfill"),
+        )
+        assert pickup_response.status_code == 200
+        material.estoque.refresh_from_db()
         assert material.estoque.saldo_fisico == Decimal("4")
         assert material.estoque.saldo_reservado == Decimal("0")
 
@@ -2232,8 +2243,8 @@ class TestRequisicaoAPI:
         assert EventoTimeline.objects.filter(requisicao=requisicao).count() == timeline_count
         assert Notificacao.objects.filter(object_id=requisicao.id).count() == notification_count
         material.estoque.refresh_from_db()
-        assert material.estoque.saldo_fisico == Decimal("6")
-        assert material.estoque.saldo_reservado == Decimal("0")
+        assert material.estoque.saldo_fisico == Decimal("7")
+        assert material.estoque.saldo_reservado == Decimal("3")
 
     def test_fulfill_mesma_chave_payload_diferente_retorna_domain_conflict_sem_efeitos(self):
         setor = self._criar_setor("Manutencao Chave Conflito", "90140")
@@ -2309,8 +2320,8 @@ class TestRequisicaoAPI:
         assert EventoTimeline.objects.filter(requisicao=requisicao).count() == timeline_count
         assert Notificacao.objects.filter(object_id=requisicao.id).count() == notification_count
         material.estoque.refresh_from_db()
-        assert material.estoque.saldo_fisico == Decimal("6")
-        assert material.estoque.saldo_reservado == Decimal("0")
+        assert material.estoque.saldo_fisico == Decimal("7")
+        assert material.estoque.saldo_reservado == Decimal("3")
 
     def test_fulfill_com_itens_registra_atendimento_parcial_e_libera_reserva(self):
         setor = self._criar_setor("Manutencao Parcial", "90039")
@@ -2372,6 +2383,21 @@ class TestRequisicaoAPI:
         material.estoque.refresh_from_db()
         assert requisicao.eventos.filter(tipo_evento=TipoEvento.ATENDIMENTO_PARCIAL).exists()
         assert item.quantidade_entregue == Decimal("1")
+        assert material.estoque.saldo_fisico == Decimal("7")
+        assert material.estoque.saldo_reservado == Decimal("3")
+        assert not MovimentacaoEstoque.objects.filter(
+            requisicao=requisicao,
+            tipo=TipoMovimentacao.SAIDA_POR_ATENDIMENTO,
+        ).exists()
+
+        pickup_response = client.post(
+            reverse("requisicao-pickup", args=[requisicao.id]),
+            {"retirante_fisico": "Servidor Retirador"},
+            format="json",
+            **self._idempotency_header("pickup-parcial-test-fulfill"),
+        )
+        assert pickup_response.status_code == 200
+        material.estoque.refresh_from_db()
         assert material.estoque.saldo_fisico == Decimal("6")
         assert material.estoque.saldo_reservado == Decimal("0")
         assert MovimentacaoEstoque.objects.filter(
@@ -2456,6 +2482,21 @@ class TestRequisicaoAPI:
         assert item_total.justificativa_atendimento_parcial == ""
         assert item_parcial.quantidade_entregue == Decimal("2")
         assert item_parcial.justificativa_atendimento_parcial == "Retirada parcial solicitada"
+        assert material_total.estoque.saldo_fisico == Decimal("10")
+        assert material_total.estoque.saldo_reservado == Decimal("4")
+        assert material_parcial.estoque.saldo_fisico == Decimal("10")
+        assert material_parcial.estoque.saldo_reservado == Decimal("5")
+        assert not MovimentacaoEstoque.objects.filter(requisicao=requisicao).exists()
+
+        pickup_response = client.post(
+            reverse("requisicao-pickup", args=[requisicao.id]),
+            {"retirante_fisico": "Servidor Retirador"},
+            format="json",
+            **self._idempotency_header("pickup-multi-item-test-fulfill"),
+        )
+        assert pickup_response.status_code == 200
+        material_total.estoque.refresh_from_db()
+        material_parcial.estoque.refresh_from_db()
         assert material_total.estoque.saldo_fisico == Decimal("6")
         assert material_total.estoque.saldo_reservado == Decimal("0")
         assert material_parcial.estoque.saldo_fisico == Decimal("8")
@@ -3160,7 +3201,7 @@ class TestRequisicaoAPI:
             papel=PapelChoices.AUXILIAR_ALMOXARIFADO,
             setor=setor,
         )
-        material = self._criar_material_com_estoque("001.001.880")
+        material = self._criar_material_com_estoque("001.001.880", saldo_reservado=Decimal("2"))
         requisicao = Requisicao.objects.create(
             criador=solicitante,
             beneficiario=solicitante,
@@ -3204,7 +3245,7 @@ class TestRequisicaoAPI:
             papel=PapelChoices.CHEFE_ALMOXARIFADO,
             setor=setor,
         )
-        material = self._criar_material_com_estoque("001.001.881")
+        material = self._criar_material_com_estoque("001.001.881", saldo_reservado=Decimal("3"))
         requisicao = Requisicao.objects.create(
             criador=solicitante,
             beneficiario=solicitante,

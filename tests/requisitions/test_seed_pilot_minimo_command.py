@@ -76,8 +76,8 @@ class TestSeedPilotMinimoCommand:
         assert not hasattr(materiais["010.001.003"], "estoque")
         assert materiais["010.001.004"].is_active is False
         assert materiais["010.001.005"].estoque.saldo_fisico == 12
-        assert materiais["010.001.006"].estoque.saldo_fisico == 19
-        assert materiais["010.001.007"].estoque.saldo_fisico == 13
+        assert materiais["010.001.006"].estoque.saldo_fisico == 20
+        assert materiais["010.001.007"].estoque.saldo_fisico == 15
 
         requisicoes = list(
             Requisicao.objects.select_related(
@@ -146,8 +146,8 @@ class TestSeedPilotMinimoCommand:
 
         material_baixo = materiais["010.001.002"]
         estoque_baixo = EstoqueMaterial.objects.get(material=material_baixo)
-        assert estoque_baixo.saldo_fisico == 2
-        assert estoque_baixo.saldo_reservado == 1
+        assert estoque_baixo.saldo_fisico == 4
+        assert estoque_baixo.saldo_reservado == 3
 
         assert "Seed piloto mínima carregada com sucesso" in stdout.getvalue()
 

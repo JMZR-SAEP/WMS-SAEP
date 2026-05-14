@@ -1244,16 +1244,8 @@ def atender_requisicao_completa(
                 "Requisição autorizada não possui itens com quantidade autorizada.",
                 details={"requisicao_id": requisicao.id},
             )
-        estoques_por_material_id = _travar_estoques_dos_itens(itens_autorizados)
-
         for item in itens_autorizados:
             quantidade_entregue = item.quantidade_autorizada
-            registrar_saida_por_atendimento(
-                requisicao=requisicao,
-                item=item,
-                quantidade=quantidade_entregue,
-                estoque_travado=estoques_por_material_id[item.material_id],
-            )
             item.quantidade_entregue = quantidade_entregue
             item.justificativa_atendimento_parcial = ""
             item.full_clean()
@@ -1382,27 +1374,10 @@ def atender_requisicao_com_itens(
         if not possui_entrega:
             raise DomainConflict("Atendimento parcial deve entregar ao menos um item.")
 
-        estoques_por_material_id = _travar_estoques_dos_itens(itens_autorizados)
-
         for item in itens_autorizados:
             item_data = dados_por_item_id[item.id]
             quantidade_entregue = item_data.quantidade_entregue
             quantidade_nao_entregue = item.quantidade_autorizada - quantidade_entregue
-
-            if quantidade_entregue > 0:
-                registrar_saida_por_atendimento(
-                    requisicao=requisicao,
-                    item=item,
-                    quantidade=quantidade_entregue,
-                    estoque_travado=estoques_por_material_id[item.material_id],
-                )
-            if quantidade_nao_entregue > 0:
-                registrar_liberacao_reserva_por_atendimento(
-                    requisicao=requisicao,
-                    item=item,
-                    quantidade=quantidade_nao_entregue,
-                    estoque_travado=estoques_por_material_id[item.material_id],
-                )
 
             item.quantidade_entregue = quantidade_entregue
             item.justificativa_atendimento_parcial = (
@@ -1461,6 +1436,32 @@ def retirar_requisicao(
             raise PermissionDenied(
                 "Usuário sem permissão para registrar retirada desta requisição."
             )
+
+        itens_requisicao = list(
+            ItemRequisicao.objects.select_for_update()
+            .select_related("material")
+            .filter(requisicao=requisicao)
+            .order_by("material_id", "id")
+        )
+        itens_autorizados = [item for item in itens_requisicao if item.quantidade_autorizada > 0]
+        if itens_autorizados:
+            estoques_por_material_id = _travar_estoques_dos_itens(itens_autorizados)
+            for item in itens_autorizados:
+                if item.quantidade_entregue > 0:
+                    registrar_saida_por_atendimento(
+                        requisicao=requisicao,
+                        item=item,
+                        quantidade=item.quantidade_entregue,
+                        estoque_travado=estoques_por_material_id[item.material_id],
+                    )
+                quantidade_nao_entregue = item.quantidade_autorizada - item.quantidade_entregue
+                if quantidade_nao_entregue > 0:
+                    registrar_liberacao_reserva_por_atendimento(
+                        requisicao=requisicao,
+                        item=item,
+                        quantidade=quantidade_nao_entregue,
+                        estoque_travado=estoques_por_material_id[item.material_id],
+                    )
 
         _apply_requisicao_transition(
             requisicao=requisicao,

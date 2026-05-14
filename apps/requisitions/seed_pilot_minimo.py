@@ -739,7 +739,7 @@ def carregar_seed_pilot_minimo() -> None:
             sequencial="002",
             nome="Cafe torrado 500g",
             unidade_medida="UN",
-            saldo_inicial=Decimal("3"),
+            saldo_inicial=Decimal("4"),
         )
         _upsert_material(
             subgrupo=subgrupo,
