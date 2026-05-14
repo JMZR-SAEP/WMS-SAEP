@@ -14,7 +14,11 @@ class TipoNotificacao(models.TextChoices):
     REQUISICAO_AUTORIZADA = "requisicao_autorizada", "Requisição autorizada"
     REQUISICAO_RECUSADA = "requisicao_recusada", "Requisição recusada"
     REQUISICAO_CANCELADA = "requisicao_cancelada", "Requisição cancelada"
-    REQUISICAO_ATENDIDA = "requisicao_atendida", "Requisição atendida"
+    REQUISICAO_PRONTA_PARA_RETIRADA = (
+        "requisicao_pronta_para_retirada",
+        "Requisição pronta para retirada",
+    )
+    REQUISICAO_RETIRADA = "requisicao_retirada", "Requisição retirada"
 
 
 class PushClientEventType(models.TextChoices):
