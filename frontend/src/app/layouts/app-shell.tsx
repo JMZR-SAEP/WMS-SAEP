@@ -140,9 +140,9 @@ export function AppShell() {
       <div className="mx-auto flex min-h-screen max-w-[1440px] flex-col gap-4 px-3 py-3 sm:px-4 lg:flex-row lg:px-6">
         <aside className="glass-panel mb-4 w-full shrink-0 overflow-hidden lg:mb-0 lg:w-[320px]">
           <div className="border-b border-[var(--line-soft)] px-4 py-3 sm:px-6 sm:py-5">
-            <img className="brand-logo" src={saepLogoUrl} alt="SAEP" />
-            <h1 className="mt-3 text-xl font-bold leading-tight sm:text-2xl">WMS-SAEP</h1>
-            <p className="mt-1 hidden max-w-[30ch] text-sm text-[var(--ink-soft)] sm:block">
+            <img className="brand-logo mx-auto" src={saepLogoUrl} alt="SAEP" />
+            <h1 className="mt-3 text-center text-xl font-bold leading-tight sm:text-2xl">WMS-SAEP</h1>
+            <p className="mt-1 hidden max-w-[30ch] text-center text-sm text-[var(--ink-soft)] sm:block">
               Almoxarifado do piloto para requisições, autorizações e atendimento.
             </p>
           </div>
