@@ -351,6 +351,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/requisitions/{id}/pickup/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["requisitions_pickup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/requisitions/{id}/refuse/": {
         parameters: {
             query?: never;
@@ -649,7 +665,8 @@ export interface components {
              *     * `requisicao_autorizada` - Requisição autorizada
              *     * `requisicao_recusada` - Requisição recusada
              *     * `requisicao_cancelada` - Requisição cancelada
-             *     * `requisicao_atendida` - Requisição atendida
+             *     * `requisicao_pronta_para_retirada` - Requisição pronta para retirada
+             *     * `requisicao_retirada` - Requisição retirada
              */
             readonly tipo: components["schemas"]["NotificacaoOutputTipoEnum"];
             readonly titulo: string;
@@ -668,10 +685,11 @@ export interface components {
          *     * `requisicao_autorizada` - Requisição autorizada
          *     * `requisicao_recusada` - Requisição recusada
          *     * `requisicao_cancelada` - Requisição cancelada
-         *     * `requisicao_atendida` - Requisição atendida
+         *     * `requisicao_pronta_para_retirada` - Requisição pronta para retirada
+         *     * `requisicao_retirada` - Requisição retirada
          * @enum {string}
          */
-        NotificacaoOutputTipoEnum: "requisicao_enviada_autorizacao" | "requisicao_autorizada" | "requisicao_recusada" | "requisicao_cancelada" | "requisicao_atendida";
+        NotificacaoOutputTipoEnum: "requisicao_enviada_autorizacao" | "requisicao_autorizada" | "requisicao_recusada" | "requisicao_cancelada" | "requisicao_pronta_para_retirada" | "requisicao_retirada";
         NotificacaoUnreadCountOutput: {
             readonly unread_count: number;
         };
@@ -781,8 +799,9 @@ export interface components {
              *     * `aguardando_autorizacao` - Aguardando Autorização
              *     * `recusada` - Recusada
              *     * `autorizada` - Autorizada
-             *     * `atendida_parcialmente` - Atendida Parcialmente
-             *     * `atendida` - Atendida
+             *     * `pronta_para_retirada_parcial` - Pronta para Retirada (Parcial)
+             *     * `pronta_para_retirada` - Pronta para Retirada
+             *     * `retirada` - Retirada
              *     * `cancelada` - Cancelada
              *     * `estornada` - Estornada
              */
@@ -818,6 +837,11 @@ export interface components {
             readonly data_finalizacao: string | null;
             /** @description Nome de quem retirou (diferente do beneficiário) */
             readonly retirante_fisico: string;
+            /**
+             * Format: date-time
+             * @description Data e hora da retirada física dos materiais
+             */
+            readonly data_retirada: string | null;
             /** @description Observações gerais */
             readonly observacao: string;
             /** @description Observações gerais do atendimento */
@@ -826,8 +850,6 @@ export interface components {
             readonly eventos: components["schemas"]["RequisicaoTimelineEventOutput"][];
         };
         RequisicaoFulfillInput: {
-            /** @default  */
-            retirante_fisico: string;
             /** @default  */
             observacao_atendimento: string;
             itens?: components["schemas"]["RequisicaoItemFulfillInput"][];
@@ -864,8 +886,9 @@ export interface components {
              *     * `aguardando_autorizacao` - Aguardando Autorização
              *     * `recusada` - Recusada
              *     * `autorizada` - Autorizada
-             *     * `atendida_parcialmente` - Atendida Parcialmente
-             *     * `atendida` - Atendida
+             *     * `pronta_para_retirada_parcial` - Pronta para Retirada (Parcial)
+             *     * `pronta_para_retirada` - Pronta para Retirada
+             *     * `retirada` - Retirada
              *     * `cancelada` - Cancelada
              *     * `estornada` - Estornada
              */
@@ -925,8 +948,9 @@ export interface components {
              *     * `aguardando_autorizacao` - Aguardando Autorização
              *     * `recusada` - Recusada
              *     * `autorizada` - Autorizada
-             *     * `atendida_parcialmente` - Atendida Parcialmente
-             *     * `atendida` - Atendida
+             *     * `pronta_para_retirada_parcial` - Pronta para Retirada (Parcial)
+             *     * `pronta_para_retirada` - Pronta para Retirada
+             *     * `retirada` - Retirada
              *     * `cancelada` - Cancelada
              *     * `estornada` - Estornada
              */
@@ -963,8 +987,9 @@ export interface components {
              *     * `aguardando_autorizacao` - Aguardando Autorização
              *     * `recusada` - Recusada
              *     * `autorizada` - Autorizada
-             *     * `atendida_parcialmente` - Atendida Parcialmente
-             *     * `atendida` - Atendida
+             *     * `pronta_para_retirada_parcial` - Pronta para Retirada (Parcial)
+             *     * `pronta_para_retirada` - Pronta para Retirada
+             *     * `retirada` - Retirada
              *     * `cancelada` - Cancelada
              *     * `estornada` - Estornada
              */
@@ -990,6 +1015,9 @@ export interface components {
             readonly previous: string | null;
             readonly results: components["schemas"]["RequisicaoPendingFulfillmentOutput"][];
         };
+        RequisicaoPickupInput: {
+            retirante_fisico: string;
+        };
         RequisicaoRefuseInput: {
             motivo_recusa: string;
         };
@@ -1011,6 +1039,7 @@ export interface components {
              *     * `recusa` - Recusa
              *     * `atendimento_parcial` - Atendimento Parcial
              *     * `atendimento` - Atendimento
+             *     * `retirada` - Retirada
              *     * `cancelamento` - Cancelamento
              *     * `estorno` - Estorno
              */
@@ -1046,13 +1075,14 @@ export interface components {
          *     * `aguardando_autorizacao` - Aguardando Autorização
          *     * `recusada` - Recusada
          *     * `autorizada` - Autorizada
-         *     * `atendida_parcialmente` - Atendida Parcialmente
-         *     * `atendida` - Atendida
+         *     * `pronta_para_retirada_parcial` - Pronta para Retirada (Parcial)
+         *     * `pronta_para_retirada` - Pronta para Retirada
+         *     * `retirada` - Retirada
          *     * `cancelada` - Cancelada
          *     * `estornada` - Estornada
          * @enum {string}
          */
-        StatusEnum: "rascunho" | "aguardando_autorizacao" | "recusada" | "autorizada" | "atendida_parcialmente" | "atendida" | "cancelada" | "estornada";
+        StatusEnum: "rascunho" | "aguardando_autorizacao" | "recusada" | "autorizada" | "pronta_para_retirada_parcial" | "pronta_para_retirada" | "retirada" | "cancelada" | "estornada";
         /**
          * @description * `criacao` - Criação
          *     * `envio_autorizacao` - Envio para Autorização
@@ -1063,11 +1093,12 @@ export interface components {
          *     * `recusa` - Recusa
          *     * `atendimento_parcial` - Atendimento Parcial
          *     * `atendimento` - Atendimento
+         *     * `retirada` - Retirada
          *     * `cancelamento` - Cancelamento
          *     * `estorno` - Estorno
          * @enum {string}
          */
-        TipoEventoEnum: "criacao" | "envio_autorizacao" | "retorno_rascunho" | "reenvio_autorizacao" | "autorizacao_total" | "autorizacao_parcial" | "recusa" | "atendimento_parcial" | "atendimento" | "cancelamento" | "estorno";
+        TipoEventoEnum: "criacao" | "envio_autorizacao" | "retorno_rascunho" | "reenvio_autorizacao" | "autorizacao_total" | "autorizacao_parcial" | "recusa" | "atendimento_parcial" | "atendimento" | "retirada" | "cancelamento" | "estorno";
     };
     responses: never;
     parameters: never;
@@ -1943,6 +1974,69 @@ export interface operations {
                 "application/json": components["schemas"]["RequisicaoFulfillInput"];
                 "application/x-www-form-urlencoded": components["schemas"]["RequisicaoFulfillInput"];
                 "multipart/form-data": components["schemas"]["RequisicaoFulfillInput"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequisicaoDetailOutput"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    requisitions_pickup: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Chave obrigatória para retries seguros da retirada; escopada por usuário, endpoint, requisição e payload. */
+                "Idempotency-Key": string;
+            };
+            path: {
+                /** @description Um valor inteiro único que identifica este Requisição. */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequisicaoPickupInput"];
+                "application/x-www-form-urlencoded": components["schemas"]["RequisicaoPickupInput"];
+                "multipart/form-data": components["schemas"]["RequisicaoPickupInput"];
             };
         };
         responses: {

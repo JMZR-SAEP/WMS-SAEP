@@ -19,6 +19,7 @@ import {
   formatDateTime,
   formatQuantity,
   fulfillRequisition,
+  pickupRequisition,
   isThirdPartyBeneficiary,
   refuseRequisition,
   requisitionDetailQueryOptions,
@@ -36,7 +37,7 @@ import {
 import { SupportErrorPanel } from "../../shared/ui/support-error";
 
 const detailSearchSchema = z.object({
-  contexto: z.enum(["autorizacao", "atendimento"]).optional().catch(undefined),
+  contexto: z.enum(["autorizacao", "atendimento", "retirada"]).optional().catch(undefined),
   etapa: draftStepSchema.optional().catch("beneficiario"),
   page: z.coerce.number().int().min(1).optional().catch(undefined),
 });
@@ -54,6 +55,15 @@ export const Route = createFileRoute("/requisicoes/$id")({
     }
 
     if (search.contexto === "atendimento") {
+      await requireOperationalPapel({
+        allowedPapeis: ["auxiliar_almoxarifado", "chefe_almoxarifado"],
+        queryClient: context.queryClient,
+        locationHref: location.href,
+      });
+      return;
+    }
+
+    if (search.contexto === "retirada") {
       await requireOperationalPapel({
         allowedPapeis: ["auxiliar_almoxarifado", "chefe_almoxarifado"],
         queryClient: context.queryClient,
@@ -144,7 +154,7 @@ function statusBlockedLabel(status: RequisicaoDetail["status"]) {
 }
 
 function blockedContextReason(
-  contexto: "autorizacao" | "atendimento" | undefined,
+  contexto: "autorizacao" | "atendimento" | "retirada" | undefined,
   requisicao: RequisicaoDetail,
 ) {
   if (contexto === "autorizacao" && requisicao.status !== "aguardando_autorizacao") {
@@ -154,6 +164,16 @@ function blockedContextReason(
   }
 
   if (contexto === "atendimento" && requisicao.status !== "autorizada") {
+    return `Requisição ${statusBlockedLabel(
+      requisicao.status,
+    )}; volte para a fila de atendimento.`;
+  }
+
+  if (
+    contexto === "retirada" &&
+    requisicao.status !== "pronta_para_retirada" &&
+    requisicao.status !== "pronta_para_retirada_parcial"
+  ) {
     return `Requisição ${statusBlockedLabel(
       requisicao.status,
     )}; volte para a fila de atendimento.`;
@@ -689,7 +709,6 @@ function FulfillmentDecisionPanel({
   requisicao: RequisicaoDetail;
 }) {
   const [items, setItems] = useState(() => fulfillmentItemsFromRequisition(requisicao));
-  const [retiranteFisico, setRetiranteFisico] = useState("");
   const [observacaoAtendimento, setObservacaoAtendimento] = useState("");
   const [motivoCancelamento, setMotivoCancelamento] = useState("");
   const [validationError, setValidationError] = useState("");
@@ -770,7 +789,6 @@ function FulfillmentDecisionPanel({
 
   function payloadFromItems(nextItems: FulfillmentItemForm[]): RequisicaoFulfillInput {
     return {
-      retirante_fisico: retiranteFisico.trim(),
       observacao_atendimento: observacaoAtendimento.trim(),
       itens: nextItems.map((item) => ({
         item_id: item.itemId,
@@ -895,18 +913,6 @@ function FulfillmentDecisionPanel({
       <form className="authorization-form" onSubmit={fulfill}>
         <div className="authorization-item-fields">
           <label className="preview-label">
-            Retirante físico
-            <input
-              className="preview-input"
-              disabled={pending}
-              onChange={(event) => {
-                setRetiranteFisico(event.target.value);
-                resetDecisionFeedback();
-              }}
-              value={retiranteFisico}
-            />
-          </label>
-          <label className="preview-label">
             Observação do atendimento
             <textarea
               className="preview-input"
@@ -996,6 +1002,96 @@ function FulfillmentDecisionPanel({
           title="Cancelar requisição autorizada?"
         />
       ) : null}
+    </section>
+  );
+}
+
+
+function PickupPanel({
+  requisicao,
+  fulfillmentPage,
+}: {
+  requisicao: RequisicaoDetail;
+  fulfillmentPage: number | undefined;
+}) {
+  const queryClient = useQueryClient();
+  const [retiranteFisico, setRetiranteFisico] = useState("");
+  const [validationError, setValidationError] = useState("");
+  const pickupIdempotencyRef = useRef<{ key: string; payloadSignature: string } | null>(null);
+
+  const pickupMutation = useMutation({
+    mutationFn: ({ input, idempotencyKey }: { input: { retirante_fisico: string }; idempotencyKey: string }) =>
+      pickupRequisition(requisicao.id, input, idempotencyKey),
+    onSuccess: (data) => {
+      queryClient.setQueryData(requisitionDetailQueryOptions(requisicao.id).queryKey, data);
+      queryClient.invalidateQueries({
+        queryKey: requisitionsQueryKeys.pendingFulfillments(fulfillmentPage),
+      });
+    },
+  });
+
+  function idempotencyKeyForPayload(input: { retirante_fisico: string }) {
+    const payloadSignature = JSON.stringify(input);
+    if (pickupIdempotencyRef.current?.payloadSignature === payloadSignature) {
+      return pickupIdempotencyRef.current.key;
+    }
+    const key = createIdempotencyKey();
+    pickupIdempotencyRef.current = { key, payloadSignature };
+    return key;
+  }
+
+  function handlePickup(event: React.FormEvent) {
+    event.preventDefault();
+    const trimmed = retiranteFisico.trim();
+    if (!trimmed) {
+      setValidationError("Informe o nome do retirante físico.");
+      return;
+    }
+    setValidationError("");
+    const input = { retirante_fisico: trimmed };
+    const idempotencyKey = idempotencyKeyForPayload(input);
+    pickupMutation.mutate({ input, idempotencyKey });
+  }
+
+  const pending = pickupMutation.isPending;
+
+  return (
+    <section className="detail-panel authorization-panel">
+      <div className="authorization-panel-header">
+        <div>
+          <p className="eyebrow">Retirada</p>
+          <h2>Registrar retirada</h2>
+          <p>Informe quem retirou fisicamente os materiais para encerrar o fluxo.</p>
+        </div>
+      </div>
+
+      {validationError ? <div className="error-panel compact-error">{validationError}</div> : null}
+      {pickupMutation.error ? (
+        <SupportErrorPanel
+          error={pickupMutation.error}
+          fallback="Não foi possível concluir a retirada."
+        />
+      ) : null}
+
+      <form className="authorization-form" onSubmit={handlePickup}>
+        <div className="authorization-item-fields">
+          <label className="preview-label">
+            Retirante físico
+            <input
+              className="preview-input"
+              disabled={pending}
+              onChange={(event) => setRetiranteFisico(event.target.value)}
+              placeholder="Nome de quem retirou os materiais"
+              value={retiranteFisico}
+            />
+          </label>
+        </div>
+        <div className="draft-actions detail-primary-action">
+          <button className="preview-button draft-primary" disabled={pending} type="submit">
+            {pending ? "Registrando..." : "Registrar retirada"}
+          </button>
+        </div>
+      </form>
     </section>
   );
 }
@@ -1215,6 +1311,20 @@ function ContextualActionPanel({
   if (contexto === "atendimento" && requisicao.status === "autorizada") {
     return (
       <FulfillmentDecisionPanel
+        fulfillmentPage={sourcePage}
+        key={requisicao.id}
+        requisicao={requisicao}
+      />
+    );
+  }
+
+  if (
+    contexto === "retirada" &&
+    (requisicao.status === "pronta_para_retirada" ||
+      requisicao.status === "pronta_para_retirada_parcial")
+  ) {
+    return (
+      <PickupPanel
         fulfillmentPage={sourcePage}
         key={requisicao.id}
         requisicao={requisicao}

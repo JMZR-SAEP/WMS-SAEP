@@ -109,6 +109,9 @@ export function notificationOperationalContext(tipo: NotificationType) {
   if (tipo === "requisicao_autorizada") {
     return "atendimento" as const;
   }
+  if (tipo === "requisicao_pronta_para_retirada") {
+    return "atendimento" as const;
+  }
   return undefined;
 }
 
@@ -117,6 +120,9 @@ export function notificationOperationalLabel(tipo: NotificationType) {
     return "Fila de autorizações";
   }
   if (tipo === "requisicao_autorizada") {
+    return "Fila de atendimentos";
+  }
+  if (tipo === "requisicao_pronta_para_retirada") {
     return "Fila de atendimentos";
   }
   return undefined;

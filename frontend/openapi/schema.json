@@ -1421,6 +1421,113 @@
                 }
             }
         },
+        "/api/v1/requisitions/{id}/pickup/": {
+            "post": {
+                "operationId": "requisitions_pickup",
+                "parameters": [
+                    {
+                        "in": "header",
+                        "name": "Idempotency-Key",
+                        "schema": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 128
+                        },
+                        "description": "Chave obrigatória para retries seguros da retirada; escopada por usuário, endpoint, requisição e payload.",
+                        "required": true
+                    },
+                    {
+                        "in": "path",
+                        "name": "id",
+                        "schema": {
+                            "type": "integer"
+                        },
+                        "description": "Um valor inteiro único que identifica este Requisição.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "requisitions"
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RequisicaoPickupInput"
+                            }
+                        },
+                        "application/x-www-form-urlencoded": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RequisicaoPickupInput"
+                            }
+                        },
+                        "multipart/form-data": {
+                            "schema": {
+                                "$ref": "#/components/schemas/RequisicaoPickupInput"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "security": [
+                    {
+                        "cookieAuth": []
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/RequisicaoDetailOutput"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "409": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponse"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/v1/requisitions/{id}/refuse/": {
             "post": {
                 "operationId": "requisitions_refuse",
@@ -2590,7 +2697,7 @@
                             }
                         ],
                         "readOnly": true,
-                        "description": "Tipo de notificação.\n\n* `requisicao_enviada_autorizacao` - Requisição enviada para autorização\n* `requisicao_autorizada` - Requisição autorizada\n* `requisicao_recusada` - Requisição recusada\n* `requisicao_cancelada` - Requisição cancelada\n* `requisicao_atendida` - Requisição atendida"
+                        "description": "Tipo de notificação.\n\n* `requisicao_enviada_autorizacao` - Requisição enviada para autorização\n* `requisicao_autorizada` - Requisição autorizada\n* `requisicao_recusada` - Requisição recusada\n* `requisicao_cancelada` - Requisição cancelada\n* `requisicao_pronta_para_retirada` - Requisição pronta para retirada\n* `requisicao_retirada` - Requisição retirada"
                     },
                     "titulo": {
                         "type": "string",
@@ -2656,10 +2763,11 @@
                     "requisicao_autorizada",
                     "requisicao_recusada",
                     "requisicao_cancelada",
-                    "requisicao_atendida"
+                    "requisicao_pronta_para_retirada",
+                    "requisicao_retirada"
                 ],
                 "type": "string",
-                "description": "* `requisicao_enviada_autorizacao` - Requisição enviada para autorização\n* `requisicao_autorizada` - Requisição autorizada\n* `requisicao_recusada` - Requisição recusada\n* `requisicao_cancelada` - Requisição cancelada\n* `requisicao_atendida` - Requisição atendida"
+                "description": "* `requisicao_enviada_autorizacao` - Requisição enviada para autorização\n* `requisicao_autorizada` - Requisição autorizada\n* `requisicao_recusada` - Requisição recusada\n* `requisicao_cancelada` - Requisição cancelada\n* `requisicao_pronta_para_retirada` - Requisição pronta para retirada\n* `requisicao_retirada` - Requisição retirada"
             },
             "NotificacaoUnreadCountOutput": {
                 "type": "object",
@@ -2997,7 +3105,7 @@
                             }
                         ],
                         "readOnly": true,
-                        "description": "Status atual da requisição\n\n* `rascunho` - Rascunho\n* `aguardando_autorizacao` - Aguardando Autorização\n* `recusada` - Recusada\n* `autorizada` - Autorizada\n* `atendida_parcialmente` - Atendida Parcialmente\n* `atendida` - Atendida\n* `cancelada` - Cancelada\n* `estornada` - Estornada"
+                        "description": "Status atual da requisição\n\n* `rascunho` - Rascunho\n* `aguardando_autorizacao` - Aguardando Autorização\n* `recusada` - Recusada\n* `autorizada` - Autorizada\n* `pronta_para_retirada_parcial` - Pronta para Retirada (Parcial)\n* `pronta_para_retirada` - Pronta para Retirada\n* `retirada` - Retirada\n* `cancelada` - Cancelada\n* `estornada` - Estornada"
                     },
                     "criador": {
                         "allOf": [
@@ -3081,6 +3189,13 @@
                         "readOnly": true,
                         "description": "Nome de quem retirou (diferente do beneficiário)"
                     },
+                    "data_retirada": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true,
+                        "nullable": true,
+                        "description": "Data e hora da retirada física dos materiais"
+                    },
                     "observacao": {
                         "type": "string",
                         "readOnly": true,
@@ -3114,6 +3229,7 @@
                     "data_criacao",
                     "data_envio_autorizacao",
                     "data_finalizacao",
+                    "data_retirada",
                     "eventos",
                     "id",
                     "itens",
@@ -3131,10 +3247,6 @@
             "RequisicaoFulfillInput": {
                 "type": "object",
                 "properties": {
-                    "retirante_fisico": {
-                        "type": "string",
-                        "default": ""
-                    },
                     "observacao_atendimento": {
                         "type": "string",
                         "default": ""
@@ -3230,7 +3342,7 @@
                             }
                         ],
                         "readOnly": true,
-                        "description": "Status atual da requisição\n\n* `rascunho` - Rascunho\n* `aguardando_autorizacao` - Aguardando Autorização\n* `recusada` - Recusada\n* `autorizada` - Autorizada\n* `atendida_parcialmente` - Atendida Parcialmente\n* `atendida` - Atendida\n* `cancelada` - Cancelada\n* `estornada` - Estornada"
+                        "description": "Status atual da requisição\n\n* `rascunho` - Rascunho\n* `aguardando_autorizacao` - Aguardando Autorização\n* `recusada` - Recusada\n* `autorizada` - Autorizada\n* `pronta_para_retirada_parcial` - Pronta para Retirada (Parcial)\n* `pronta_para_retirada` - Pronta para Retirada\n* `retirada` - Retirada\n* `cancelada` - Cancelada\n* `estornada` - Estornada"
                     },
                     "criador": {
                         "allOf": [
@@ -3404,7 +3516,7 @@
                             }
                         ],
                         "readOnly": true,
-                        "description": "Status atual da requisição\n\n* `rascunho` - Rascunho\n* `aguardando_autorizacao` - Aguardando Autorização\n* `recusada` - Recusada\n* `autorizada` - Autorizada\n* `atendida_parcialmente` - Atendida Parcialmente\n* `atendida` - Atendida\n* `cancelada` - Cancelada\n* `estornada` - Estornada"
+                        "description": "Status atual da requisição\n\n* `rascunho` - Rascunho\n* `aguardando_autorizacao` - Aguardando Autorização\n* `recusada` - Recusada\n* `autorizada` - Autorizada\n* `pronta_para_retirada_parcial` - Pronta para Retirada (Parcial)\n* `pronta_para_retirada` - Pronta para Retirada\n* `retirada` - Retirada\n* `cancelada` - Cancelada\n* `estornada` - Estornada"
                     },
                     "data_envio_autorizacao": {
                         "type": "string",
@@ -3522,7 +3634,7 @@
                             }
                         ],
                         "readOnly": true,
-                        "description": "Status atual da requisição\n\n* `rascunho` - Rascunho\n* `aguardando_autorizacao` - Aguardando Autorização\n* `recusada` - Recusada\n* `autorizada` - Autorizada\n* `atendida_parcialmente` - Atendida Parcialmente\n* `atendida` - Atendida\n* `cancelada` - Cancelada\n* `estornada` - Estornada"
+                        "description": "Status atual da requisição\n\n* `rascunho` - Rascunho\n* `aguardando_autorizacao` - Aguardando Autorização\n* `recusada` - Recusada\n* `autorizada` - Autorizada\n* `pronta_para_retirada_parcial` - Pronta para Retirada (Parcial)\n* `pronta_para_retirada` - Pronta para Retirada\n* `retirada` - Retirada\n* `cancelada` - Cancelada\n* `estornada` - Estornada"
                     },
                     "beneficiario": {
                         "allOf": [
@@ -3620,6 +3732,17 @@
                     "total_pages"
                 ]
             },
+            "RequisicaoPickupInput": {
+                "type": "object",
+                "properties": {
+                    "retirante_fisico": {
+                        "type": "string"
+                    }
+                },
+                "required": [
+                    "retirante_fisico"
+                ]
+            },
             "RequisicaoRefuseInput": {
                 "type": "object",
                 "properties": {
@@ -3662,7 +3785,7 @@
                             }
                         ],
                         "readOnly": true,
-                        "description": "Tipo de evento registrado\n\n* `criacao` - Criação\n* `envio_autorizacao` - Envio para Autorização\n* `retorno_rascunho` - Retorno para Rascunho\n* `reenvio_autorizacao` - Reenvio para Autorização\n* `autorizacao_total` - Autorização Total\n* `autorizacao_parcial` - Autorização Parcial\n* `recusa` - Recusa\n* `atendimento_parcial` - Atendimento Parcial\n* `atendimento` - Atendimento\n* `cancelamento` - Cancelamento\n* `estorno` - Estorno"
+                        "description": "Tipo de evento registrado\n\n* `criacao` - Criação\n* `envio_autorizacao` - Envio para Autorização\n* `retorno_rascunho` - Retorno para Rascunho\n* `reenvio_autorizacao` - Reenvio para Autorização\n* `autorizacao_total` - Autorização Total\n* `autorizacao_parcial` - Autorização Parcial\n* `recusa` - Recusa\n* `atendimento_parcial` - Atendimento Parcial\n* `atendimento` - Atendimento\n* `retirada` - Retirada\n* `cancelamento` - Cancelamento\n* `estorno` - Estorno"
                     },
                     "usuario": {
                         "allOf": [
@@ -3734,13 +3857,14 @@
                     "aguardando_autorizacao",
                     "recusada",
                     "autorizada",
-                    "atendida_parcialmente",
-                    "atendida",
+                    "pronta_para_retirada_parcial",
+                    "pronta_para_retirada",
+                    "retirada",
                     "cancelada",
                     "estornada"
                 ],
                 "type": "string",
-                "description": "* `rascunho` - Rascunho\n* `aguardando_autorizacao` - Aguardando Autorização\n* `recusada` - Recusada\n* `autorizada` - Autorizada\n* `atendida_parcialmente` - Atendida Parcialmente\n* `atendida` - Atendida\n* `cancelada` - Cancelada\n* `estornada` - Estornada"
+                "description": "* `rascunho` - Rascunho\n* `aguardando_autorizacao` - Aguardando Autorização\n* `recusada` - Recusada\n* `autorizada` - Autorizada\n* `pronta_para_retirada_parcial` - Pronta para Retirada (Parcial)\n* `pronta_para_retirada` - Pronta para Retirada\n* `retirada` - Retirada\n* `cancelada` - Cancelada\n* `estornada` - Estornada"
             },
             "TipoEventoEnum": {
                 "enum": [
@@ -3753,11 +3877,12 @@
                     "recusa",
                     "atendimento_parcial",
                     "atendimento",
+                    "retirada",
                     "cancelamento",
                     "estorno"
                 ],
                 "type": "string",
-                "description": "* `criacao` - Criação\n* `envio_autorizacao` - Envio para Autorização\n* `retorno_rascunho` - Retorno para Rascunho\n* `reenvio_autorizacao` - Reenvio para Autorização\n* `autorizacao_total` - Autorização Total\n* `autorizacao_parcial` - Autorização Parcial\n* `recusa` - Recusa\n* `atendimento_parcial` - Atendimento Parcial\n* `atendimento` - Atendimento\n* `cancelamento` - Cancelamento\n* `estorno` - Estorno"
+                "description": "* `criacao` - Criação\n* `envio_autorizacao` - Envio para Autorização\n* `retorno_rascunho` - Retorno para Rascunho\n* `reenvio_autorizacao` - Reenvio para Autorização\n* `autorizacao_total` - Autorização Total\n* `autorizacao_parcial` - Autorização Parcial\n* `recusa` - Recusa\n* `atendimento_parcial` - Atendimento Parcial\n* `atendimento` - Atendimento\n* `retirada` - Retirada\n* `cancelamento` - Cancelamento\n* `estorno` - Estorno"
             }
         },
         "securitySchemes": {

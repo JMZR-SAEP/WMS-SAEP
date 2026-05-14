@@ -1856,9 +1856,6 @@ describe("frontend pilot router", () => {
     const { container } = renderRoute("/requisicoes/101?contexto=atendimento");
 
     expect(await screen.findByRole("heading", { name: "REQ-2026-000101" })).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("Retirante físico"), {
-      target: { value: "Joao da Silva" },
-    });
     fireEvent.change(screen.getByLabelText("Observação do atendimento"), {
       target: { value: "Retirada no balcão" },
     });
@@ -1872,7 +1869,6 @@ describe("frontend pilot router", () => {
       expect((fulfillIdempotencyKey as string).length).toBeGreaterThan(0);
       expect((fulfillIdempotencyKey as string).length).toBeLessThanOrEqual(128);
       expect(fulfillPayload).toEqual({
-        retirante_fisico: "Joao da Silva",
         observacao_atendimento: "Retirada no balcão",
         itens: [
           {
@@ -1935,7 +1931,6 @@ describe("frontend pilot router", () => {
 
     await waitFor(() => {
       expect(fulfillPayload).toEqual({
-        retirante_fisico: "",
         observacao_atendimento: "",
         itens: [
           {
