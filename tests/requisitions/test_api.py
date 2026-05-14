@@ -2100,7 +2100,6 @@ class TestRequisicaoAPI:
         response = client.post(
             reverse("requisicao-fulfill", args=[requisicao.id]),
             {
-                "retirante_fisico": "Servidor Retirante",
                 "observacao_atendimento": "Entrega no balcão",
             },
             format="json",
@@ -2108,9 +2107,9 @@ class TestRequisicaoAPI:
         )
 
         assert response.status_code == 200
-        assert response.data["status"] == StatusRequisicao.ATENDIDA
+        assert response.data["status"] == StatusRequisicao.PRONTA_PARA_RETIRADA
         assert response.data["responsavel_atendimento"]["id"] == almoxarife.id
-        assert response.data["retirante_fisico"] == "Servidor Retirante"
+        assert response.data["retirante_fisico"] == ""
         assert response.data["observacao_atendimento"] == "Entrega no balcão"
         assert response.data["itens"][0]["quantidade_entregue"] == "3.000"
         requisicao.refresh_from_db()
@@ -2198,7 +2197,6 @@ class TestRequisicaoAPI:
             quantidade_autorizada=Decimal("3"),
         )
         payload = {
-            "retirante_fisico": "Servidor Idempotente",
             "itens": [
                 {
                     "item_id": item.id,
@@ -2229,7 +2227,7 @@ class TestRequisicaoAPI:
 
         assert first_response.status_code == 200
         assert retry_response.status_code == 200
-        assert retry_response.data["status"] == StatusRequisicao.ATENDIDA_PARCIALMENTE
+        assert retry_response.data["status"] == StatusRequisicao.PRONTA_PARA_RETIRADA_PARCIAL
         assert MovimentacaoEstoque.objects.filter(requisicao=requisicao).count() == movement_count
         assert EventoTimeline.objects.filter(requisicao=requisicao).count() == timeline_count
         assert Notificacao.objects.filter(object_id=requisicao.id).count() == notification_count
@@ -2349,7 +2347,6 @@ class TestRequisicaoAPI:
         response = client.post(
             reverse("requisicao-fulfill", args=[requisicao.id]),
             {
-                "retirante_fisico": "Servidor Parcial",
                 "itens": [
                     {
                         "item_id": item.id,
@@ -2363,8 +2360,8 @@ class TestRequisicaoAPI:
         )
 
         assert response.status_code == 200
-        assert response.data["status"] == StatusRequisicao.ATENDIDA_PARCIALMENTE
-        assert response.data["retirante_fisico"] == "Servidor Parcial"
+        assert response.data["status"] == StatusRequisicao.PRONTA_PARA_RETIRADA_PARCIAL
+        assert response.data["retirante_fisico"] == ""
         assert response.data["itens"][0]["quantidade_entregue"] == "1.000"
         assert (
             response.data["itens"][0]["justificativa_atendimento_parcial"]
@@ -2448,7 +2445,7 @@ class TestRequisicaoAPI:
         )
 
         assert response.status_code == 200
-        assert response.data["status"] == StatusRequisicao.ATENDIDA_PARCIALMENTE
+        assert response.data["status"] == StatusRequisicao.PRONTA_PARA_RETIRADA_PARCIAL
         requisicao.refresh_from_db()
         item_total.refresh_from_db()
         item_parcial.refresh_from_db()
@@ -3149,6 +3146,212 @@ class TestRequisicaoAPI:
             reverse("requisicao-fulfill", args=[requisicao.id]),
             {},
             **self._idempotency_header("fulfill-status-invalido"),
+        )
+
+        assert response.status_code == 409
+        assert response.data["error"]["code"] == "domain_conflict"
+
+    def test_pickup_happy_path_pronta_para_retirada(self):
+        setor = self._criar_setor("Retirada Setor", "88001")
+        solicitante = self._criar_usuario("88002", "Solicitante Pickup", setor=setor)
+        almoxarife = self._criar_usuario(
+            "88003",
+            "Almoxarife Pickup",
+            papel=PapelChoices.AUXILIAR_ALMOXARIFADO,
+            setor=setor,
+        )
+        material = self._criar_material_com_estoque("001.001.880")
+        requisicao = Requisicao.objects.create(
+            criador=solicitante,
+            beneficiario=solicitante,
+            setor_beneficiario=setor,
+            numero_publico="REQ-2026-880001",
+            status=StatusRequisicao.PRONTA_PARA_RETIRADA,
+            data_envio_autorizacao="2026-04-30T10:00:00Z",
+            data_autorizacao_ou_recusa="2026-04-30T11:00:00Z",
+            data_finalizacao="2026-04-30T12:00:00Z",
+        )
+        requisicao.itens.create(
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal("2"),
+            quantidade_autorizada=Decimal("2"),
+            quantidade_entregue=Decimal("2"),
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=almoxarife)
+        response = client.post(
+            reverse("requisicao-pickup", args=[requisicao.id]),
+            {"retirante_fisico": "Servidor Retirador"},
+            format="json",
+            **self._idempotency_header("pickup-total"),
+        )
+
+        assert response.status_code == 200
+        assert response.data["status"] == StatusRequisicao.RETIRADA
+        assert response.data["retirante_fisico"] == "Servidor Retirador"
+        assert response.data["data_retirada"] is not None
+        requisicao.refresh_from_db()
+        assert requisicao.eventos.filter(tipo_evento=TipoEvento.RETIRADA).exists()
+
+    def test_pickup_happy_path_pronta_para_retirada_parcial(self):
+        setor = self._criar_setor("Retirada Parcial Setor", "88010")
+        solicitante = self._criar_usuario("88011", "Solicitante Pickup Parcial", setor=setor)
+        almoxarife = self._criar_usuario(
+            "88012",
+            "Almoxarife Pickup Parcial",
+            papel=PapelChoices.CHEFE_ALMOXARIFADO,
+            setor=setor,
+        )
+        material = self._criar_material_com_estoque("001.001.881")
+        requisicao = Requisicao.objects.create(
+            criador=solicitante,
+            beneficiario=solicitante,
+            setor_beneficiario=setor,
+            numero_publico="REQ-2026-880002",
+            status=StatusRequisicao.PRONTA_PARA_RETIRADA_PARCIAL,
+            data_envio_autorizacao="2026-04-30T10:00:00Z",
+            data_autorizacao_ou_recusa="2026-04-30T11:00:00Z",
+            data_finalizacao="2026-04-30T12:00:00Z",
+        )
+        requisicao.itens.create(
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal("3"),
+            quantidade_autorizada=Decimal("3"),
+            quantidade_entregue=Decimal("1"),
+            justificativa_atendimento_parcial="Estoque insuficiente.",
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=almoxarife)
+        response = client.post(
+            reverse("requisicao-pickup", args=[requisicao.id]),
+            {"retirante_fisico": "Servidor Parcial"},
+            format="json",
+            **self._idempotency_header("pickup-parcial"),
+        )
+
+        assert response.status_code == 200
+        assert response.data["status"] == StatusRequisicao.RETIRADA
+
+    def test_pickup_sem_idempotency_key_retorna_400(self):
+        setor = self._criar_setor("Retirada Sem Chave", "88020")
+        solicitante = self._criar_usuario("88021", "Solicitante Sem Chave", setor=setor)
+        almoxarife = self._criar_usuario(
+            "88022",
+            "Almoxarife Sem Chave",
+            papel=PapelChoices.AUXILIAR_ALMOXARIFADO,
+            setor=setor,
+        )
+        _material = self._criar_material_com_estoque("001.001.882")
+        requisicao = Requisicao.objects.create(
+            criador=solicitante,
+            beneficiario=solicitante,
+            setor_beneficiario=setor,
+            numero_publico="REQ-2026-880003",
+            status=StatusRequisicao.PRONTA_PARA_RETIRADA,
+            data_envio_autorizacao="2026-04-30T10:00:00Z",
+            data_autorizacao_ou_recusa="2026-04-30T11:00:00Z",
+            data_finalizacao="2026-04-30T12:00:00Z",
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=almoxarife)
+        response = client.post(
+            reverse("requisicao-pickup", args=[requisicao.id]),
+            {"retirante_fisico": "Servidor"},
+            format="json",
+        )
+
+        assert response.status_code == 400
+
+    def test_pickup_retirante_fisico_blank_retorna_400(self):
+        setor = self._criar_setor("Retirada Blank", "88030")
+        solicitante = self._criar_usuario("88031", "Solicitante Blank", setor=setor)
+        almoxarife = self._criar_usuario(
+            "88032",
+            "Almoxarife Blank",
+            papel=PapelChoices.AUXILIAR_ALMOXARIFADO,
+            setor=setor,
+        )
+        _material = self._criar_material_com_estoque("001.001.883")
+        requisicao = Requisicao.objects.create(
+            criador=solicitante,
+            beneficiario=solicitante,
+            setor_beneficiario=setor,
+            numero_publico="REQ-2026-880004",
+            status=StatusRequisicao.PRONTA_PARA_RETIRADA,
+            data_envio_autorizacao="2026-04-30T10:00:00Z",
+            data_autorizacao_ou_recusa="2026-04-30T11:00:00Z",
+            data_finalizacao="2026-04-30T12:00:00Z",
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=almoxarife)
+        response = client.post(
+            reverse("requisicao-pickup", args=[requisicao.id]),
+            {"retirante_fisico": ""},
+            format="json",
+            **self._idempotency_header("pickup-blank"),
+        )
+
+        assert response.status_code == 400
+
+    def test_pickup_bloqueia_papel_sem_permissao(self):
+        setor = self._criar_setor("Retirada Perm", "88040")
+        solicitante = self._criar_usuario("88041", "Solicitante Perm", setor=setor)
+        _material = self._criar_material_com_estoque("001.001.884")
+        requisicao = Requisicao.objects.create(
+            criador=solicitante,
+            beneficiario=solicitante,
+            setor_beneficiario=setor,
+            numero_publico="REQ-2026-880005",
+            status=StatusRequisicao.PRONTA_PARA_RETIRADA,
+            data_envio_autorizacao="2026-04-30T10:00:00Z",
+            data_autorizacao_ou_recusa="2026-04-30T11:00:00Z",
+            data_finalizacao="2026-04-30T12:00:00Z",
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=solicitante)
+        response = client.post(
+            reverse("requisicao-pickup", args=[requisicao.id]),
+            {"retirante_fisico": "Indevido"},
+            format="json",
+            **self._idempotency_header("pickup-perm"),
+        )
+
+        assert response.status_code in (403, 404)
+
+    def test_pickup_bloqueia_status_invalido(self):
+        setor = self._criar_setor("Retirada Status Invalido", "88050")
+        solicitante = self._criar_usuario("88051", "Solicitante Status", setor=setor)
+        almoxarife = self._criar_usuario(
+            "88052",
+            "Almoxarife Status",
+            papel=PapelChoices.AUXILIAR_ALMOXARIFADO,
+            setor=setor,
+        )
+        _material = self._criar_material_com_estoque("001.001.885")
+        requisicao = Requisicao.objects.create(
+            criador=solicitante,
+            beneficiario=solicitante,
+            setor_beneficiario=setor,
+            numero_publico="REQ-2026-880006",
+            status=StatusRequisicao.AUTORIZADA,
+            data_envio_autorizacao="2026-04-30T10:00:00Z",
+            data_autorizacao_ou_recusa="2026-04-30T11:00:00Z",
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=almoxarife)
+        response = client.post(
+            reverse("requisicao-pickup", args=[requisicao.id]),
+            {"retirante_fisico": "Servidor"},
+            format="json",
+            **self._idempotency_header("pickup-status"),
         )
 
         assert response.status_code == 409

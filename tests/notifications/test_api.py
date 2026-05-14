@@ -173,7 +173,7 @@ class TestNotificacoesAPI:
         usuario = self._criar_usuario("41008", "Usuario Mark Read", setor=setor)
         notificacao = criar_notificacao_usuario(
             destinatario=usuario,
-            tipo=TipoNotificacao.REQUISICAO_ATENDIDA,
+            tipo=TipoNotificacao.REQUISICAO_PRONTA_PARA_RETIRADA,
             titulo="Atendida",
             mensagem="Requisição atendida.",
         )
@@ -236,7 +236,7 @@ class TestNotificacoesAPI:
         usuario = self._criar_usuario("41012", "Usuario Auth", setor=setor)
         notificacao = criar_notificacao_usuario(
             destinatario=usuario,
-            tipo=TipoNotificacao.REQUISICAO_ATENDIDA,
+            tipo=TipoNotificacao.REQUISICAO_PRONTA_PARA_RETIRADA,
             titulo="Atendida",
             mensagem="Requisição atendida.",
         )
@@ -257,7 +257,7 @@ class TestNotificacoesAPI:
         outro_usuario = self._criar_usuario("41015", "Outro Usuário", setor=setor)
         notificacao = criar_notificacao_usuario(
             destinatario=destinatario,
-            tipo=TipoNotificacao.REQUISICAO_ATENDIDA,
+            tipo=TipoNotificacao.REQUISICAO_PRONTA_PARA_RETIRADA,
             titulo="Atendida",
             mensagem="Requisição atendida.",
         )
