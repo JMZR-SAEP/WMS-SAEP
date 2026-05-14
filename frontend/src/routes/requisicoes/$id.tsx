@@ -1018,13 +1018,32 @@ function PickupPanel({
   requisicao: RequisicaoDetail;
 }) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate({ from: "/requisicoes/$id" });
   const [retiranteFisico, setRetiranteFisico] = useState("");
   const [validationError, setValidationError] = useState("");
   const pickupIdempotencyRef = useRef<{ key: string; payloadSignature: string } | null>(null);
 
+  function redirectToLoginAfterAuthError(error: unknown) {
+    if (!isUnauthenticatedError(error)) {
+      return;
+    }
+    queryClient.removeQueries({ queryKey: authQueryKeys.me });
+    void navigate({
+      to: "/login",
+      search: {
+        redirect: buildRequisicaoRedirect({
+          id: String(requisicao.id),
+          contexto: "retirada",
+          sourcePage: undefined,
+        }),
+      },
+    });
+  }
+
   const pickupMutation = useMutation({
     mutationFn: ({ input, idempotencyKey }: PickupMutationArgs) =>
       pickupRequisition(requisicao.id, input, idempotencyKey),
+    onError: redirectToLoginAfterAuthError,
     onSuccess: (data) => {
       queryClient.setQueryData(requisitionDetailQueryOptions(requisicao.id).queryKey, data);
       void queryClient.invalidateQueries({
@@ -1111,7 +1130,13 @@ function DetailHeader({
   sourcePage: number | undefined;
 }) {
   const contextLabel =
-    contexto === "autorizacao" ? "autorização" : contexto === "atendimento" ? "atendimento" : null;
+    contexto === "autorizacao"
+      ? "autorização"
+      : contexto === "atendimento"
+        ? "atendimento"
+        : contexto === "retirada"
+          ? "retirada"
+          : null;
 
   return (
     <div className="detail-hero">
@@ -1344,7 +1369,7 @@ function DetalheRequisicaoPage() {
   const backTo =
     contexto === "autorizacao"
       ? "/autorizacoes"
-      : contexto === "atendimento"
+      : contexto === "atendimento" || contexto === "retirada"
         ? "/atendimentos"
         : "/minhas-requisicoes";
   const queryClient = useQueryClient();

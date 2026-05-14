@@ -210,6 +210,11 @@ class Requisicao(models.Model):
                 | Q(data_autorizacao_ou_recusa__isnull=True),
                 name="req_motivo_cancelamento_obrigatorio_quando_cancelada_pos_autorizacao",
             ),
+            models.CheckConstraint(
+                condition=~Q(status=StatusRequisicao.RETIRADA)
+                | (Q(data_retirada__isnull=False) & Q(retirante_fisico__gt="")),
+                name="req_auditoria_retirada_obrigatoria",
+            ),
         ]
 
     def __str__(self):

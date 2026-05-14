@@ -1455,6 +1455,8 @@ def retirar_requisicao(
             .select_related("criador", "beneficiario", "setor_beneficiario")
             .get(pk=requisicao.pk)
         )
+        if not pode_visualizar_requisicao(ator, requisicao):
+            raise NotFound("Requisição não encontrada.")
         if not pode_retirar_requisicao(ator, requisicao):
             raise PermissionDenied(
                 "Usuário sem permissão para registrar retirada desta requisição."

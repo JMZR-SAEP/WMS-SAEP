@@ -110,7 +110,7 @@ export function notificationOperationalContext(tipo: NotificationType) {
     return "atendimento" as const;
   }
   if (tipo === "requisicao_pronta_para_retirada") {
-    return "atendimento" as const;
+    return "retirada" as const;
   }
   return undefined;
 }
@@ -123,7 +123,7 @@ export function notificationOperationalLabel(tipo: NotificationType) {
     return "Fila de atendimentos";
   }
   if (tipo === "requisicao_pronta_para_retirada") {
-    return "Fila de atendimentos";
+    return "Fila de retiradas";
   }
   return undefined;
 }
