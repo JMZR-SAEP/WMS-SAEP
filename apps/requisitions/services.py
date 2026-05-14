@@ -10,11 +10,12 @@ from rest_framework.exceptions import NotFound, PermissionDenied, ValidationErro
 
 from apps.core.api.exceptions import DomainConflict
 from apps.core.events import (
-    REQUISICAO_ATENDIDA,
     REQUISICAO_AUTORIZADA,
     REQUISICAO_CANCELADA,
     REQUISICAO_ENVIADA_AUTORIZACAO,
+    REQUISICAO_PRONTA_PARA_RETIRADA,
     REQUISICAO_RECUSADA,
+    REQUISICAO_RETIRADA,
     publish_on_commit,
 )
 from apps.materials.models import Material
@@ -33,6 +34,7 @@ from apps.requisitions.policies import (
     pode_autorizar_requisicao,
     pode_cancelar_autorizada,
     pode_manipular_pre_autorizacao,
+    pode_retirar_requisicao,
     pode_visualizar_requisicao,
     queryset_fila_atendimento,
     queryset_fila_autorizacao,
@@ -51,6 +53,7 @@ from apps.users.policies import (
 
 User = get_user_model()
 IDEMPOTENCY_ENDPOINT_FULFILL = "requisitions_fulfill"
+IDEMPOTENCY_ENDPOINT_PICKUP = "requisitions_pickup"
 
 
 @dataclass(frozen=True)
@@ -84,13 +87,11 @@ def _decimal_canonico(value: Decimal) -> str:
 def _hash_payload_atendimento(
     *,
     itens: list[ItemAtendimentoData] | None,
-    retirante_fisico: str,
     observacao_atendimento: str,
 ) -> str:
     payload: dict[str, object] = {
         "itens": None,
         "observacao_atendimento": observacao_atendimento.strip(),
-        "retirante_fisico": retirante_fisico.strip(),
     }
     if itens is not None:
         payload["itens"] = [
@@ -197,31 +198,44 @@ TRANSICOES_REQUISICAO: dict[str, dict[str, object]] = {
     },
     "atender_total": {
         "from_status": (StatusRequisicao.AUTORIZADA,),
-        "to_status": StatusRequisicao.ATENDIDA,
+        "to_status": StatusRequisicao.PRONTA_PARA_RETIRADA,
         "timeline_event_type": TipoEvento.ATENDIMENTO,
         "audit_fields_to_set": (
             "responsavel_atendimento",
             "data_finalizacao",
-            "retirante_fisico",
             "observacao_atendimento",
             "status",
         ),
         "side_effects": (),
-        "notification_event": REQUISICAO_ATENDIDA,
+        "notification_event": REQUISICAO_PRONTA_PARA_RETIRADA,
     },
     "atender_parcial": {
         "from_status": (StatusRequisicao.AUTORIZADA,),
-        "to_status": StatusRequisicao.ATENDIDA_PARCIALMENTE,
+        "to_status": StatusRequisicao.PRONTA_PARA_RETIRADA_PARCIAL,
         "timeline_event_type": TipoEvento.ATENDIMENTO_PARCIAL,
         "audit_fields_to_set": (
             "responsavel_atendimento",
             "data_finalizacao",
-            "retirante_fisico",
             "observacao_atendimento",
             "status",
         ),
         "side_effects": (),
-        "notification_event": REQUISICAO_ATENDIDA,
+        "notification_event": REQUISICAO_PRONTA_PARA_RETIRADA,
+    },
+    "retirar": {
+        "from_status": (
+            StatusRequisicao.PRONTA_PARA_RETIRADA,
+            StatusRequisicao.PRONTA_PARA_RETIRADA_PARCIAL,
+        ),
+        "to_status": StatusRequisicao.RETIRADA,
+        "timeline_event_type": TipoEvento.RETIRADA,
+        "audit_fields_to_set": (
+            "retirante_fisico",
+            "data_retirada",
+            "status",
+        ),
+        "side_effects": (),
+        "notification_event": REQUISICAO_RETIRADA,
     },
     "cancelar_pos_autorizacao_sem_saldo": {
         "from_status": (StatusRequisicao.AUTORIZADA,),
@@ -1131,7 +1145,6 @@ def atender_requisicao(
     requisicao: Requisicao,
     ator: User,
     itens: list[ItemAtendimentoPayload] | None = None,
-    retirante_fisico: str = "",
     observacao_atendimento: str = "",
 ) -> Requisicao:
     itens_normalizados = _normalizar_itens_atendimento(itens)
@@ -1139,7 +1152,6 @@ def atender_requisicao(
         return atender_requisicao_completa(
             requisicao=requisicao,
             ator=ator,
-            retirante_fisico=retirante_fisico,
             observacao_atendimento=observacao_atendimento,
         )
 
@@ -1147,7 +1159,6 @@ def atender_requisicao(
         requisicao=requisicao,
         ator=ator,
         itens=itens_normalizados,
-        retirante_fisico=retirante_fisico,
         observacao_atendimento=observacao_atendimento,
     )
 
@@ -1158,13 +1169,11 @@ def atender_requisicao_idempotente(
     ator: User,
     idempotency_key: str,
     itens: list[ItemAtendimentoPayload] | None = None,
-    retirante_fisico: str = "",
     observacao_atendimento: str = "",
 ) -> Requisicao:
     itens_normalizados = _normalizar_itens_atendimento(itens)
     payload_hash = _hash_payload_atendimento(
         itens=itens_normalizados,
-        retirante_fisico=retirante_fisico,
         observacao_atendimento=observacao_atendimento,
     )
 
@@ -1199,7 +1208,6 @@ def atender_requisicao_idempotente(
             requisicao=requisicao,
             ator=ator,
             itens=itens_normalizados,
-            retirante_fisico=retirante_fisico,
             observacao_atendimento=observacao_atendimento,
         )
         registro.status = StatusIdempotencia.COMPLETED
@@ -1211,7 +1219,6 @@ def atender_requisicao_completa(
     *,
     requisicao: Requisicao,
     ator: User,
-    retirante_fisico: str = "",
     observacao_atendimento: str = "",
 ) -> Requisicao:
     with transaction.atomic():
@@ -1265,7 +1272,6 @@ def atender_requisicao_completa(
             payload={
                 "responsavel_atendimento": ator,
                 "data_finalizacao": timezone.now(),
-                "retirante_fisico": retirante_fisico.strip(),
                 "observacao_atendimento": observacao_atendimento.strip(),
             },
         )
@@ -1288,7 +1294,6 @@ def atender_requisicao_com_itens(
     requisicao: Requisicao,
     ator: User,
     itens: list[ItemAtendimentoData],
-    retirante_fisico: str = "",
     observacao_atendimento: str = "",
 ) -> Requisicao:
     with transaction.atomic():
@@ -1421,7 +1426,6 @@ def atender_requisicao_com_itens(
             payload={
                 "responsavel_atendimento": ator,
                 "data_finalizacao": timezone.now(),
-                "retirante_fisico": retirante_fisico.strip(),
                 "observacao_atendimento": observacao_atendimento.strip(),
             },
         )
@@ -1437,3 +1441,104 @@ def atender_requisicao_com_itens(
         .prefetch_related("itens__material__estoque", "eventos__usuario")
         .get(pk=requisicao.pk)
     )
+
+
+def retirar_requisicao(
+    *,
+    requisicao: Requisicao,
+    ator: User,
+    retirante_fisico: str,
+) -> Requisicao:
+    with transaction.atomic():
+        requisicao = (
+            Requisicao.objects.select_for_update()
+            .select_related("criador", "beneficiario", "setor_beneficiario")
+            .get(pk=requisicao.pk)
+        )
+        if not pode_retirar_requisicao(ator, requisicao):
+            raise PermissionDenied(
+                "Usuário sem permissão para registrar retirada desta requisição."
+            )
+
+        if requisicao.status not in (
+            StatusRequisicao.PRONTA_PARA_RETIRADA,
+            StatusRequisicao.PRONTA_PARA_RETIRADA_PARCIAL,
+        ):
+            raise DomainConflict(
+                "Somente requisições prontas para retirada podem ser encerradas.",
+                details={"status_atual": requisicao.status},
+            )
+
+        _apply_requisicao_transition(
+            requisicao=requisicao,
+            transition_name="retirar",
+            actor=ator,
+            payload={
+                "retirante_fisico": retirante_fisico.strip(),
+                "data_retirada": timezone.now(),
+            },
+        )
+
+    return _recarregar_requisicao_detalhe(requisicao.pk)
+
+
+def retirar_requisicao_idempotente(
+    *,
+    requisicao: Requisicao,
+    ator: User,
+    idempotency_key: str,
+    retirante_fisico: str,
+) -> Requisicao:
+    payload_hash = hashlib.sha256(
+        json.dumps({"retirante_fisico": retirante_fisico.strip()}, sort_keys=True).encode()
+    ).hexdigest()
+
+    with transaction.atomic():
+        lookup = {
+            "usuario": ator,
+            "requisicao": requisicao,
+            "endpoint": IDEMPOTENCY_ENDPOINT_PICKUP,
+            "key": idempotency_key,
+        }
+        try:
+            with transaction.atomic():
+                registro, criado = (
+                    RequisicaoIdempotencyKey.objects.select_for_update().get_or_create(
+                        **lookup,
+                        defaults={
+                            "payload_hash": payload_hash,
+                            "status": StatusIdempotencia.IN_PROGRESS,
+                        },
+                    )
+                )
+        except IntegrityError:
+            registro = RequisicaoIdempotencyKey.objects.select_for_update().get(**lookup)
+            criado = False
+
+        if not criado:
+            if registro.payload_hash != payload_hash:
+                raise DomainConflict(
+                    "Chave de idempotência já usada com payload diferente.",
+                    details={
+                        "idempotency_key": idempotency_key,
+                        "endpoint": IDEMPOTENCY_ENDPOINT_PICKUP,
+                    },
+                )
+            if registro.status == StatusIdempotencia.COMPLETED:
+                return _recarregar_requisicao_detalhe(requisicao.id)
+            raise DomainConflict(
+                "Retirada com esta chave de idempotência ainda está em processamento.",
+                details={
+                    "idempotency_key": idempotency_key,
+                    "endpoint": IDEMPOTENCY_ENDPOINT_PICKUP,
+                },
+            )
+
+        requisicao_retirada = retirar_requisicao(
+            requisicao=requisicao,
+            ator=ator,
+            retirante_fisico=retirante_fisico,
+        )
+        registro.status = StatusIdempotencia.COMPLETED
+        registro.save(update_fields=["status", "updated_at"])
+        return requisicao_retirada
