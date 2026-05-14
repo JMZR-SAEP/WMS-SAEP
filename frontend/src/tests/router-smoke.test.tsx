@@ -3540,6 +3540,7 @@ describe("frontend pilot router", () => {
 
     expect(await screen.findByText("Notificações")).toBeInTheDocument();
     expect(await screen.findByText("2")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /notificações/i }));
     expect(
       await screen.findByText("Aviso coletivo", { selector: ".notification-badge" }),
     ).toBeInTheDocument();
@@ -3598,6 +3599,8 @@ describe("frontend pilot router", () => {
 
     renderRoute("/minhas-requisicoes");
 
+    await screen.findByText("Notificações");
+    fireEvent.click(screen.getByRole("button", { name: /notificações/i }));
     const markReadButton = await screen.findByRole("button", { name: "Marcar como lida" });
     fireEvent.click(markReadButton);
 
@@ -3650,6 +3653,8 @@ describe("frontend pilot router", () => {
 
     renderRoute("/minhas-requisicoes");
 
+    await screen.findByText("Notificações");
+    fireEvent.click(screen.getByRole("button", { name: /notificações/i }));
     const link = await screen.findByRole("link", { name: "Abrir requisição" });
     expect(link).toHaveAttribute("href", "/requisicoes/101?contexto=autorizacao");
     expect(screen.getByText("Fila de autorizações", { selector: ".notification-context" })).toBeInTheDocument();

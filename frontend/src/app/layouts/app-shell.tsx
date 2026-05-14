@@ -82,7 +82,7 @@ export function AppShell() {
   const pushDiagnostic =
     pushRole && pushConfigQuery.isSuccess ? getPushDiagnostic(pushConfigQuery.data) : null;
   const pushUnsupported = pushDiagnostic?.status === "sem_suporte";
-  const [notificationsOpen, setNotificationsOpen] = useState(true);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
 
   useEffect(() => {
     if (
