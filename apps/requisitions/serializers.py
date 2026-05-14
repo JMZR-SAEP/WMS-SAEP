@@ -83,13 +83,16 @@ class RequisicaoItemFulfillInputSerializer(serializers.Serializer):
 
 
 class RequisicaoFulfillInputSerializer(serializers.Serializer):
-    retirante_fisico = serializers.CharField(required=False, allow_blank=True, default="")
     observacao_atendimento = serializers.CharField(required=False, allow_blank=True, default="")
     itens = RequisicaoItemFulfillInputSerializer(
         many=True,
         required=False,
         allow_empty=False,
     )
+
+
+class RequisicaoPickupInputSerializer(serializers.Serializer):
+    retirante_fisico = serializers.CharField(required=True, allow_blank=False)
 
 
 class RequisicaoActionOutputSerializer(serializers.ModelSerializer):
@@ -188,6 +191,7 @@ class RequisicaoDetailOutputSerializer(serializers.ModelSerializer):
             "motivo_cancelamento",
             "data_finalizacao",
             "retirante_fisico",
+            "data_retirada",
             "observacao",
             "observacao_atendimento",
             "itens",

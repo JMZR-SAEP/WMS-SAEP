@@ -161,8 +161,18 @@ def pode_atender_requisicao(user, requisicao: Requisicao) -> bool:
     return pode_operar_estoque(user) and pode_visualizar_requisicao(user, requisicao)
 
 
+def pode_retirar_requisicao(user, requisicao: Requisicao) -> bool:
+    return pode_operar_estoque(user) and pode_visualizar_requisicao(user, requisicao)
+
+
 def queryset_fila_atendimento(user) -> QuerySet[Requisicao]:
     if not pode_ver_fila_atendimento(user):
         return Requisicao.objects.none()
 
-    return Requisicao.objects.filter(status=StatusRequisicao.AUTORIZADA)
+    return Requisicao.objects.filter(
+        status__in=(
+            StatusRequisicao.AUTORIZADA,
+            StatusRequisicao.PRONTA_PARA_RETIRADA,
+            StatusRequisicao.PRONTA_PARA_RETIRADA_PARCIAL,
+        )
+    )
