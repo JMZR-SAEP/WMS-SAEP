@@ -8,6 +8,7 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from apps.core.api.exceptions import DomainConflict
 from apps.materials.models import GrupoMaterial, Material, SubgrupoMaterial
+from apps.requisitions.domain.types import ItemAtendimentoData, ItemAutorizacaoData
 from apps.requisitions.models import (
     ItemRequisicao,
     Requisicao,
@@ -16,8 +17,6 @@ from apps.requisitions.models import (
     TipoEvento,
 )
 from apps.requisitions.services import (
-    ItemAtendimentoData,
-    ItemAutorizacaoData,
     _gerar_numero_publico,
     atender_requisicao,
     atender_requisicao_com_itens,

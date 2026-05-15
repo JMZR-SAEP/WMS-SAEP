@@ -13,6 +13,7 @@ from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 
 from apps.core.api.serializers import ErrorResponseSerializer
+from apps.requisitions.domain.types import ItemAutorizacaoData, ItemRascunhoData
 from apps.requisitions.filters import RequisicaoFilter
 from apps.requisitions.policies import (
     queryset_requisicoes_pessoais,
@@ -34,8 +35,6 @@ from apps.requisitions.serializers import (
     RequisicaoRefuseInputSerializer,
 )
 from apps.requisitions.services import (
-    ItemAutorizacaoData,
-    ItemRascunhoData,
     atender_requisicao_idempotente,
     atualizar_rascunho_requisicao,
     autorizar_requisicao,
