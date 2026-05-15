@@ -2035,8 +2035,9 @@ class TestMaquinaEstadosRequisicao:
             quantidade_solicitada=Decimal("1"),
         )
 
-        with pytest.raises(DomainConflict):
+        with pytest.raises(DomainConflict) as excinfo:
             enviar_para_autorizacao(requisicao=requisicao, ator=solicitante)
+        assert "Transição inválida" in str(excinfo.value.detail)
 
     def test_retornar_para_rascunho_de_status_invalido_levanta_domain_conflict(self):
         setor = self._criar_setor("Invalido02", "SM040")
@@ -2051,8 +2052,9 @@ class TestMaquinaEstadosRequisicao:
             data_autorizacao_ou_recusa="2026-01-04T11:00:00Z",
         )
 
-        with pytest.raises(DomainConflict):
+        with pytest.raises(DomainConflict) as excinfo:
             retornar_para_rascunho(requisicao=requisicao, ator=solicitante)
+        assert "Transição inválida" in str(excinfo.value.detail)
 
     def test_autorizar_de_status_invalido_levanta_domain_conflict(self):
         setor = self._criar_setor("Invalido03", "SM050")
@@ -2071,12 +2073,13 @@ class TestMaquinaEstadosRequisicao:
             quantidade_solicitada=Decimal("1"),
         )
 
-        with pytest.raises(DomainConflict):
+        with pytest.raises(DomainConflict) as excinfo:
             autorizar_requisicao(
                 requisicao=requisicao,
                 ator=chefe,
                 itens=[ItemAutorizacaoData(item_id=item.id, quantidade_autorizada=Decimal("1"))],
             )
+        assert "Transição inválida" in str(excinfo.value.detail)
 
     def test_retirar_de_status_invalido_levanta_domain_conflict(self):
         setor = self._criar_setor("Invalido04", "SM060")
@@ -2097,5 +2100,6 @@ class TestMaquinaEstadosRequisicao:
             data_autorizacao_ou_recusa="2026-01-06T11:00:00Z",
         )
 
-        with pytest.raises(DomainConflict):
+        with pytest.raises(DomainConflict) as excinfo:
             retirar_requisicao(requisicao=requisicao, ator=almoxarife, retirante_fisico="Teste")
+        assert "Transição inválida" in str(excinfo.value.detail)
