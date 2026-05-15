@@ -1,6 +1,8 @@
 import hashlib
+from unittest.mock import MagicMock, patch
 
 import pytest
+from django.db import IntegrityError
 
 from apps.requisitions.idempotency import get_or_create_idempotency_record
 from apps.requisitions.models import Requisicao, RequisicaoIdempotencyKey, StatusIdempotencia
@@ -138,3 +140,37 @@ class TestGetOrCreateIdempotencyRecord:
         )
 
         assert registro.payload_hash == hash_esperado
+
+    def test_fallback_integrityerror_retorna_registro_existente(self):
+        hash_original = _hash("race")
+        registro_existente = RequisicaoIdempotencyKey.objects.create(
+            usuario=self.usuario,
+            requisicao=self.requisicao,
+            endpoint=OPERATION_FULFILL,
+            key="chave-race",
+            payload_hash=hash_original,
+            status=StatusIdempotencia.IN_PROGRESS,
+        )
+
+        mock_qs = MagicMock()
+        mock_qs.get_or_create.side_effect = IntegrityError("simulated race condition")
+        mock_qs.get.return_value = registro_existente
+
+        with patch.object(
+            RequisicaoIdempotencyKey.objects,
+            "select_for_update",
+            return_value=mock_qs,
+        ):
+            registro, criado = get_or_create_idempotency_record(
+                usuario=self.usuario,
+                requisicao=self.requisicao,
+                operation=OPERATION_FULFILL,
+                key="chave-race",
+                payload_hash=hash_original,
+            )
+
+        assert criado is False
+        assert registro.pk == registro_existente.pk
+        assert registro.payload_hash == hash_original
+        assert registro.status == StatusIdempotencia.IN_PROGRESS
+        assert RequisicaoIdempotencyKey.objects.count() == 1

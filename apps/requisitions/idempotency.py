@@ -28,4 +28,5 @@ def get_or_create_idempotency_record(
                 },
             )
     except IntegrityError:
-        return RequisicaoIdempotencyKey.objects.select_for_update().get(**lookup), False
+        with transaction.atomic():
+            return RequisicaoIdempotencyKey.objects.select_for_update().get(**lookup), False
