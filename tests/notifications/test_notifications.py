@@ -23,10 +23,9 @@ from apps.notifications.services import (
     enviar_push_payload_usuario,
     marcar_notificacao_como_lida,
 )
+from apps.requisitions.domain.types import ItemAutorizacaoData, ItemRascunhoData
 from apps.requisitions.models import StatusRequisicao
 from apps.requisitions.services import (
-    ItemAutorizacaoData,
-    ItemRascunhoData,
     atender_requisicao_completa,
     autorizar_requisicao,
     cancelar_requisicao,

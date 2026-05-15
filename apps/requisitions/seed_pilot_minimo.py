@@ -6,11 +6,13 @@ from django.db import transaction
 
 from apps.materials.models import GrupoMaterial, Material, SubgrupoMaterial
 from apps.materials.services import criar_material
-from apps.requisitions.models import Requisicao
-from apps.requisitions.services import (
+from apps.requisitions.domain.types import (
     ItemAtendimentoData,
     ItemAutorizacaoData,
     ItemRascunhoData,
+)
+from apps.requisitions.models import Requisicao
+from apps.requisitions.services import (
     atender_requisicao,
     atualizar_rascunho_requisicao,
     autorizar_requisicao,
