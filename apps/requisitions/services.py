@@ -251,6 +251,30 @@ TRANSICOES_REQUISICAO: dict[str, dict[str, object]] = {
         "side_effects": (),
         "notification_event": REQUISICAO_CANCELADA,
     },
+    "enviar_para_autorizacao": {
+        "from_status": (StatusRequisicao.RASCUNHO,),
+        "to_status": StatusRequisicao.AGUARDANDO_AUTORIZACAO,
+        "timeline_event_type": TipoEvento.ENVIO_AUTORIZACAO,
+        "audit_fields_to_set": ("numero_publico", "data_envio_autorizacao", "status"),
+        "side_effects": (),
+        "notification_event": REQUISICAO_ENVIADA_AUTORIZACAO,
+    },
+    "reenviar_para_autorizacao": {
+        "from_status": (StatusRequisicao.RASCUNHO,),
+        "to_status": StatusRequisicao.AGUARDANDO_AUTORIZACAO,
+        "timeline_event_type": TipoEvento.REENVIO_AUTORIZACAO,
+        "audit_fields_to_set": ("status",),
+        "side_effects": (),
+        "notification_event": REQUISICAO_ENVIADA_AUTORIZACAO,
+    },
+    "retornar_para_rascunho": {
+        "from_status": (StatusRequisicao.AGUARDANDO_AUTORIZACAO,),
+        "to_status": StatusRequisicao.RASCUNHO,
+        "timeline_event_type": TipoEvento.RETORNO_RASCUNHO,
+        "audit_fields_to_set": ("status",),
+        "side_effects": (),
+        "notification_event": None,
+    },
 }
 
 
@@ -575,12 +599,6 @@ def enviar_para_autorizacao(*, requisicao: Requisicao, ator: User) -> Requisicao
         if not pode_manipular_pre_autorizacao(ator, requisicao):
             raise PermissionDenied("Apenas criador pode enviar a requisição.")
 
-        if requisicao.status != StatusRequisicao.RASCUNHO:
-            raise DomainConflict(
-                "Somente requisições em rascunho podem ser enviadas para autorização.",
-                details={"status_atual": requisicao.status},
-            )
-
         itens = list(requisicao.itens.all())
         if not itens:
             raise DomainConflict(
@@ -596,30 +614,21 @@ def enviar_para_autorizacao(*, requisicao: Requisicao, ator: User) -> Requisicao
 
         is_primeiro_envio = not requisicao.numero_publico
         if is_primeiro_envio:
-            numero_publico = _gerar_numero_publico()
-            requisicao.numero_publico = numero_publico
-            requisicao.data_envio_autorizacao = timezone.now()
+            transicao = "enviar_para_autorizacao"
+            payload = {
+                "numero_publico": _gerar_numero_publico(),
+                "data_envio_autorizacao": timezone.now(),
+            }
+        else:
+            transicao = "reenviar_para_autorizacao"
+            payload = {}
 
-        requisicao.status = StatusRequisicao.AGUARDANDO_AUTORIZACAO
-        requisicao.full_clean()
-        requisicao.save(
-            update_fields=[
-                "numero_publico",
-                "status",
-                "data_envio_autorizacao",
-                "updated_at",
-            ]
-        )
-        EventoTimeline.objects.create(
+        _apply_requisicao_transition(
             requisicao=requisicao,
-            tipo_evento=(
-                TipoEvento.ENVIO_AUTORIZACAO
-                if is_primeiro_envio
-                else TipoEvento.REENVIO_AUTORIZACAO
-            ),
-            usuario=ator,
+            transition_name=transicao,
+            actor=ator,
+            payload=payload,
         )
-        _publish_notification_event_on_commit(REQUISICAO_ENVIADA_AUTORIZACAO, requisicao)
 
     return (
         Requisicao.objects.select_related(
@@ -644,18 +653,11 @@ def retornar_para_rascunho(*, requisicao: Requisicao, ator: User) -> Requisicao:
         if not pode_manipular_pre_autorizacao(ator, requisicao):
             raise PermissionDenied("Apenas criador ou beneficiário podem retornar a requisição.")
 
-        if requisicao.status != StatusRequisicao.AGUARDANDO_AUTORIZACAO:
-            raise DomainConflict(
-                "Somente requisições aguardando autorização podem retornar para rascunho.",
-                details={"status_atual": requisicao.status},
-            )
-
-        requisicao.status = StatusRequisicao.RASCUNHO
-        requisicao.save(update_fields=["status", "updated_at"])
-        EventoTimeline.objects.create(
+        _apply_requisicao_transition(
             requisicao=requisicao,
-            tipo_evento=TipoEvento.RETORNO_RASCUNHO,
-            usuario=ator,
+            transition_name="retornar_para_rascunho",
+            actor=ator,
+            payload={},
         )
 
     return (
@@ -731,12 +733,6 @@ def _cancelar_autorizada_sem_saldo(
     if not pode_cancelar_autorizada(ator, requisicao):
         raise PermissionDenied("Usuário sem permissão para cancelar esta requisição.")
 
-    if requisicao.status != StatusRequisicao.AUTORIZADA:
-        raise DomainConflict(
-            "Somente requisições autorizadas podem ser canceladas no atendimento.",
-            details={"status_atual": requisicao.status},
-        )
-
     itens_requisicao = list(
         ItemRequisicao.objects.select_for_update()
         .select_related("material")
@@ -810,12 +806,6 @@ def autorizar_requisicao(
         requisicao = _recarregar_requisicao_para_autorizacao(requisicao)
         if not pode_autorizar_requisicao(ator, requisicao):
             raise PermissionDenied("Usuário sem permissão para autorizar esta requisição.")
-
-        if requisicao.status != StatusRequisicao.AGUARDANDO_AUTORIZACAO:
-            raise DomainConflict(
-                "Somente requisições aguardando autorização podem ser autorizadas.",
-                details={"status_atual": requisicao.status},
-            )
 
         itens_requisicao = list(
             ItemRequisicao.objects.select_for_update()
@@ -906,12 +896,6 @@ def recusar_requisicao(*, requisicao: Requisicao, ator: User, motivo_recusa: str
         requisicao = _recarregar_requisicao_para_autorizacao(requisicao)
         if not pode_autorizar_requisicao(ator, requisicao):
             raise PermissionDenied("Usuário sem permissão para recusar esta requisição.")
-
-        if requisicao.status != StatusRequisicao.AGUARDANDO_AUTORIZACAO:
-            raise DomainConflict(
-                "Somente requisições aguardando autorização podem ser recusadas.",
-                details={"status_atual": requisicao.status},
-            )
 
         _apply_requisicao_transition(
             requisicao=requisicao,
@@ -1058,12 +1042,6 @@ def atender_requisicao_completa(
         if not pode_atender_requisicao(ator, requisicao):
             raise PermissionDenied("Usuário sem permissão para atender esta requisição.")
 
-        if requisicao.status != StatusRequisicao.AUTORIZADA:
-            raise DomainConflict(
-                "Somente requisições autorizadas podem ser atendidas.",
-                details={"status_atual": requisicao.status},
-            )
-
         itens_requisicao = list(
             ItemRequisicao.objects.select_for_update()
             .select_related("material")
@@ -1124,12 +1102,6 @@ def atender_requisicao_com_itens(
         requisicao = _recarregar_requisicao_para_atendimento(requisicao)
         if not pode_atender_requisicao(ator, requisicao):
             raise PermissionDenied("Usuário sem permissão para atender esta requisição.")
-
-        if requisicao.status != StatusRequisicao.AUTORIZADA:
-            raise DomainConflict(
-                "Somente requisições autorizadas podem ser atendidas.",
-                details={"status_atual": requisicao.status},
-            )
 
         itens_requisicao = list(
             ItemRequisicao.objects.select_for_update()
@@ -1267,15 +1239,6 @@ def retirar_requisicao(
         if not pode_retirar_requisicao(ator, requisicao):
             raise PermissionDenied(
                 "Usuário sem permissão para registrar retirada desta requisição."
-            )
-
-        if requisicao.status not in (
-            StatusRequisicao.PRONTA_PARA_RETIRADA,
-            StatusRequisicao.PRONTA_PARA_RETIRADA_PARCIAL,
-        ):
-            raise DomainConflict(
-                "Somente requisições prontas para retirada podem ser retiradas.",
-                details={"status_atual": requisicao.status},
             )
 
         retirante_fisico_normalizado = retirante_fisico.strip()
