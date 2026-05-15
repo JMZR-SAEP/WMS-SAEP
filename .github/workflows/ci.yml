@@ -63,7 +63,7 @@ jobs:
       - name: Django check
         run: uv run python manage.py check
       - name: Run pytest
-        run: make test DATABASE_URL="$DATABASE_URL" DJANGO_SETTINGS_MODULE="$DJANGO_SETTINGS_MODULE" TEST_SETTINGS_MODULE="$TEST_SETTINGS_MODULE" SECRET_KEY="$SECRET_KEY"
+        run: uv run pytest -q -ra --tb=short --strict-markers --disable-warnings
 
   frontend:
     runs-on: ubuntu-latest

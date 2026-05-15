@@ -71,8 +71,8 @@ Durante a fase inicial, o ambiente local é descartável.
 - o fluxo padrão é resetar banco -> aplicar migrations -> carregar dados mínimos (quando existirem);
 - migrations locais são não versionadas e ignoradas pelo `.gitignore`.
 - `rtk make init` deve ser usado no setup inicial do projeto para criar `.venv` e instalar dependências.
-- `rtk make setup` é o comando principal do ciclo efêmero: apaga migrations locais e recria tudo do zero.
-- `rtk make test` executa a suíte com `config.settings.test`;
+- `rtk make test` executa a suíte com `DJANGO_SETTINGS_MODULE=config.settings.test` e opções econômicas/seguras de pytest: `-q -ra --tb=short --strict-markers --disable-warnings`;
+- Para execução manual equivalente, use `DJANGO_SETTINGS_MODULE=config.settings.test pytest -q -ra --tb=short --strict-markers --disable-warnings`;
 - `rtk make frontend-init` instala dependências da SPA e prepara o navegador Chromium do Playwright;
 - `rtk make frontend-gen-api` exporta `frontend/openapi/schema.json` e regenera `frontend/src/shared/api/schema.d.ts`;
 - `rtk make frontend-dev`, `rtk make frontend-build`, `rtk make frontend-lint`, `rtk make frontend-test` e `rtk make frontend-e2e` são os entrypoints operacionais oficiais da SPA;
