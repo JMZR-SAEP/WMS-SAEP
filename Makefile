@@ -116,7 +116,7 @@ finish:: ## Stop application execution
 
 test: ## Rodar testes com settings de teste
 	-rm -fr .pytest_cache/
-	DJANGO_SETTINGS_MODULE=config.settings.test pytest -q -ra --tb=short --strict-markers --disable-warnings
+	DJANGO_SETTINGS_MODULE=$(TEST_SETTINGS_MODULE) $(UV) run pytest -q -ra --tb=short --strict-markers --disable-warnings
 
 seed-pilot-minimo: ## Carregar seed minima oficial do piloto
 	DJANGO_SETTINGS_MODULE=$(DJANGO_SETTINGS_MODULE) $(DJANGO_ADMIN) seed_pilot_minimo
