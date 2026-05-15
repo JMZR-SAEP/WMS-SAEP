@@ -1046,12 +1046,17 @@ function PickupPanel({
     mutationFn: ({ input, idempotencyKey }: PickupMutationArgs) =>
       pickupRequisition(requisicao.id, input, idempotencyKey),
     onError: redirectToLoginAfterAuthError,
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       queryClient.setQueryData(requisitionDetailQueryOptions(requisicao.id).queryKey, data);
-      void queryClient.invalidateQueries({
+      await queryClient.invalidateQueries({
         queryKey: requisitionsQueryKeys.pendingFulfillmentsAll,
       });
-      void navigate({ to: "/atendimentos" });
+      await navigate({
+        to: "/atendimentos",
+        search: {
+          page: fulfillmentPage && fulfillmentPage > 1 ? fulfillmentPage : undefined,
+        },
+      });
     },
   });
 

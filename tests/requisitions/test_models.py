@@ -349,6 +349,48 @@ class TestRequisicaoModel:
         self._marcar_primeiro_envio(req, "REQ-2026-000001")
         assert str(req) == f"REQ REQ-2026-000001 — {req.beneficiario.nome_completo}"
 
+    def _criar_requisicao_retirada(self):
+        req = self._criar_requisicao()
+        req.status = StatusRequisicao.RETIRADA
+        req.data_retirada = timezone.now()
+        req.retirante_fisico = "Retirador Original"
+        req.save(update_fields=["status", "data_retirada", "retirante_fisico", "updated_at"])
+        return req
+
+    def test_data_retirada_imutavel_via_save(self):
+        req = self._criar_requisicao_retirada()
+        original = req.data_retirada
+        req.data_retirada = timezone.now()
+        with pytest.raises(ValidationError, match="data_retirada"):
+            req.save(update_fields=["data_retirada", "updated_at"])
+        req.refresh_from_db()
+        assert req.data_retirada == original
+
+    def test_retirante_fisico_imutavel_via_save(self):
+        req = self._criar_requisicao_retirada()
+        req.retirante_fisico = "Outro Retirador"
+        with pytest.raises(ValidationError, match="retirante_fisico"):
+            req.save(update_fields=["retirante_fisico", "updated_at"])
+        req.refresh_from_db()
+        assert req.retirante_fisico == "Retirador Original"
+
+    def test_data_retirada_imutavel_via_queryset_update(self):
+        req = self._criar_requisicao_retirada()
+        with pytest.raises(ValueError, match="imutáveis"):
+            Requisicao.objects.filter(pk=req.pk).update(data_retirada=timezone.now())
+
+    def test_retirante_fisico_imutavel_via_queryset_update(self):
+        req = self._criar_requisicao_retirada()
+        with pytest.raises(ValueError, match="imutáveis"):
+            Requisicao.objects.filter(pk=req.pk).update(retirante_fisico="Outro")
+
+    def test_update_outro_campo_permitido_mesmo_com_retirada_preenchida(self):
+        req = self._criar_requisicao_retirada()
+        Requisicao.objects.filter(pk=req.pk).update(observacao="nova obs")
+        req.refresh_from_db()
+        assert req.observacao == "nova obs"
+        assert req.retirante_fisico == "Retirador Original"
+
 
 @pytest.mark.django_db
 class TestItemRequisicaoModel:

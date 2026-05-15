@@ -66,6 +66,18 @@ class SequenciaNumeroRequisicao(models.Model):
         return f"{self.ano}: {self.ultimo_numero}"
 
 
+class RequisicaoQuerySet(models.QuerySet):
+    def update(self, **kwargs):
+        condition = models.Q()
+        if "data_retirada" in kwargs:
+            condition |= models.Q(data_retirada__isnull=False)
+        if "retirante_fisico" in kwargs:
+            condition |= models.Q(retirante_fisico__gt="")
+        if condition and self.filter(condition).exists():
+            raise ValueError("Campos de auditoria de retirada são imutáveis após preenchimento.")
+        return super().update(**kwargs)
+
+
 class Requisicao(models.Model):
     numero_publico = models.CharField(
         max_length=20,
@@ -172,6 +184,8 @@ class Requisicao(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    objects = RequisicaoQuerySet.as_manager()
+
     class Meta:
         verbose_name = "Requisição"
         verbose_name_plural = "Requisições"
@@ -240,6 +254,8 @@ class Requisicao(models.Model):
                     "beneficiario_id",
                     "setor_beneficiario_id",
                     "status",
+                    "data_retirada",
+                    "retirante_fisico",
                 )
                 .first()
             )
@@ -263,6 +279,20 @@ class Requisicao(models.Model):
                 ):
                     errors["setor_beneficiario"] = (
                         "Setor beneficiário deve corresponder ao setor atual do beneficiário."
+                    )
+                if (
+                    persisted["data_retirada"] is not None
+                    and self.data_retirada != persisted["data_retirada"]
+                ):
+                    errors["data_retirada"] = (
+                        "data_retirada é campo de auditoria imutável após preenchimento."
+                    )
+                if (
+                    persisted["retirante_fisico"]
+                    and self.retirante_fisico != persisted["retirante_fisico"]
+                ):
+                    errors["retirante_fisico"] = (
+                        "retirante_fisico é campo de auditoria imutável após preenchimento."
                     )
                 if errors:
                     raise ValidationError(errors)

@@ -1437,6 +1437,15 @@ def retirar_requisicao(
                 "Usuário sem permissão para registrar retirada desta requisição."
             )
 
+        if requisicao.status not in (
+            StatusRequisicao.PRONTA_PARA_RETIRADA,
+            StatusRequisicao.PRONTA_PARA_RETIRADA_PARCIAL,
+        ):
+            raise DomainConflict(
+                "Somente requisições prontas para retirada podem ser retiradas.",
+                details={"status_atual": requisicao.status},
+            )
+
         itens_requisicao = list(
             ItemRequisicao.objects.select_for_update()
             .select_related("material")
@@ -1463,12 +1472,16 @@ def retirar_requisicao(
                         estoque_travado=estoques_por_material_id[item.material_id],
                     )
 
+        retirante_fisico_normalizado = retirante_fisico.strip()
+        if not retirante_fisico_normalizado:
+            raise ValidationError({"retirante_fisico": ["Nome do retirante é obrigatório."]})
+
         _apply_requisicao_transition(
             requisicao=requisicao,
             transition_name="retirar",
             actor=ator,
             payload={
-                "retirante_fisico": retirante_fisico.strip(),
+                "retirante_fisico": retirante_fisico_normalizado,
                 "data_retirada": timezone.now(),
             },
         )

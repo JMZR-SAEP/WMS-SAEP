@@ -3235,6 +3235,9 @@ class TestRequisicaoAPI:
         assert response.data["data_retirada"] is not None
         requisicao.refresh_from_db()
         assert requisicao.eventos.filter(tipo_evento=TipoEvento.RETIRADA).exists()
+        material.estoque.refresh_from_db()
+        assert material.estoque.saldo_fisico == Decimal("8")
+        assert material.estoque.saldo_reservado == Decimal("0")
 
     def test_pickup_happy_path_pronta_para_retirada_parcial(self):
         setor = self._criar_setor("Retirada Parcial Setor", "88010")
@@ -3282,6 +3285,9 @@ class TestRequisicaoAPI:
         assert requisicao.retirante_fisico == "Servidor Parcial"
         assert requisicao.data_retirada is not None
         assert requisicao.eventos.filter(tipo_evento=TipoEvento.RETIRADA).exists()
+        material.estoque.refresh_from_db()
+        assert material.estoque.saldo_fisico == Decimal("9")
+        assert material.estoque.saldo_reservado == Decimal("0")
 
     def test_pickup_sem_idempotency_key_retorna_400(self):
         setor = self._criar_setor("Retirada Sem Chave", "88020")
