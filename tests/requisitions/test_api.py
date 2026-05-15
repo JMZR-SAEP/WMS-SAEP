@@ -3380,7 +3380,8 @@ class TestRequisicaoAPI:
             **self._idempotency_header("pickup-perm"),
         )
 
-        assert response.status_code in (403, 404)
+        assert response.status_code == 403
+        assert response.data["error"]["code"] == "permission_denied"
 
     def test_pickup_bloqueia_status_invalido(self):
         setor = self._criar_setor("Retirada Status Invalido", "88050")

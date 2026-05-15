@@ -1446,6 +1446,10 @@ def retirar_requisicao(
                 details={"status_atual": requisicao.status},
             )
 
+        retirante_fisico_normalizado = retirante_fisico.strip()
+        if not retirante_fisico_normalizado:
+            raise ValidationError({"retirante_fisico": ["Nome do retirante é obrigatório."]})
+
         itens_requisicao = list(
             ItemRequisicao.objects.select_for_update()
             .select_related("material")
@@ -1471,10 +1475,6 @@ def retirar_requisicao(
                         quantidade=quantidade_nao_entregue,
                         estoque_travado=estoques_por_material_id[item.material_id],
                     )
-
-        retirante_fisico_normalizado = retirante_fisico.strip()
-        if not retirante_fisico_normalizado:
-            raise ValidationError({"retirante_fisico": ["Nome do retirante é obrigatório."]})
 
         _apply_requisicao_transition(
             requisicao=requisicao,
