@@ -23,8 +23,10 @@ from apps.requisitions.services import (
     atender_requisicao_completa,
     autorizar_requisicao,
     cancelar_requisicao,
+    enviar_para_autorizacao,
     recusar_requisicao,
     retirar_requisicao,
+    retornar_para_rascunho,
 )
 from apps.stock.models import EstoqueMaterial, MovimentacaoEstoque, TipoMovimentacao
 from apps.users.models import PapelChoices, Setor, User
@@ -1879,3 +1881,225 @@ class TestRetiradaRequisicaoService:
                 ator=almoxarife,
                 retirante_fisico="Servidor",
             )
+
+
+@pytest.mark.django_db(transaction=True)
+class TestMaquinaEstadosRequisicao:
+    @staticmethod
+    def _criar_setor(nome: str, chefe_matricula: str) -> Setor:
+        chefe = User.objects.create(
+            matricula_funcional=chefe_matricula,
+            nome_completo=f"Chefe {nome}",
+            papel=PapelChoices.CHEFE_SETOR,
+            is_active=True,
+        )
+        setor = Setor.objects.create(nome=nome, chefe_responsavel=chefe)
+        chefe.setor = setor
+        chefe.save(update_fields=["setor"])
+        return setor
+
+    @staticmethod
+    def _criar_usuario(
+        matricula: str,
+        nome: str,
+        *,
+        papel=PapelChoices.SOLICITANTE,
+        setor: Setor | None = None,
+    ) -> User:
+        return User.objects.create(
+            matricula_funcional=matricula,
+            nome_completo=nome,
+            papel=papel,
+            setor=setor,
+            is_active=True,
+        )
+
+    @staticmethod
+    def _criar_material_com_estoque(
+        codigo: str,
+        *,
+        saldo_fisico: Decimal = Decimal("10"),
+    ) -> Material:
+        from apps.materials.models import GrupoMaterial, SubgrupoMaterial
+
+        grupo_codigo, subgrupo_codigo, sequencial = codigo.split(".")
+        grupo, _ = GrupoMaterial.objects.get_or_create(
+            codigo_grupo=grupo_codigo, defaults={"nome": f"Grupo {grupo_codigo}"}
+        )
+        subgrupo, _ = SubgrupoMaterial.objects.get_or_create(
+            grupo=grupo,
+            codigo_subgrupo=subgrupo_codigo,
+            defaults={"nome": f"Subgrupo {subgrupo_codigo}"},
+        )
+        material = Material.objects.create(
+            subgrupo=subgrupo,
+            codigo_completo=codigo,
+            sequencial=sequencial,
+            nome=f"Material {codigo}",
+            unidade_medida="UN",
+            is_active=True,
+        )
+        EstoqueMaterial.objects.create(
+            material=material, saldo_fisico=saldo_fisico, saldo_reservado=Decimal("0")
+        )
+        return material
+
+    @staticmethod
+    def _criar_rascunho_com_item(*, criador: User, material: Material) -> Requisicao:
+        requisicao = Requisicao.objects.create(
+            criador=criador,
+            beneficiario=criador,
+            setor_beneficiario=criador.setor,
+            status=StatusRequisicao.RASCUNHO,
+        )
+        requisicao.itens.create(
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal("2"),
+        )
+        return requisicao
+
+    def test_enviar_para_autorizacao_primeiro_envio_gera_numero_e_evento(self):
+        setor = self._criar_setor("Envio01", "SM001")
+        solicitante = self._criar_usuario("SM002", "Solicitante Envio01", setor=setor)
+        material = self._criar_material_com_estoque("001.001.901")
+        requisicao = self._criar_rascunho_com_item(criador=solicitante, material=material)
+
+        resultado = enviar_para_autorizacao(requisicao=requisicao, ator=solicitante)
+
+        assert resultado.status == StatusRequisicao.AGUARDANDO_AUTORIZACAO
+        assert resultado.numero_publico is not None
+        assert resultado.numero_publico.startswith("REQ-")
+        assert resultado.data_envio_autorizacao is not None
+        evento = resultado.eventos.get(tipo_evento=TipoEvento.ENVIO_AUTORIZACAO)
+        assert evento.usuario == solicitante
+
+    def test_reenviar_para_autorizacao_preserva_numero_publico_e_registra_reenvio(self):
+        setor = self._criar_setor("Envio02", "SM010")
+        solicitante = self._criar_usuario("SM011", "Solicitante Envio02", setor=setor)
+        material = self._criar_material_com_estoque("001.001.902")
+        requisicao = Requisicao.objects.create(
+            criador=solicitante,
+            beneficiario=solicitante,
+            setor_beneficiario=setor,
+            status=StatusRequisicao.RASCUNHO,
+            numero_publico="REQ-2026-900001",
+            data_envio_autorizacao="2026-01-01T10:00:00Z",
+        )
+        requisicao.itens.create(
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal("3"),
+        )
+
+        resultado = enviar_para_autorizacao(requisicao=requisicao, ator=solicitante)
+
+        assert resultado.status == StatusRequisicao.AGUARDANDO_AUTORIZACAO
+        assert resultado.numero_publico == "REQ-2026-900001"
+        assert resultado.eventos.filter(tipo_evento=TipoEvento.REENVIO_AUTORIZACAO).exists()
+        assert not resultado.eventos.filter(tipo_evento=TipoEvento.ENVIO_AUTORIZACAO).exists()
+
+    def test_retornar_para_rascunho_muda_status_e_registra_evento(self):
+        setor = self._criar_setor("Retorno01", "SM020")
+        solicitante = self._criar_usuario("SM021", "Solicitante Retorno01", setor=setor)
+        requisicao = Requisicao.objects.create(
+            criador=solicitante,
+            beneficiario=solicitante,
+            setor_beneficiario=setor,
+            status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
+            numero_publico="REQ-2026-900002",
+            data_envio_autorizacao="2026-01-02T10:00:00Z",
+        )
+
+        resultado = retornar_para_rascunho(requisicao=requisicao, ator=solicitante)
+
+        assert resultado.status == StatusRequisicao.RASCUNHO
+        evento = resultado.eventos.get(tipo_evento=TipoEvento.RETORNO_RASCUNHO)
+        assert evento.usuario == solicitante
+
+    def test_enviar_de_status_invalido_levanta_domain_conflict(self):
+        setor = self._criar_setor("Invalido01", "SM030")
+        solicitante = self._criar_usuario("SM031", "Solicitante Invalido01", setor=setor)
+        material = self._criar_material_com_estoque("001.001.903")
+        requisicao = Requisicao.objects.create(
+            criador=solicitante,
+            beneficiario=solicitante,
+            setor_beneficiario=setor,
+            status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
+            numero_publico="REQ-2026-900003",
+            data_envio_autorizacao="2026-01-03T10:00:00Z",
+        )
+        requisicao.itens.create(
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal("1"),
+        )
+
+        with pytest.raises(DomainConflict) as excinfo:
+            enviar_para_autorizacao(requisicao=requisicao, ator=solicitante)
+        assert "Transição inválida" in str(excinfo.value.detail)
+
+    def test_retornar_para_rascunho_de_status_invalido_levanta_domain_conflict(self):
+        setor = self._criar_setor("Invalido02", "SM040")
+        solicitante = self._criar_usuario("SM041", "Solicitante Invalido02", setor=setor)
+        requisicao = Requisicao.objects.create(
+            criador=solicitante,
+            beneficiario=solicitante,
+            setor_beneficiario=setor,
+            status=StatusRequisicao.AUTORIZADA,
+            numero_publico="REQ-2026-900004",
+            data_envio_autorizacao="2026-01-04T10:00:00Z",
+            data_autorizacao_ou_recusa="2026-01-04T11:00:00Z",
+        )
+
+        with pytest.raises(DomainConflict) as excinfo:
+            retornar_para_rascunho(requisicao=requisicao, ator=solicitante)
+        assert "Transição inválida" in str(excinfo.value.detail)
+
+    def test_autorizar_de_status_invalido_levanta_domain_conflict(self):
+        setor = self._criar_setor("Invalido03", "SM050")
+        chefe = setor.chefe_responsavel
+        solicitante = self._criar_usuario("SM051", "Solicitante Invalido03", setor=setor)
+        material = self._criar_material_com_estoque("001.001.905")
+        requisicao = Requisicao.objects.create(
+            criador=solicitante,
+            beneficiario=solicitante,
+            setor_beneficiario=setor,
+            status=StatusRequisicao.RASCUNHO,
+        )
+        item = requisicao.itens.create(
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal("1"),
+        )
+
+        with pytest.raises(DomainConflict) as excinfo:
+            autorizar_requisicao(
+                requisicao=requisicao,
+                ator=chefe,
+                itens=[ItemAutorizacaoData(item_id=item.id, quantidade_autorizada=Decimal("1"))],
+            )
+        assert "Transição inválida" in str(excinfo.value.detail)
+
+    def test_retirar_de_status_invalido_levanta_domain_conflict(self):
+        setor = self._criar_setor("Invalido04", "SM060")
+        solicitante = self._criar_usuario("SM061", "Solicitante Invalido04", setor=setor)
+        almoxarife = self._criar_usuario(
+            "SM062",
+            "Almoxarife Invalido04",
+            setor=setor,
+            papel=PapelChoices.AUXILIAR_ALMOXARIFADO,
+        )
+        requisicao = Requisicao.objects.create(
+            criador=solicitante,
+            beneficiario=solicitante,
+            setor_beneficiario=setor,
+            status=StatusRequisicao.AUTORIZADA,
+            numero_publico="REQ-2026-900006",
+            data_envio_autorizacao="2026-01-06T10:00:00Z",
+            data_autorizacao_ou_recusa="2026-01-06T11:00:00Z",
+        )
+
+        with pytest.raises(DomainConflict) as excinfo:
+            retirar_requisicao(requisicao=requisicao, ator=almoxarife, retirante_fisico="Teste")
+        assert "Transição inválida" in str(excinfo.value.detail)
