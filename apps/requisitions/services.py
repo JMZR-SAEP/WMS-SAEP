@@ -1456,6 +1456,23 @@ def retirar_requisicao(
             .filter(requisicao=requisicao)
             .order_by("material_id", "id")
         )
+
+        for item in itens_requisicao:
+            if (
+                item.quantidade_entregue < 0
+                or item.quantidade_entregue > item.quantidade_autorizada
+                or item.quantidade_autorizada > item.quantidade_solicitada
+            ):
+                raise DomainConflict(
+                    "Item em estado inconsistente para retirada.",
+                    details={
+                        "item_id": item.id,
+                        "quantidade_entregue": str(item.quantidade_entregue),
+                        "quantidade_autorizada": str(item.quantidade_autorizada),
+                        "quantidade_solicitada": str(item.quantidade_solicitada),
+                    },
+                )
+
         itens_autorizados = [item for item in itens_requisicao if item.quantidade_autorizada > 0]
         if itens_autorizados:
             estoques_por_material_id = _travar_estoques_dos_itens(itens_autorizados)

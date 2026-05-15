@@ -3414,3 +3414,147 @@ class TestRequisicaoAPI:
 
         assert response.status_code == 409
         assert response.data["error"]["code"] == "domain_conflict"
+
+    def test_pickup_idempotency_same_key_same_payload_retorna_sucesso(self):
+        setor = self._criar_setor("Retirada Idem Same", "88060")
+        solicitante = self._criar_usuario("88061", "Solicitante Idem Same", setor=setor)
+        almoxarife = self._criar_usuario(
+            "88062",
+            "Almoxarife Idem Same",
+            papel=PapelChoices.AUXILIAR_ALMOXARIFADO,
+            setor=setor,
+        )
+        material = self._criar_material_com_estoque("001.001.886", saldo_reservado=Decimal("2"))
+        requisicao = Requisicao.objects.create(
+            criador=solicitante,
+            beneficiario=solicitante,
+            setor_beneficiario=setor,
+            numero_publico="REQ-2026-880007",
+            status=StatusRequisicao.PRONTA_PARA_RETIRADA,
+            data_envio_autorizacao="2026-04-30T10:00:00Z",
+            data_autorizacao_ou_recusa="2026-04-30T11:00:00Z",
+            data_finalizacao="2026-04-30T12:00:00Z",
+        )
+        requisicao.itens.create(
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal("2"),
+            quantidade_autorizada=Decimal("2"),
+            quantidade_entregue=Decimal("2"),
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=almoxarife)
+        first_response = client.post(
+            reverse("requisicao-pickup", args=[requisicao.id]),
+            {"retirante_fisico": "Servidor Idem"},
+            format="json",
+            **self._idempotency_header("pickup-idem-same"),
+        )
+        movement_count = MovimentacaoEstoque.objects.filter(requisicao=requisicao).count()
+        timeline_count = EventoTimeline.objects.filter(requisicao=requisicao).count()
+
+        retry_response = client.post(
+            reverse("requisicao-pickup", args=[requisicao.id]),
+            {"retirante_fisico": "Servidor Idem"},
+            format="json",
+            **self._idempotency_header("pickup-idem-same"),
+        )
+
+        assert first_response.status_code == 200
+        assert retry_response.status_code == 200
+        assert retry_response.data["status"] == StatusRequisicao.RETIRADA
+        assert MovimentacaoEstoque.objects.filter(requisicao=requisicao).count() == movement_count
+        assert EventoTimeline.objects.filter(requisicao=requisicao).count() == timeline_count
+        material.estoque.refresh_from_db()
+        assert material.estoque.saldo_fisico == Decimal("8")
+        assert material.estoque.saldo_reservado == Decimal("0")
+
+    def test_pickup_idempotency_same_key_different_payload_retorna_409(self):
+        setor = self._criar_setor("Retirada Idem Conflito", "88070")
+        solicitante = self._criar_usuario("88071", "Solicitante Idem Conflito", setor=setor)
+        almoxarife = self._criar_usuario(
+            "88072",
+            "Almoxarife Idem Conflito",
+            papel=PapelChoices.AUXILIAR_ALMOXARIFADO,
+            setor=setor,
+        )
+        material = self._criar_material_com_estoque("001.001.887", saldo_reservado=Decimal("2"))
+        requisicao = Requisicao.objects.create(
+            criador=solicitante,
+            beneficiario=solicitante,
+            setor_beneficiario=setor,
+            numero_publico="REQ-2026-880008",
+            status=StatusRequisicao.PRONTA_PARA_RETIRADA,
+            data_envio_autorizacao="2026-04-30T10:00:00Z",
+            data_autorizacao_ou_recusa="2026-04-30T11:00:00Z",
+            data_finalizacao="2026-04-30T12:00:00Z",
+        )
+        requisicao.itens.create(
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=Decimal("2"),
+            quantidade_autorizada=Decimal("2"),
+            quantidade_entregue=Decimal("2"),
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=almoxarife)
+        first_response = client.post(
+            reverse("requisicao-pickup", args=[requisicao.id]),
+            {"retirante_fisico": "Servidor Original"},
+            format="json",
+            **self._idempotency_header("pickup-idem-conflito"),
+        )
+        movement_count = MovimentacaoEstoque.objects.filter(requisicao=requisicao).count()
+        timeline_count = EventoTimeline.objects.filter(requisicao=requisicao).count()
+
+        conflict_response = client.post(
+            reverse("requisicao-pickup", args=[requisicao.id]),
+            {"retirante_fisico": "Servidor Diferente"},
+            format="json",
+            **self._idempotency_header("pickup-idem-conflito"),
+        )
+
+        assert first_response.status_code == 200
+        assert conflict_response.status_code == 409
+        assert conflict_response.data["error"]["code"] == "domain_conflict"
+        assert MovimentacaoEstoque.objects.filter(requisicao=requisicao).count() == movement_count
+        assert EventoTimeline.objects.filter(requisicao=requisicao).count() == timeline_count
+        material.estoque.refresh_from_db()
+        assert material.estoque.saldo_fisico == Decimal("8")
+        assert material.estoque.saldo_reservado == Decimal("0")
+
+    def test_pickup_retorna_404_quando_fora_do_escopo(self):
+        setor_req = self._criar_setor("Retirada Escopo Req", "88080")
+        solicitante = self._criar_usuario("88081", "Solicitante Escopo", setor=setor_req)
+        requisicao = Requisicao.objects.create(
+            criador=solicitante,
+            beneficiario=solicitante,
+            setor_beneficiario=setor_req,
+            numero_publico="REQ-2026-880009",
+            status=StatusRequisicao.PRONTA_PARA_RETIRADA,
+            data_envio_autorizacao="2026-04-30T10:00:00Z",
+            data_autorizacao_ou_recusa="2026-04-30T11:00:00Z",
+            data_finalizacao="2026-04-30T12:00:00Z",
+        )
+
+        setor_outro = self._criar_setor("Outro Setor Escopo", "88090")
+        usuario_outro_setor = self._criar_usuario(
+            "88091",
+            "Solicitante Outro Setor",
+            papel=PapelChoices.SOLICITANTE,
+            setor=setor_outro,
+        )
+
+        client = APIClient()
+        client.force_authenticate(user=usuario_outro_setor)
+        response = client.post(
+            reverse("requisicao-pickup", args=[requisicao.id]),
+            {"retirante_fisico": "Invasor"},
+            format="json",
+            **self._idempotency_header("pickup-escopo"),
+        )
+
+        assert response.status_code == 404
+        assert response.data["error"]["code"] == "not_found"
