@@ -9,16 +9,16 @@ class StatusRequisicao(models.TextChoices):
     AGUARDANDO_AUTORIZACAO = "aguardando_autorizacao", "Aguardando Autorização"
     RECUSADA = "recusada", "Recusada"
     AUTORIZADA = "autorizada", "Autorizada"
-    ATENDIDA_PARCIALMENTE = "atendida_parcialmente", "Atendida Parcialmente"
-    ATENDIDA = "atendida", "Atendida"
+    PRONTA_PARA_RETIRADA_PARCIAL = "pronta_para_retirada_parcial", "Pronta para Retirada (Parcial)"
+    PRONTA_PARA_RETIRADA = "pronta_para_retirada", "Pronta para Retirada"
+    RETIRADA = "retirada", "Retirada"
     CANCELADA = "cancelada", "Cancelada"
     ESTORNADA = "estornada", "Estornada"
 
     @classmethod
     def estados_finais(cls):
         return [
-            cls.ATENDIDA_PARCIALMENTE,
-            cls.ATENDIDA,
+            cls.RETIRADA,
             cls.CANCELADA,
             cls.ESTORNADA,
             cls.RECUSADA,
@@ -35,6 +35,7 @@ class TipoEvento(models.TextChoices):
     RECUSA = "recusa", "Recusa"
     ATENDIMENTO_PARCIAL = "atendimento_parcial", "Atendimento Parcial"
     ATENDIMENTO = "atendimento", "Atendimento"
+    RETIRADA = "retirada", "Retirada"
     CANCELAMENTO = "cancelamento", "Cancelamento"
     ESTORNO = "estorno", "Estorno"
 
@@ -63,6 +64,18 @@ class SequenciaNumeroRequisicao(models.Model):
 
     def __str__(self):
         return f"{self.ano}: {self.ultimo_numero}"
+
+
+class RequisicaoQuerySet(models.QuerySet):
+    def update(self, **kwargs):
+        condition = models.Q()
+        if "data_retirada" in kwargs:
+            condition |= models.Q(data_retirada__isnull=False)
+        if "retirante_fisico" in kwargs:
+            condition |= models.Q(retirante_fisico__gt="")
+        if condition and self.filter(condition).exists():
+            raise ValueError("Campos de auditoria de retirada são imutáveis após preenchimento.")
+        return super().update(**kwargs)
 
 
 class Requisicao(models.Model):
@@ -148,6 +161,11 @@ class Requisicao(models.Model):
         default="",
         help_text="Nome de quem retirou (diferente do beneficiário)",
     )
+    data_retirada = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Data e hora da retirada física dos materiais",
+    )
     motivo_cancelamento = models.TextField(
         blank=True,
         default="",
@@ -165,6 +183,8 @@ class Requisicao(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    objects = RequisicaoQuerySet.as_manager()
 
     class Meta:
         verbose_name = "Requisição"
@@ -204,6 +224,11 @@ class Requisicao(models.Model):
                 | Q(data_autorizacao_ou_recusa__isnull=True),
                 name="req_motivo_cancelamento_obrigatorio_quando_cancelada_pos_autorizacao",
             ),
+            models.CheckConstraint(
+                condition=~Q(status=StatusRequisicao.RETIRADA)
+                | (Q(data_retirada__isnull=False) & Q(retirante_fisico__gt="")),
+                name="req_auditoria_retirada_obrigatoria",
+            ),
         ]
 
     def __str__(self):
@@ -229,6 +254,8 @@ class Requisicao(models.Model):
                     "beneficiario_id",
                     "setor_beneficiario_id",
                     "status",
+                    "data_retirada",
+                    "retirante_fisico",
                 )
                 .first()
             )
@@ -252,6 +279,20 @@ class Requisicao(models.Model):
                 ):
                     errors["setor_beneficiario"] = (
                         "Setor beneficiário deve corresponder ao setor atual do beneficiário."
+                    )
+                if (
+                    persisted["data_retirada"] is not None
+                    and self.data_retirada != persisted["data_retirada"]
+                ):
+                    errors["data_retirada"] = (
+                        "data_retirada é campo de auditoria imutável após preenchimento."
+                    )
+                if (
+                    persisted["retirante_fisico"]
+                    and self.retirante_fisico != persisted["retirante_fisico"]
+                ):
+                    errors["retirante_fisico"] = (
+                        "retirante_fisico é campo de auditoria imutável após preenchimento."
                     )
                 if errors:
                     raise ValidationError(errors)

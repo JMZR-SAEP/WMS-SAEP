@@ -40,6 +40,14 @@ export const Route = createFileRoute("/atendimentos")({
   component: AtendimentosPage,
 });
 
+function contextoParaStatus(
+  status: RequisicaoPendingFulfillmentItem["status"],
+): "atendimento" | "retirada" {
+  return status === "pronta_para_retirada" || status === "pronta_para_retirada_parcial"
+    ? "retirada"
+    : "atendimento";
+}
+
 function EmptyState() {
   return (
     <WorklistEmptyState
@@ -96,7 +104,7 @@ function AtendimentoCard({
         <Link
           className="action-link compact-action"
           params={{ id: String(requisicao.id) }}
-          search={{ contexto: "atendimento", page: currentPage === 1 ? undefined : currentPage }}
+          search={{ contexto: contextoParaStatus(requisicao.status), page: currentPage === 1 ? undefined : currentPage }}
           to="/requisicoes/$id"
         >
           Abrir
@@ -159,7 +167,7 @@ function AtendimentosPage() {
               aria-label={`Abrir ${row.original.numero_publico ?? `#${row.original.id}`}`}
               className="sr-only focus:not-sr-only"
               params={{ id: String(row.original.id) }}
-              search={{ contexto: "atendimento", page: currentPage === 1 ? undefined : currentPage }}
+              search={{ contexto: contextoParaStatus(row.original.status), page: currentPage === 1 ? undefined : currentPage }}
               to="/requisicoes/$id"
             />
             <span className="font-semibold text-[var(--ink-strong)]">
@@ -295,7 +303,7 @@ function AtendimentosPage() {
                       void navigate({
                         to: "/requisicoes/$id",
                         params: { id: String(row.original.id) },
-                        search: { contexto: "atendimento", page: currentPage === 1 ? undefined : currentPage },
+                        search: { contexto: contextoParaStatus(row.original.status), page: currentPage === 1 ? undefined : currentPage },
                       });
                     }}
                   >

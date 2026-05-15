@@ -1390,6 +1390,7 @@ describe("frontend pilot router", () => {
   });
 
   it("opens canonical requisition detail from authorization queue with context", async () => {
+    mockWorklistViewport(true);
     vi.stubGlobal(
       "fetch",
       vi.fn((request: Request) => {
@@ -1481,6 +1482,7 @@ describe("frontend pilot router", () => {
   });
 
   it("opens canonical requisition detail from fulfillment queue with context", async () => {
+    mockWorklistViewport(true);
     vi.stubGlobal(
       "fetch",
       vi.fn((request: Request) => {
@@ -1518,6 +1520,7 @@ describe("frontend pilot router", () => {
   });
 
   it("opens canonical requisition detail from the list", async () => {
+    mockWorklistViewport(true);
     vi.stubGlobal(
       "fetch",
       vi.fn((request: Request) => {
@@ -1856,9 +1859,6 @@ describe("frontend pilot router", () => {
     const { container } = renderRoute("/requisicoes/101?contexto=atendimento");
 
     expect(await screen.findByRole("heading", { name: "REQ-2026-000101" })).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("Retirante físico"), {
-      target: { value: "Joao da Silva" },
-    });
     fireEvent.change(screen.getByLabelText("Observação do atendimento"), {
       target: { value: "Retirada no balcão" },
     });
@@ -1872,7 +1872,6 @@ describe("frontend pilot router", () => {
       expect((fulfillIdempotencyKey as string).length).toBeGreaterThan(0);
       expect((fulfillIdempotencyKey as string).length).toBeLessThanOrEqual(128);
       expect(fulfillPayload).toEqual({
-        retirante_fisico: "Joao da Silva",
         observacao_atendimento: "Retirada no balcão",
         itens: [
           {
@@ -1935,7 +1934,6 @@ describe("frontend pilot router", () => {
 
     await waitFor(() => {
       expect(fulfillPayload).toEqual({
-        retirante_fisico: "",
         observacao_atendimento: "",
         itens: [
           {
@@ -3679,6 +3677,9 @@ describe("frontend pilot router", () => {
   });
 
   it("leva chefe ao onboarding de alertas no primeiro acesso aplicavel", async () => {
+    vi.stubGlobal("Notification", { permission: "default", requestPermission: vi.fn() });
+    vi.stubGlobal("PushManager", function PushManager() {});
+    Object.defineProperty(navigator, "serviceWorker", { configurable: true, value: {} });
     vi.stubGlobal("fetch", (request: Request) => {
       if (requestUrl(request).includes("/api/v1/auth/me/")) {
         return Promise.resolve(sessionResponse(chefeSession()));
@@ -3703,6 +3704,7 @@ describe("frontend pilot router", () => {
   });
 
   it("mostra aviso persistente quando push esta bloqueado sem bloquear fila", async () => {
+    mockWorklistViewport(true);
     vi.stubGlobal("Notification", {
       permission: "denied",
       requestPermission: vi.fn(),

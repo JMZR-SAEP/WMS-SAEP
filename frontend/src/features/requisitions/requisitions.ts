@@ -37,8 +37,9 @@ export const STATUS_OPTIONS: Array<{ value: RequisicaoStatus; label: string }> =
   { value: "aguardando_autorizacao", label: "Aguardando autorização" },
   { value: "recusada", label: "Recusada" },
   { value: "autorizada", label: "Autorizada" },
-  { value: "atendida_parcialmente", label: "Atendida parcialmente" },
-  { value: "atendida", label: "Atendida" },
+  { value: "pronta_para_retirada_parcial", label: "Pronta para retirada (parcial)" },
+  { value: "pronta_para_retirada", label: "Pronta para retirada" },
+  { value: "retirada", label: "Retirada" },
   { value: "cancelada", label: "Cancelada" },
   { value: "estornada", label: "Estornada" },
 ];
@@ -298,6 +299,56 @@ export async function fulfillRequisition(
       response.status,
       error,
       "/api/v1/requisitions/{id}/fulfill/",
+    );
+  }
+
+  return data;
+}
+
+
+export async function pickupRequisition(
+  id: number,
+  input: { retirante_fisico: string },
+  idempotencyKey: string,
+) {
+  if (typeof idempotencyKey !== "string") {
+    throw new ApiError(
+      "Idempotency-Key inválida para registrar retirada.",
+      400,
+      undefined,
+      "/api/v1/requisitions/{id}/pickup/",
+    );
+  }
+  const normalizedIdempotencyKey = idempotencyKey.trim();
+  if (normalizedIdempotencyKey.length === 0 || normalizedIdempotencyKey.length > 128) {
+    throw new ApiError(
+      "Idempotency-Key inválida para registrar retirada.",
+      400,
+      undefined,
+      "/api/v1/requisitions/{id}/pickup/",
+    );
+  }
+  const { data, error, response } = await apiClient.POST(
+    "/api/v1/requisitions/{id}/pickup/",
+    {
+      params: {
+        header: {
+          "Idempotency-Key": normalizedIdempotencyKey,
+        },
+        path: {
+          id,
+        },
+      },
+      body: input,
+    },
+  );
+
+  if (error || !data) {
+    throw new ApiError(
+      messageFromError(error, "Não foi possível registrar retirada."),
+      response.status,
+      error,
+      "/api/v1/requisitions/{id}/pickup/",
     );
   }
 

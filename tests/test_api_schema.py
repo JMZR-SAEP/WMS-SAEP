@@ -150,6 +150,7 @@ class TestOpenAPISchema:
         assert "/api/v1/requisitions/{id}/authorize/" in paths
         assert "/api/v1/requisitions/{id}/refuse/" in paths
         assert "/api/v1/requisitions/{id}/fulfill/" in paths
+        assert "/api/v1/requisitions/{id}/pickup/" in paths
         assert "/api/v1/requisitions/pending-approvals/" in paths
         assert "/api/v1/requisitions/pending-fulfillments/" in paths
         assert "/api/v1/notifications/" in paths
@@ -493,6 +494,14 @@ class TestOpenAPISchema:
             ("/api/v1/requisitions/{id}/fulfill/", "post"): {
                 "request_body": True,
                 "request_ref": "#/components/schemas/RequisicaoFulfillInput",
+                "success_codes": {"200"},
+                "success_ref": "#/components/schemas/RequisicaoDetailOutput",
+                "error_codes": {"400", "403", "404", "409"},
+                "required_parameters": {"Idempotency-Key"},
+            },
+            ("/api/v1/requisitions/{id}/pickup/", "post"): {
+                "request_body": True,
+                "request_ref": "#/components/schemas/RequisicaoPickupInput",
                 "success_codes": {"200"},
                 "success_ref": "#/components/schemas/RequisicaoDetailOutput",
                 "error_codes": {"400", "403", "404", "409"},

@@ -25,6 +25,7 @@ from apps.requisitions.services import (
     autorizar_requisicao,
     cancelar_requisicao,
     recusar_requisicao,
+    retirar_requisicao,
 )
 from apps.stock.models import EstoqueMaterial, MovimentacaoEstoque, TipoMovimentacao
 from apps.users.models import PapelChoices, Setor, User
@@ -712,18 +713,31 @@ class TestAtendimentoRequisicaoService:
         atendida = atender_requisicao_completa(
             requisicao=requisicao,
             ator=atendente,
-            retirante_fisico="Servidor retirante",
             observacao_atendimento="Retirada no balcão",
         )
 
         item.refresh_from_db()
         material.estoque.refresh_from_db()
-        assert atendida.status == StatusRequisicao.ATENDIDA
+        assert atendida.status == StatusRequisicao.PRONTA_PARA_RETIRADA
         assert atendida.responsavel_atendimento_id == atendente.id
-        assert atendida.retirante_fisico == "Servidor retirante"
+        assert atendida.retirante_fisico == ""
         assert atendida.observacao_atendimento == "Retirada no balcão"
         assert atendida.eventos.filter(tipo_evento=TipoEvento.ATENDIMENTO).exists()
         assert item.quantidade_entregue == Decimal("4")
+        assert material.estoque.saldo_fisico == Decimal("10")
+        assert material.estoque.saldo_reservado == Decimal("4")
+        assert not MovimentacaoEstoque.objects.filter(
+            requisicao=atendida,
+            tipo=TipoMovimentacao.SAIDA_POR_ATENDIMENTO,
+        ).exists()
+
+        retirada = retirar_requisicao(
+            requisicao=atendida,
+            ator=atendente,
+            retirante_fisico="Responsável Retirada",
+        )
+        material.estoque.refresh_from_db()
+        assert retirada.status == StatusRequisicao.RETIRADA
         assert material.estoque.saldo_fisico == Decimal("6")
         assert material.estoque.saldo_reservado == Decimal("0")
         assert MovimentacaoEstoque.objects.filter(
@@ -762,7 +776,7 @@ class TestAtendimentoRequisicaoService:
             justificativa_autorizacao_parcial="Não autorizado",
         )
 
-        atender_requisicao_completa(requisicao=requisicao, ator=atendente)
+        atendida = atender_requisicao_completa(requisicao=requisicao, ator=atendente)
 
         item_a.refresh_from_db()
         item_b.refresh_from_db()
@@ -770,10 +784,20 @@ class TestAtendimentoRequisicaoService:
         material_b.estoque.refresh_from_db()
         assert item_a.quantidade_entregue == Decimal("3")
         assert item_b.quantidade_entregue == Decimal("0")
-        assert material_a.estoque.saldo_fisico == Decimal("5")
-        assert material_a.estoque.saldo_reservado == Decimal("0")
+        assert material_a.estoque.saldo_fisico == Decimal("8")
+        assert material_a.estoque.saldo_reservado == Decimal("3")
         assert material_b.estoque.saldo_fisico == Decimal("8")
         assert material_b.estoque.saldo_reservado == Decimal("0")
+
+        retirada = retirar_requisicao(
+            requisicao=atendida,
+            ator=atendente,
+            retirante_fisico="Responsável Retirada",
+        )
+        material_a.estoque.refresh_from_db()
+        assert retirada.status == StatusRequisicao.RETIRADA
+        assert material_a.estoque.saldo_fisico == Decimal("5")
+        assert material_a.estoque.saldo_reservado == Decimal("0")
 
     def test_atendimento_parcial_entrega_item_e_libera_reserva_nao_entregue(self):
         setor = self._criar_setor("Atendimento Parcial", "92020")
@@ -807,15 +831,28 @@ class TestAtendimentoRequisicaoService:
                     justificativa_atendimento_parcial="Estoque físico divergente",
                 )
             ],
-            retirante_fisico="Servidor parcial",
         )
 
         item.refresh_from_db()
         material.estoque.refresh_from_db()
-        assert atendida.status == StatusRequisicao.ATENDIDA_PARCIALMENTE
+        assert atendida.status == StatusRequisicao.PRONTA_PARA_RETIRADA_PARCIAL
         assert atendida.eventos.filter(tipo_evento=TipoEvento.ATENDIMENTO_PARCIAL).exists()
         assert item.quantidade_entregue == Decimal("3")
         assert item.justificativa_atendimento_parcial == "Estoque físico divergente"
+        assert material.estoque.saldo_fisico == Decimal("10")
+        assert material.estoque.saldo_reservado == Decimal("5")
+        assert not MovimentacaoEstoque.objects.filter(
+            requisicao=atendida,
+            tipo=TipoMovimentacao.SAIDA_POR_ATENDIMENTO,
+        ).exists()
+
+        retirada = retirar_requisicao(
+            requisicao=atendida,
+            ator=atendente,
+            retirante_fisico="Responsável Retirada",
+        )
+        material.estoque.refresh_from_db()
+        assert retirada.status == StatusRequisicao.RETIRADA
         assert material.estoque.saldo_fisico == Decimal("7")
         assert material.estoque.saldo_reservado == Decimal("0")
         assert MovimentacaoEstoque.objects.filter(
@@ -881,12 +918,26 @@ class TestAtendimentoRequisicaoService:
         item_parcial.refresh_from_db()
         material_total.estoque.refresh_from_db()
         material_parcial.estoque.refresh_from_db()
-        assert atendida.status == StatusRequisicao.ATENDIDA_PARCIALMENTE
+        assert atendida.status == StatusRequisicao.PRONTA_PARA_RETIRADA_PARCIAL
         assert atendida.eventos.filter(tipo_evento=TipoEvento.ATENDIMENTO_PARCIAL).exists()
         assert item_total.quantidade_entregue == Decimal("4")
         assert item_total.justificativa_atendimento_parcial == ""
         assert item_parcial.quantidade_entregue == Decimal("2")
         assert item_parcial.justificativa_atendimento_parcial == "Retirada parcial solicitada"
+        assert material_total.estoque.saldo_fisico == Decimal("10")
+        assert material_total.estoque.saldo_reservado == Decimal("4")
+        assert material_parcial.estoque.saldo_fisico == Decimal("10")
+        assert material_parcial.estoque.saldo_reservado == Decimal("5")
+        assert not MovimentacaoEstoque.objects.filter(requisicao=atendida).exists()
+
+        retirada = retirar_requisicao(
+            requisicao=atendida,
+            ator=atendente,
+            retirante_fisico="Responsável Retirada",
+        )
+        material_total.estoque.refresh_from_db()
+        material_parcial.estoque.refresh_from_db()
+        assert retirada.status == StatusRequisicao.RETIRADA
         assert material_total.estoque.saldo_fisico == Decimal("6")
         assert material_total.estoque.saldo_reservado == Decimal("0")
         assert material_parcial.estoque.saldo_fisico == Decimal("8")
@@ -932,7 +983,7 @@ class TestAtendimentoRequisicaoService:
         )
 
         item.refresh_from_db()
-        assert atendida.status == StatusRequisicao.ATENDIDA
+        assert atendida.status == StatusRequisicao.PRONTA_PARA_RETIRADA
         assert atendida.eventos.filter(tipo_evento=TipoEvento.ATENDIMENTO).exists()
         assert item.quantidade_entregue == Decimal("2")
         assert item.justificativa_atendimento_parcial == ""
@@ -1250,7 +1301,7 @@ class TestAtendimentoRequisicaoService:
             papel=PapelChoices.AUXILIAR_ALMOXARIFADO,
             setor=setor,
         )
-        requisicao.status = StatusRequisicao.ATENDIDA
+        requisicao.status = StatusRequisicao.PRONTA_PARA_RETIRADA
         requisicao.save(update_fields=["status", "updated_at"])
 
         with pytest.raises(DomainConflict):
@@ -1278,12 +1329,19 @@ class TestAtendimentoRequisicaoService:
             quantidade_autorizada=Decimal("3"),
         )
 
+        atendida = atender_requisicao_completa(requisicao=requisicao, ator=atendente)
+        assert atendida.status == StatusRequisicao.PRONTA_PARA_RETIRADA
+
         with pytest.raises(DomainConflict):
-            atender_requisicao_completa(requisicao=requisicao, ator=atendente)
+            retirar_requisicao(
+                requisicao=atendida,
+                ator=atendente,
+                retirante_fisico="Responsável",
+            )
 
         item.refresh_from_db()
         material.estoque.refresh_from_db()
-        assert item.quantidade_entregue == Decimal("0")
+        assert item.quantidade_entregue == Decimal("3")
         assert material.estoque.saldo_fisico == Decimal("1")
         assert material.estoque.saldo_reservado == Decimal("3")
         assert MovimentacaoEstoque.objects.count() == 0
@@ -1310,12 +1368,19 @@ class TestAtendimentoRequisicaoService:
             quantidade_autorizada=Decimal("3"),
         )
 
+        atendida = atender_requisicao_completa(requisicao=requisicao, ator=atendente)
+        assert atendida.status == StatusRequisicao.PRONTA_PARA_RETIRADA
+
         with pytest.raises(DomainConflict):
-            atender_requisicao_completa(requisicao=requisicao, ator=atendente)
+            retirar_requisicao(
+                requisicao=atendida,
+                ator=atendente,
+                retirante_fisico="Responsável",
+            )
 
         item.refresh_from_db()
         material.estoque.refresh_from_db()
-        assert item.quantidade_entregue == Decimal("0")
+        assert item.quantidade_entregue == Decimal("3")
         assert material.estoque.saldo_fisico == Decimal("5")
         assert material.estoque.saldo_reservado == Decimal("1")
         assert MovimentacaoEstoque.objects.count() == 0
@@ -1371,7 +1436,24 @@ class TestAtendimentoRequisicaoService:
         requisicao.refresh_from_db()
 
         assert resultados == {"ok", "DomainConflict"}
-        assert requisicao.status == StatusRequisicao.ATENDIDA
+        assert requisicao.status == StatusRequisicao.PRONTA_PARA_RETIRADA
+        assert material.estoque.saldo_fisico == Decimal("5")
+        assert material.estoque.saldo_reservado == Decimal("5")
+        assert (
+            MovimentacaoEstoque.objects.filter(
+                requisicao=requisicao,
+                tipo=TipoMovimentacao.SAIDA_POR_ATENDIMENTO,
+            ).count()
+            == 0
+        )
+
+        retirada = retirar_requisicao(
+            requisicao=requisicao,
+            ator=atendente,
+            retirante_fisico="Responsável",
+        )
+        material.estoque.refresh_from_db()
+        assert retirada.status == StatusRequisicao.RETIRADA
         assert material.estoque.saldo_fisico == Decimal("0")
         assert material.estoque.saldo_reservado == Decimal("0")
         assert (
@@ -1501,8 +1583,19 @@ class TestAtendimentoRequisicaoService:
         material.estoque.refresh_from_db()
 
         assert resultados == {"ok", "DomainConflict"}
-        assert requisicao.status == StatusRequisicao.ATENDIDA_PARCIALMENTE
+        assert requisicao.status == StatusRequisicao.PRONTA_PARA_RETIRADA_PARCIAL
         assert item.quantidade_entregue == Decimal("3")
+        assert material.estoque.saldo_fisico == Decimal("5")
+        assert material.estoque.saldo_reservado == Decimal("5")
+        assert MovimentacaoEstoque.objects.filter(requisicao=requisicao).count() == 0
+
+        retirada = retirar_requisicao(
+            requisicao=requisicao,
+            ator=atendente,
+            retirante_fisico="Responsável",
+        )
+        material.estoque.refresh_from_db()
+        assert retirada.status == StatusRequisicao.RETIRADA
         assert material.estoque.saldo_fisico == Decimal("2")
         assert material.estoque.saldo_reservado == Decimal("0")
         assert material.estoque.saldo_fisico >= 0
@@ -1557,16 +1650,24 @@ class TestAtendimentoRequisicaoService:
             quantidade_autorizada=Decimal("5"),
         )
 
+        atender_requisicao_completa(requisicao=requisicao_a, ator=atendente)
+        atender_requisicao_completa(requisicao=requisicao_b, ator=atendente)
+        requisicao_a.refresh_from_db()
+        requisicao_b.refresh_from_db()
+        assert requisicao_a.status == StatusRequisicao.PRONTA_PARA_RETIRADA
+        assert requisicao_b.status == StatusRequisicao.PRONTA_PARA_RETIRADA
+
         barrier = Barrier(2)
 
-        def atender(req_id: int):
+        def retirar(req_id: int):
             close_old_connections()
             try:
                 barrier.wait()
-                requisicao_atendimento = Requisicao.objects.get(pk=req_id)
-                atender_requisicao_completa(
-                    requisicao=requisicao_atendimento,
+                req = Requisicao.objects.get(pk=req_id)
+                retirar_requisicao(
+                    requisicao=req,
                     ator=atendente,
+                    retirante_fisico="Servidor Retirante",
                 )
                 return "ok"
             except Exception as exc:  # noqa: BLE001
@@ -1575,8 +1676,8 @@ class TestAtendimentoRequisicaoService:
                 close_old_connections()
 
         with ThreadPoolExecutor(max_workers=2) as executor:
-            futuro_a = executor.submit(atender, requisicao_a.id)
-            futuro_b = executor.submit(atender, requisicao_b.id)
+            futuro_a = executor.submit(retirar, requisicao_a.id)
+            futuro_b = executor.submit(retirar, requisicao_b.id)
 
         resultados = {futuro_a.result(), futuro_b.result()}
         close_old_connections()
@@ -1587,8 +1688,8 @@ class TestAtendimentoRequisicaoService:
 
         assert resultados == {"ok", "DomainConflict"}
         assert {requisicao_a.status, requisicao_b.status} == {
-            StatusRequisicao.AUTORIZADA,
-            StatusRequisicao.ATENDIDA,
+            StatusRequisicao.PRONTA_PARA_RETIRADA,
+            StatusRequisicao.RETIRADA,
         }
         assert material.estoque.saldo_fisico == Decimal("0")
         assert material.estoque.saldo_reservado == Decimal("5")
@@ -1601,3 +1702,181 @@ class TestAtendimentoRequisicaoService:
             ).count()
             == 1
         )
+
+
+@pytest.mark.django_db(transaction=True)
+class TestRetiradaRequisicaoService:
+    @staticmethod
+    def _criar_setor(nome: str, chefe_matricula: str) -> Setor:
+        chefe = User.objects.create(
+            matricula_funcional=chefe_matricula,
+            nome_completo=f"Chefe {nome}",
+            papel=PapelChoices.CHEFE_SETOR,
+            is_active=True,
+        )
+        setor = Setor.objects.create(nome=nome, chefe_responsavel=chefe)
+        chefe.setor = setor
+        chefe.save(update_fields=["setor"])
+        return setor
+
+    @staticmethod
+    def _criar_usuario(matricula: str, nome: str, setor, papel=PapelChoices.SOLICITANTE) -> User:
+        return User.objects.create(
+            matricula_funcional=matricula,
+            nome_completo=nome,
+            papel=papel,
+            setor=setor,
+            is_active=True,
+        )
+
+    @staticmethod
+    def _criar_material_com_estoque(
+        codigo: str, saldo_fisico=Decimal("10"), saldo_reservado=Decimal("0")
+    ):
+        from apps.materials.models import GrupoMaterial, Material, SubgrupoMaterial
+
+        grupo_codigo, subgrupo_codigo, sequencial = codigo.split(".")
+        grupo, _ = GrupoMaterial.objects.get_or_create(
+            codigo_grupo=grupo_codigo, defaults={"nome": f"Grupo {grupo_codigo}"}
+        )
+        subgrupo, _ = SubgrupoMaterial.objects.get_or_create(
+            grupo=grupo,
+            codigo_subgrupo=subgrupo_codigo,
+            defaults={"nome": f"Subgrupo {subgrupo_codigo}"},
+        )
+        material = Material.objects.create(
+            subgrupo=subgrupo,
+            codigo_completo=codigo,
+            sequencial=sequencial,
+            nome=f"Material {codigo}",
+            unidade_medida="UN",
+            is_active=True,
+        )
+        EstoqueMaterial.objects.create(
+            material=material, saldo_fisico=saldo_fisico, saldo_reservado=saldo_reservado
+        )
+        return material
+
+    def _criar_requisicao_pronta(
+        self, criador, beneficiario, numero_publico, material, quantidade_autorizada, parcial=False
+    ):
+        status = (
+            StatusRequisicao.PRONTA_PARA_RETIRADA_PARCIAL
+            if parcial
+            else StatusRequisicao.PRONTA_PARA_RETIRADA
+        )
+        requisicao = Requisicao.objects.create(
+            criador=criador,
+            beneficiario=beneficiario,
+            setor_beneficiario=beneficiario.setor,
+            numero_publico=numero_publico,
+            status=status,
+            data_envio_autorizacao="2026-04-30T10:00:00Z",
+            data_autorizacao_ou_recusa="2026-04-30T11:00:00Z",
+            data_finalizacao="2026-04-30T12:00:00Z",
+        )
+        requisicao.itens.create(
+            material=material,
+            unidade_medida=material.unidade_medida,
+            quantidade_solicitada=quantidade_autorizada,
+            quantidade_autorizada=quantidade_autorizada,
+            quantidade_entregue=quantidade_autorizada,
+        )
+        return requisicao
+
+    def test_retirada_completa_persiste_retirante_e_data(self):
+        setor = self._criar_setor("Almox Retirada", "77001")
+        solicitante = self._criar_usuario("77002", "Solicitante Retirada", setor=setor)
+        almoxarife = self._criar_usuario(
+            "77003", "Almoxarife Retirada", setor=setor, papel=PapelChoices.AUXILIAR_ALMOXARIFADO
+        )
+        material = self._criar_material_com_estoque(
+            "001.001.901", saldo_fisico=Decimal("5"), saldo_reservado=Decimal("2")
+        )
+        requisicao = self._criar_requisicao_pronta(
+            criador=solicitante,
+            beneficiario=solicitante,
+            numero_publico="REQ-2026-770001",
+            material=material,
+            quantidade_autorizada=Decimal("2"),
+        )
+
+        retirada = retirar_requisicao(
+            requisicao=requisicao,
+            ator=almoxarife,
+            retirante_fisico="Servidor Retirante",
+        )
+
+        assert retirada.status == StatusRequisicao.RETIRADA
+        assert retirada.retirante_fisico == "Servidor Retirante"
+        assert retirada.data_retirada is not None
+        assert retirada.eventos.filter(tipo_evento=TipoEvento.RETIRADA).exists()
+
+    def test_retirada_parcial_transita_para_retirada(self):
+        setor = self._criar_setor("Almox Retirada Parcial", "77010")
+        solicitante = self._criar_usuario("77011", "Solicitante Parcial", setor=setor)
+        almoxarife = self._criar_usuario(
+            "77012", "Almoxarife Parcial", setor=setor, papel=PapelChoices.CHEFE_ALMOXARIFADO
+        )
+        material = self._criar_material_com_estoque(
+            "001.001.902", saldo_fisico=Decimal("5"), saldo_reservado=Decimal("2")
+        )
+        requisicao = self._criar_requisicao_pronta(
+            criador=solicitante,
+            beneficiario=solicitante,
+            numero_publico="REQ-2026-770002",
+            material=material,
+            quantidade_autorizada=Decimal("2"),
+            parcial=True,
+        )
+
+        retirada = retirar_requisicao(
+            requisicao=requisicao,
+            ator=almoxarife,
+            retirante_fisico="Servidor Parcial",
+        )
+
+        assert retirada.status == StatusRequisicao.RETIRADA
+
+    def test_retirada_bloqueia_papel_solicitante(self):
+        setor = self._criar_setor("Almox Perm", "77020")
+        solicitante = self._criar_usuario("77021", "Solicitante Perm", setor=setor)
+        material = self._criar_material_com_estoque("001.001.903", saldo_fisico=Decimal("5"))
+        requisicao = self._criar_requisicao_pronta(
+            criador=solicitante,
+            beneficiario=solicitante,
+            numero_publico="REQ-2026-770003",
+            material=material,
+            quantidade_autorizada=Decimal("2"),
+        )
+
+        with pytest.raises(PermissionDenied):
+            retirar_requisicao(
+                requisicao=requisicao,
+                ator=solicitante,
+                retirante_fisico="Indevido",
+            )
+
+    def test_retirada_bloqueia_status_invalido(self):
+        setor = self._criar_setor("Almox Status", "77030")
+        solicitante = self._criar_usuario("77031", "Solicitante Status", setor=setor)
+        almoxarife = self._criar_usuario(
+            "77032", "Almoxarife Status", setor=setor, papel=PapelChoices.AUXILIAR_ALMOXARIFADO
+        )
+        _material = self._criar_material_com_estoque("001.001.904", saldo_fisico=Decimal("5"))
+        requisicao = Requisicao.objects.create(
+            criador=solicitante,
+            beneficiario=solicitante,
+            setor_beneficiario=setor,
+            numero_publico="REQ-2026-770004",
+            status=StatusRequisicao.AUTORIZADA,
+            data_envio_autorizacao="2026-04-30T10:00:00Z",
+            data_autorizacao_ou_recusa="2026-04-30T11:00:00Z",
+        )
+
+        with pytest.raises(DomainConflict):
+            retirar_requisicao(
+                requisicao=requisicao,
+                ator=almoxarife,
+                retirante_fisico="Servidor",
+            )

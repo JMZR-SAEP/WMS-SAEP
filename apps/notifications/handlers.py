@@ -1,10 +1,11 @@
 from apps.core.events import (
     PUSH_LEMBRETE_AUTORIZACOES_ATRASADAS,
-    REQUISICAO_ATENDIDA,
     REQUISICAO_AUTORIZADA,
     REQUISICAO_CANCELADA,
     REQUISICAO_ENVIADA_AUTORIZACAO,
+    REQUISICAO_PRONTA_PARA_RETIRADA,
     REQUISICAO_RECUSADA,
+    REQUISICAO_RETIRADA,
     subscribe,
 )
 from apps.notifications.models import TipoNotificacao
@@ -84,13 +85,24 @@ def _notificar_cancelamento(payload: dict[str, object]) -> None:
     )
 
 
-def _notificar_atendimento(payload: dict[str, object]) -> None:
+def _notificar_pronta_para_retirada(payload: dict[str, object]) -> None:
     requisicao = _carregar_requisicao(payload["requisicao_id"])
     criar_notificacoes_usuarios_unicos(
         destinatarios=[requisicao.criador, requisicao.beneficiario],
-        tipo=TipoNotificacao.REQUISICAO_ATENDIDA,
-        titulo="Requisição atendida",
-        mensagem=f"A requisição {_identificador(requisicao)} foi atendida.",
+        tipo=TipoNotificacao.REQUISICAO_PRONTA_PARA_RETIRADA,
+        titulo="Requisição pronta para retirada",
+        mensagem=f"A requisição {_identificador(requisicao)} está pronta para retirada no almoxarifado.",
+        objeto_relacionado=requisicao,
+    )
+
+
+def _notificar_retirada(payload: dict[str, object]) -> None:
+    requisicao = _carregar_requisicao(payload["requisicao_id"])
+    criar_notificacoes_usuarios_unicos(
+        destinatarios=[requisicao.criador, requisicao.beneficiario],
+        tipo=TipoNotificacao.REQUISICAO_RETIRADA,
+        titulo="Requisição retirada",
+        mensagem=f"A requisição {_identificador(requisicao)} foi retirada.",
         objeto_relacionado=requisicao,
     )
 
@@ -108,5 +120,6 @@ def register_event_handlers() -> None:
     subscribe(REQUISICAO_AUTORIZADA, _notificar_autorizacao)
     subscribe(REQUISICAO_RECUSADA, _notificar_recusa)
     subscribe(REQUISICAO_CANCELADA, _notificar_cancelamento)
-    subscribe(REQUISICAO_ATENDIDA, _notificar_atendimento)
+    subscribe(REQUISICAO_PRONTA_PARA_RETIRADA, _notificar_pronta_para_retirada)
+    subscribe(REQUISICAO_RETIRADA, _notificar_retirada)
     subscribe(PUSH_LEMBRETE_AUTORIZACOES_ATRASADAS, _enviar_lembrete_autorizacoes_atrasadas)

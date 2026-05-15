@@ -591,15 +591,14 @@ class TestNotificacoes:
         atender_requisicao_completa(
             requisicao=autorizada,
             ator=almoxarife,
-            retirante_fisico="Servidor piloto",
             observacao_atendimento="",
         )
 
         assert Notificacao.objects.filter(
             destinatario=criador,
-            tipo=TipoNotificacao.REQUISICAO_ATENDIDA,
+            tipo=TipoNotificacao.REQUISICAO_PRONTA_PARA_RETIRADA,
         ).exists()
         assert Notificacao.objects.filter(
             destinatario=beneficiario,
-            tipo=TipoNotificacao.REQUISICAO_ATENDIDA,
+            tipo=TipoNotificacao.REQUISICAO_PRONTA_PARA_RETIRADA,
         ).exists()

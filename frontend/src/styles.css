@@ -625,11 +625,17 @@ button:disabled {
   border-color: #f0d79c;
 }
 
-.req-status-atendida,
-.req-status-atendida_parcialmente {
+.req-status-pronta_para_retirada,
+.req-status-pronta_para_retirada_parcial {
   background: #e6f4ee;
   color: var(--success);
   border-color: #b2d9c5;
+}
+
+.req-status-retirada {
+  background: #d4edda;
+  color: #155724;
+  border-color: #a3d9b5;
 }
 
 .req-status-recusada,

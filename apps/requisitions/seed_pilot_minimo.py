@@ -277,7 +277,6 @@ def _seed_requisicao_atendida_parcial(
                 justificativa_atendimento_parcial="Entrega parcial para cenario seed.",
             )
         ],
-        retirante_fisico="Servidor piloto",
         observacao_atendimento=SEED_OBSERVACAO_PREFIX,
     )
 
@@ -459,7 +458,6 @@ def _seed_requisicao_atendida_manutencao(
                 justificativa_atendimento_parcial="Entrega parcial para cenario da manutencao.",
             )
         ],
-        retirante_fisico="Equipe de manutencao",
         observacao_atendimento=SEED_OBSERVACAO_PREFIX,
     )
 
@@ -598,7 +596,6 @@ def _seed_requisicao_atendida_secundario(
                 quantidade_entregue=Decimal("2"),
             )
         ],
-        retirante_fisico="Equipe de operacao",
         observacao_atendimento=SEED_OBSERVACAO_PREFIX,
     )
 
@@ -742,7 +739,7 @@ def carregar_seed_pilot_minimo() -> None:
             sequencial="002",
             nome="Cafe torrado 500g",
             unidade_medida="UN",
-            saldo_inicial=Decimal("3"),
+            saldo_inicial=Decimal("4"),
         )
         _upsert_material(
             subgrupo=subgrupo,

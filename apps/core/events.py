@@ -12,7 +12,8 @@ REQUISICAO_ENVIADA_AUTORIZACAO = "requisicao.enviada_autorizacao"
 REQUISICAO_AUTORIZADA = "requisicao.autorizada"
 REQUISICAO_RECUSADA = "requisicao.recusada"
 REQUISICAO_CANCELADA = "requisicao.cancelada"
-REQUISICAO_ATENDIDA = "requisicao.atendida"
+REQUISICAO_PRONTA_PARA_RETIRADA = "requisicao.pronta_para_retirada"
+REQUISICAO_RETIRADA = "requisicao.retirada"
 PUSH_LEMBRETE_AUTORIZACOES_ATRASADAS = "push.lembrete_autorizacoes_atrasadas"
 
 EventPayload = dict[str, Any]
