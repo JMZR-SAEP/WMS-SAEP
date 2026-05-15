@@ -3234,6 +3234,8 @@ class TestRequisicaoAPI:
         assert response.data["retirante_fisico"] == "Servidor Retirador"
         assert response.data["data_retirada"] is not None
         requisicao.refresh_from_db()
+        assert requisicao.retirante_fisico == "Servidor Retirador"
+        assert requisicao.data_retirada is not None
         assert requisicao.eventos.filter(tipo_evento=TipoEvento.RETIRADA).exists()
         material.estoque.refresh_from_db()
         assert material.estoque.saldo_fisico == Decimal("8")
@@ -3453,6 +3455,7 @@ class TestRequisicaoAPI:
         )
         movement_count = MovimentacaoEstoque.objects.filter(requisicao=requisicao).count()
         timeline_count = EventoTimeline.objects.filter(requisicao=requisicao).count()
+        notification_count = Notificacao.objects.filter(object_id=requisicao.id).count()
 
         retry_response = client.post(
             reverse("requisicao-pickup", args=[requisicao.id]),
@@ -3466,6 +3469,7 @@ class TestRequisicaoAPI:
         assert retry_response.data["status"] == StatusRequisicao.RETIRADA
         assert MovimentacaoEstoque.objects.filter(requisicao=requisicao).count() == movement_count
         assert EventoTimeline.objects.filter(requisicao=requisicao).count() == timeline_count
+        assert Notificacao.objects.filter(object_id=requisicao.id).count() == notification_count
         material.estoque.refresh_from_db()
         assert material.estoque.saldo_fisico == Decimal("8")
         assert material.estoque.saldo_reservado == Decimal("0")
@@ -3508,6 +3512,7 @@ class TestRequisicaoAPI:
         )
         movement_count = MovimentacaoEstoque.objects.filter(requisicao=requisicao).count()
         timeline_count = EventoTimeline.objects.filter(requisicao=requisicao).count()
+        notification_count = Notificacao.objects.filter(object_id=requisicao.id).count()
 
         conflict_response = client.post(
             reverse("requisicao-pickup", args=[requisicao.id]),
@@ -3521,6 +3526,7 @@ class TestRequisicaoAPI:
         assert conflict_response.data["error"]["code"] == "domain_conflict"
         assert MovimentacaoEstoque.objects.filter(requisicao=requisicao).count() == movement_count
         assert EventoTimeline.objects.filter(requisicao=requisicao).count() == timeline_count
+        assert Notificacao.objects.filter(object_id=requisicao.id).count() == notification_count
         material.estoque.refresh_from_db()
         assert material.estoque.saldo_fisico == Decimal("8")
         assert material.estoque.saldo_reservado == Decimal("0")
