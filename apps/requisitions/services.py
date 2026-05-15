@@ -27,11 +27,11 @@ from apps.requisitions.domain.validation import (
     _validar_itens_autorizacao,
     _validar_itens_rascunho,
 )
+from apps.requisitions.idempotency import get_or_create_idempotency_record
 from apps.requisitions.models import (
     EventoTimeline,
     ItemRequisicao,
     Requisicao,
-    RequisicaoIdempotencyKey,
     SequenciaNumeroRequisicao,
     StatusIdempotencia,
     StatusRequisicao,
@@ -361,32 +361,6 @@ def _recarregar_requisicao_detalhe(requisicao_id: int) -> Requisicao:
         .prefetch_related("itens__material__estoque", "eventos__usuario")
         .get(pk=requisicao_id)
     )
-
-
-def _obter_registro_idempotencia_atendimento(
-    *,
-    requisicao: Requisicao,
-    ator: User,
-    idempotency_key: str,
-    payload_hash: str,
-) -> tuple[RequisicaoIdempotencyKey, bool]:
-    lookup = {
-        "usuario": ator,
-        "requisicao": requisicao,
-        "endpoint": IDEMPOTENCY_ENDPOINT_FULFILL,
-        "key": idempotency_key,
-    }
-    try:
-        with transaction.atomic():
-            return RequisicaoIdempotencyKey.objects.select_for_update().get_or_create(
-                **lookup,
-                defaults={
-                    "payload_hash": payload_hash,
-                    "status": StatusIdempotencia.IN_PROGRESS,
-                },
-            )
-    except IntegrityError:
-        return RequisicaoIdempotencyKey.objects.select_for_update().get(**lookup), False
 
 
 def _travar_estoques_dos_itens(
@@ -994,10 +968,11 @@ def atender_requisicao_idempotente(
     )
 
     with transaction.atomic():
-        registro, criado = _obter_registro_idempotencia_atendimento(
+        registro, criado = get_or_create_idempotency_record(
+            usuario=ator,
             requisicao=requisicao,
-            ator=ator,
-            idempotency_key=idempotency_key,
+            operation=IDEMPOTENCY_ENDPOINT_FULFILL,
+            key=idempotency_key,
             payload_hash=payload_hash,
         )
 
@@ -1313,26 +1288,13 @@ def retirar_requisicao_idempotente(
     ).hexdigest()
 
     with transaction.atomic():
-        lookup = {
-            "usuario": ator,
-            "requisicao": requisicao,
-            "endpoint": IDEMPOTENCY_ENDPOINT_PICKUP,
-            "key": idempotency_key,
-        }
-        try:
-            with transaction.atomic():
-                registro, criado = (
-                    RequisicaoIdempotencyKey.objects.select_for_update().get_or_create(
-                        **lookup,
-                        defaults={
-                            "payload_hash": payload_hash,
-                            "status": StatusIdempotencia.IN_PROGRESS,
-                        },
-                    )
-                )
-        except IntegrityError:
-            registro = RequisicaoIdempotencyKey.objects.select_for_update().get(**lookup)
-            criado = False
+        registro, criado = get_or_create_idempotency_record(
+            usuario=ator,
+            requisicao=requisicao,
+            operation=IDEMPOTENCY_ENDPOINT_PICKUP,
+            key=idempotency_key,
+            payload_hash=payload_hash,
+        )
 
         if not criado:
             if registro.payload_hash != payload_hash:
