@@ -22,7 +22,7 @@ BEGIN
     IF OLD.data_retirada IS NOT NULL AND NEW.data_retirada IS DISTINCT FROM OLD.data_retirada THEN
         RAISE EXCEPTION 'data_retirada é imutável após preenchimento';
     END IF;
-    IF OLD.retirante_fisico <> '' AND NEW.retirante_fisico IS DISTINCT FROM OLD.retirante_fisico THEN
+    IF OLD.retirante_fisico IS NOT NULL AND OLD.retirante_fisico <> '' AND NEW.retirante_fisico IS DISTINCT FROM OLD.retirante_fisico THEN
         RAISE EXCEPTION 'retirante_fisico é imutável após preenchimento';
     END IF;
     RETURN NEW;

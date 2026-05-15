@@ -12,45 +12,18 @@ from apps.requisitions.domain.validation import (
     _validar_itens_rascunho,
 )
 from apps.requisitions.models import Requisicao, StatusRequisicao
-from apps.stock.models import EstoqueMaterial
 from apps.users.models import PapelChoices, Setor, User
+from tests.requisitions.helpers import criar_material
 
 
 @pytest.mark.django_db
 class TestMaterialEEstoqueValidos:
-    @staticmethod
-    def _criar_material(
-        codigo: str, *, saldo_fisico: Decimal = Decimal("10"), is_active: bool = True
-    ) -> Material:
-        grupo_codigo, subgrupo_codigo, sequencial = codigo.split(".")
-        grupo, _ = GrupoMaterial.objects.get_or_create(
-            codigo_grupo=grupo_codigo,
-            defaults={"nome": f"Grupo {grupo_codigo}"},
-        )
-        subgrupo, _ = SubgrupoMaterial.objects.get_or_create(
-            grupo=grupo,
-            codigo_subgrupo=subgrupo_codigo,
-            defaults={"nome": f"Subgrupo {subgrupo_codigo}"},
-        )
-        material = Material.objects.create(
-            subgrupo=subgrupo,
-            codigo_completo=codigo,
-            sequencial=sequencial,
-            nome=f"Material {codigo}",
-            unidade_medida="UN",
-            is_active=is_active,
-        )
-        EstoqueMaterial.objects.create(
-            material=material, saldo_fisico=saldo_fisico, saldo_reservado=Decimal("0")
-        )
-        return material
-
     def test_caminho_feliz(self):
-        material = self._criar_material("001.001.001")
+        material = criar_material("001.001.001")
         _material_e_estoque_validos(material=material, quantidade_solicitada=Decimal("5"))
 
     def test_material_inativo(self):
-        material = self._criar_material("001.001.002", is_active=False)
+        material = criar_material("001.001.002", is_active=False)
         with pytest.raises(DomainConflict):
             _material_e_estoque_validos(material=material, quantidade_solicitada=Decimal("1"))
 
@@ -71,14 +44,14 @@ class TestMaterialEEstoqueValidos:
             _material_e_estoque_validos(material=material, quantidade_solicitada=Decimal("1"))
 
     def test_saldo_zero(self):
-        material = self._criar_material("001.001.004", saldo_fisico=Decimal("0"))
+        material = criar_material("001.001.004", saldo_fisico=Decimal("0"))
         material.refresh_from_db()
         material = Material.objects.select_related("estoque").get(pk=material.pk)
         with pytest.raises(DomainConflict):
             _material_e_estoque_validos(material=material, quantidade_solicitada=Decimal("1"))
 
     def test_quantidade_excede_saldo(self):
-        material = self._criar_material("001.001.005", saldo_fisico=Decimal("5"))
+        material = criar_material("001.001.005", saldo_fisico=Decimal("5"))
         material = Material.objects.select_related("estoque").get(pk=material.pk)
         with pytest.raises(DomainConflict):
             _material_e_estoque_validos(material=material, quantidade_solicitada=Decimal("999"))
@@ -86,35 +59,8 @@ class TestMaterialEEstoqueValidos:
 
 @pytest.mark.django_db
 class TestValidarItensRascunho:
-    @staticmethod
-    def _criar_material(
-        codigo: str, *, saldo_fisico: Decimal = Decimal("10"), is_active: bool = True
-    ) -> Material:
-        grupo_codigo, subgrupo_codigo, sequencial = codigo.split(".")
-        grupo, _ = GrupoMaterial.objects.get_or_create(
-            codigo_grupo=grupo_codigo,
-            defaults={"nome": f"Grupo {grupo_codigo}"},
-        )
-        subgrupo, _ = SubgrupoMaterial.objects.get_or_create(
-            grupo=grupo,
-            codigo_subgrupo=subgrupo_codigo,
-            defaults={"nome": f"Subgrupo {subgrupo_codigo}"},
-        )
-        material = Material.objects.create(
-            subgrupo=subgrupo,
-            codigo_completo=codigo,
-            sequencial=sequencial,
-            nome=f"Material {codigo}",
-            unidade_medida="UN",
-            is_active=is_active,
-        )
-        EstoqueMaterial.objects.create(
-            material=material, saldo_fisico=saldo_fisico, saldo_reservado=Decimal("0")
-        )
-        return material
-
     def test_caminho_feliz(self):
-        material = self._criar_material("002.001.001")
+        material = criar_material("002.001.001")
         itens = [ItemRascunhoData(material_id=material.pk, quantidade_solicitada=Decimal("3"))]
         result = _validar_itens_rascunho(itens)
         assert len(result) == 1
@@ -126,7 +72,7 @@ class TestValidarItensRascunho:
         assert "itens" in exc.value.detail
 
     def test_material_duplicado(self):
-        material = self._criar_material("002.001.002")
+        material = criar_material("002.001.002")
         itens = [
             ItemRascunhoData(material_id=material.pk, quantidade_solicitada=Decimal("1")),
             ItemRascunhoData(material_id=material.pk, quantidade_solicitada=Decimal("2")),
@@ -142,27 +88,27 @@ class TestValidarItensRascunho:
         assert "itens" in exc.value.detail
 
     def test_quantidade_zero(self):
-        material = self._criar_material("002.001.003")
+        material = criar_material("002.001.003")
         itens = [ItemRascunhoData(material_id=material.pk, quantidade_solicitada=Decimal("0"))]
         with pytest.raises(ValidationError) as exc:
             _validar_itens_rascunho(itens)
         assert "itens" in exc.value.detail
 
     def test_quantidade_negativa(self):
-        material = self._criar_material("002.001.004")
+        material = criar_material("002.001.004")
         itens = [ItemRascunhoData(material_id=material.pk, quantidade_solicitada=Decimal("-1"))]
         with pytest.raises(ValidationError) as exc:
             _validar_itens_rascunho(itens)
         assert "itens" in exc.value.detail
 
     def test_material_inativo(self):
-        material = self._criar_material("002.001.005", is_active=False)
+        material = criar_material("002.001.005", is_active=False)
         itens = [ItemRascunhoData(material_id=material.pk, quantidade_solicitada=Decimal("1"))]
         with pytest.raises(DomainConflict):
             _validar_itens_rascunho(itens)
 
     def test_quantidade_excede_saldo(self):
-        material = self._criar_material("002.001.006", saldo_fisico=Decimal("5"))
+        material = criar_material("002.001.006", saldo_fisico=Decimal("5"))
         itens = [ItemRascunhoData(material_id=material.pk, quantidade_solicitada=Decimal("999"))]
         with pytest.raises(DomainConflict):
             _validar_itens_rascunho(itens)
@@ -183,31 +129,6 @@ class TestValidarItensAutorizacao:
         chefe.save(update_fields=["setor"])
         return setor
 
-    @staticmethod
-    def _criar_material(codigo: str, saldo_fisico: Decimal = Decimal("10")) -> Material:
-        grupo_codigo, subgrupo_codigo, sequencial = codigo.split(".")
-        grupo, _ = GrupoMaterial.objects.get_or_create(
-            codigo_grupo=grupo_codigo,
-            defaults={"nome": f"Grupo {grupo_codigo}"},
-        )
-        subgrupo, _ = SubgrupoMaterial.objects.get_or_create(
-            grupo=grupo,
-            codigo_subgrupo=subgrupo_codigo,
-            defaults={"nome": f"Subgrupo {subgrupo_codigo}"},
-        )
-        material = Material.objects.create(
-            subgrupo=subgrupo,
-            codigo_completo=codigo,
-            sequencial=sequencial,
-            nome=f"Material {codigo}",
-            unidade_medida="UN",
-            is_active=True,
-        )
-        EstoqueMaterial.objects.create(
-            material=material, saldo_fisico=saldo_fisico, saldo_reservado=Decimal("0")
-        )
-        return material
-
     def _criar_requisicao_com_item(self, quantidade_solicitada: Decimal = Decimal("10")):
         setor = self._criar_setor("Setor Val", "99001")
         solicitante = User.objects.create(
@@ -217,7 +138,7 @@ class TestValidarItensAutorizacao:
             setor=setor,
             is_active=True,
         )
-        material = self._criar_material("003.001.001")
+        material = criar_material("003.001.001")
         req = Requisicao.objects.create(
             criador=solicitante,
             beneficiario=solicitante,
