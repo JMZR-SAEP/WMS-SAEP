@@ -3276,6 +3276,12 @@ class TestRequisicaoAPI:
 
         assert response.status_code == 200
         assert response.data["status"] == StatusRequisicao.RETIRADA
+        assert response.data["retirante_fisico"] == "Servidor Parcial"
+        assert response.data["data_retirada"] is not None
+        requisicao.refresh_from_db()
+        assert requisicao.retirante_fisico == "Servidor Parcial"
+        assert requisicao.data_retirada is not None
+        assert requisicao.eventos.filter(tipo_evento=TipoEvento.RETIRADA).exists()
 
     def test_pickup_sem_idempotency_key_retorna_400(self):
         setor = self._criar_setor("Retirada Sem Chave", "88020")
@@ -3307,6 +3313,8 @@ class TestRequisicaoAPI:
         )
 
         assert response.status_code == 400
+        assert response.data["error"]["code"] == "validation_error"
+        assert "Idempotency-Key" in response.data["error"]["details"]
 
     def test_pickup_retirante_fisico_blank_retorna_400(self):
         setor = self._criar_setor("Retirada Blank", "88030")
@@ -3339,6 +3347,8 @@ class TestRequisicaoAPI:
         )
 
         assert response.status_code == 400
+        assert response.data["error"]["code"] == "validation_error"
+        assert "retirante_fisico" in response.data["error"]["details"]
 
     def test_pickup_bloqueia_papel_sem_permissao(self):
         setor = self._criar_setor("Retirada Perm", "88040")

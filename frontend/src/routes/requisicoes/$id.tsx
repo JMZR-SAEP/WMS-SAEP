@@ -1014,8 +1014,10 @@ type PickupMutationArgs = {
 
 function PickupPanel({
   requisicao,
+  fulfillmentPage,
 }: {
   requisicao: RequisicaoDetail;
+  fulfillmentPage: number | undefined;
 }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate({ from: "/requisicoes/$id" });
@@ -1034,7 +1036,7 @@ function PickupPanel({
         redirect: buildRequisicaoRedirect({
           id: String(requisicao.id),
           contexto: "retirada",
-          sourcePage: undefined,
+          sourcePage: fulfillmentPage,
         }),
       },
     });
@@ -1354,6 +1356,7 @@ function ContextualActionPanel({
   ) {
     return (
       <PickupPanel
+        fulfillmentPage={sourcePage}
         key={requisicao.id}
         requisicao={requisicao}
       />
