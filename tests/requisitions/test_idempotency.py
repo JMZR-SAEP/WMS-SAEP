@@ -2,7 +2,7 @@ import hashlib
 from unittest.mock import MagicMock, patch
 
 import pytest
-from django.db import IntegrityError
+from django.db import IntegrityError, connection
 
 from apps.requisitions.idempotency import get_or_create_idempotency_record
 from apps.requisitions.models import Requisicao, RequisicaoIdempotencyKey, StatusIdempotencia
@@ -154,7 +154,12 @@ class TestGetOrCreateIdempotencyRecord:
 
         mock_qs = MagicMock()
         mock_qs.get_or_create.side_effect = IntegrityError("simulated race condition")
-        mock_qs.get.return_value = registro_existente
+
+        def _get_existing_with_atomic_check(**kwargs):
+            assert connection.in_atomic_block is True
+            return registro_existente
+
+        mock_qs.get.side_effect = _get_existing_with_atomic_check
 
         with patch.object(
             RequisicaoIdempotencyKey.objects,
