@@ -90,7 +90,12 @@ def carregar_beneficiario_e_setor(beneficiario_id: int) -> tuple[User, Setor]:
         beneficiario = User.objects.select_for_update().get(pk=beneficiario_id)
     except User.DoesNotExist as exc:
         raise NotFound("Beneficiário não encontrado.") from exc
-    setor = Setor.objects.select_for_update().get(pk=beneficiario.setor_id)
+    if not beneficiario.setor_id:
+        raise NotFound("Beneficiário deve possuir setor válido.")
+    try:
+        setor = Setor.objects.select_for_update().get(pk=beneficiario.setor_id)
+    except Setor.DoesNotExist as exc:
+        raise NotFound("Setor do beneficiário não encontrado.") from exc
     return beneficiario, setor
 
 

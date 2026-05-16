@@ -1,4 +1,4 @@
-from django.db import transaction
+from django.db import connection, transaction
 
 from apps.core.api.exceptions import DomainConflict
 from apps.core.events import (
@@ -161,6 +161,11 @@ def apply_transition(
     *,
     payload: dict[str, object],
 ) -> Requisicao:
+    if not connection.in_atomic_block:
+        raise DomainConflict(
+            "apply_transition exige transação ativa.",
+            details={"transition_name": transition_name},
+        )
     config = TRANSICOES_REQUISICAO[transition_name]
 
     if requisicao.status not in config["from_status"]:
