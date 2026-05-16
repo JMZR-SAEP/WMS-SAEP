@@ -30,6 +30,7 @@ from apps.requisitions.services import (
 )
 from apps.stock.models import EstoqueMaterial, MovimentacaoEstoque, TipoMovimentacao
 from apps.users.models import PapelChoices, Setor, User
+from tests.requisitions.helpers import StubStockPort
 
 
 @pytest.mark.django_db(transaction=True)
@@ -2103,3 +2104,344 @@ class TestMaquinaEstadosRequisicao:
         with pytest.raises(DomainConflict) as excinfo:
             retirar_requisicao(requisicao=requisicao, ator=almoxarife, retirante_fisico="Teste")
         assert "Transição inválida" in str(excinfo.value.detail)
+
+
+@pytest.mark.django_db(transaction=True)
+class TestPortAdapterStock:
+    """Testes de unidade do contrato Port/Adapter entre requisitions e stock.
+
+    Usam StubStockPort — não dependem de EstoqueMaterial nem MovimentacaoEstoque.
+    """
+
+    @staticmethod
+    def _criar_setor(nome: str, matricula: str) -> Setor:
+        chefe = User.objects.create(
+            matricula_funcional=matricula,
+            nome_completo=f"Chefe {nome}",
+            papel=PapelChoices.CHEFE_SETOR,
+            is_active=True,
+        )
+        setor = Setor.objects.create(nome=nome, chefe_responsavel=chefe)
+        chefe.setor = setor
+        chefe.save(update_fields=["setor"])
+        return setor
+
+    @staticmethod
+    def _criar_usuario(matricula: str, nome: str, *, setor: Setor) -> User:
+        return User.objects.create(
+            matricula_funcional=matricula,
+            nome_completo=nome,
+            papel=PapelChoices.SOLICITANTE,
+            setor=setor,
+            is_active=True,
+        )
+
+    @staticmethod
+    def _criar_material(codigo: str) -> Material:
+        from apps.materials.models import GrupoMaterial, Material, SubgrupoMaterial
+
+        g, _ = GrupoMaterial.objects.get_or_create(
+            codigo_grupo=codigo.split(".")[0],
+            defaults={"nome": f"G{codigo}"},
+        )
+        s, _ = SubgrupoMaterial.objects.get_or_create(
+            grupo=g,
+            codigo_subgrupo=codigo.split(".")[1],
+            defaults={"nome": f"S{codigo}"},
+        )
+        return Material.objects.create(
+            subgrupo=s,
+            codigo_completo=codigo,
+            sequencial=codigo.split(".")[2],
+            nome=f"Mat {codigo}",
+            unidade_medida="UN",
+            is_active=True,
+        )
+
+    def _criar_requisicao_aguardando(
+        self, *, criador: User, setor: Setor, material: Material, quantidade: Decimal
+    ) -> tuple[Requisicao, ItemRequisicao]:
+        from apps.requisitions.models import StatusRequisicao
+
+        req = Requisicao.objects.create(
+            criador=criador,
+            beneficiario=criador,
+            setor_beneficiario=setor,
+            numero_publico="REQ-2026-990001",
+            status=StatusRequisicao.AGUARDANDO_AUTORIZACAO,
+            data_envio_autorizacao="2026-01-01T00:00:00Z",
+        )
+        item = req.itens.create(
+            material=material,
+            unidade_medida="UN",
+            quantidade_solicitada=quantidade,
+        )
+        return req, item
+
+    def _criar_requisicao_autorizada(
+        self,
+        *,
+        criador: User,
+        setor: Setor,
+        chefe: User,
+        material: Material,
+        quantidade: Decimal,
+    ) -> tuple[Requisicao, ItemRequisicao]:
+        from django.utils import timezone
+
+        from apps.requisitions.models import StatusRequisicao
+
+        req = Requisicao.objects.create(
+            criador=criador,
+            beneficiario=criador,
+            setor_beneficiario=setor,
+            numero_publico="REQ-2026-990002",
+            status=StatusRequisicao.AUTORIZADA,
+            chefe_autorizador=chefe,
+            data_envio_autorizacao="2026-01-01T00:00:00Z",
+            data_autorizacao_ou_recusa=timezone.now(),
+        )
+        item = req.itens.create(
+            material=material,
+            unidade_medida="UN",
+            quantidade_solicitada=quantidade,
+            quantidade_autorizada=quantidade,
+        )
+        return req, item
+
+    def _criar_requisicao_pronta(
+        self,
+        *,
+        criador: User,
+        setor: Setor,
+        chefe: User,
+        atendente: User,
+        material: Material,
+        quantidade: Decimal,
+    ) -> tuple[Requisicao, ItemRequisicao]:
+        from django.utils import timezone
+
+        from apps.requisitions.models import StatusRequisicao
+
+        req = Requisicao.objects.create(
+            criador=criador,
+            beneficiario=criador,
+            setor_beneficiario=setor,
+            numero_publico="REQ-2026-990003",
+            status=StatusRequisicao.PRONTA_PARA_RETIRADA,
+            chefe_autorizador=chefe,
+            responsavel_atendimento=atendente,
+            data_envio_autorizacao="2026-01-01T00:00:00Z",
+            data_autorizacao_ou_recusa=timezone.now(),
+            data_finalizacao=timezone.now(),
+        )
+        item = req.itens.create(
+            material=material,
+            unidade_medida="UN",
+            quantidade_solicitada=quantidade,
+            quantidade_autorizada=quantidade,
+            quantidade_entregue=quantidade,
+        )
+        return req, item
+
+    def test_autorizar_chama_port_com_itens_autorizados(self):
+        setor = self._criar_setor("Port Setor", "PA001")
+        chefe = setor.chefe_responsavel
+        req_user = self._criar_usuario("PA002", "Solicitante Port", setor=setor)
+        material = self._criar_material("099.001.001")
+        req, item = self._criar_requisicao_aguardando(
+            criador=req_user, setor=setor, material=material, quantidade=Decimal("3")
+        )
+        stub = StubStockPort()
+
+        autorizar_requisicao(
+            requisicao=req,
+            ator=chefe,
+            itens=[ItemAutorizacaoData(item_id=item.id, quantidade_autorizada=Decimal("3"))],
+            stock=stub,
+        )
+
+        assert len(stub.reservas_aplicadas) == 1
+        req_chamado, itens_chamados = stub.reservas_aplicadas[0]
+        assert req_chamado.pk == req.pk
+        assert len(itens_chamados) == 1
+        assert itens_chamados[0].quantidade_autorizada == Decimal("3")
+
+    def test_autorizar_nao_chama_port_quando_todos_itens_zerados(self):
+        setor = self._criar_setor("Port Setor Zero", "PA010")
+        chefe = setor.chefe_responsavel
+        req_user = self._criar_usuario("PA011", "Solicitante Zero", setor=setor)
+        material = self._criar_material("099.001.002")
+        req, item = self._criar_requisicao_aguardando(
+            criador=req_user, setor=setor, material=material, quantidade=Decimal("3")
+        )
+        stub = StubStockPort()
+
+        with pytest.raises(DomainConflict):
+            autorizar_requisicao(
+                requisicao=req,
+                ator=chefe,
+                itens=[
+                    ItemAutorizacaoData(
+                        item_id=item.id,
+                        quantidade_autorizada=Decimal("0"),
+                        justificativa_autorizacao_parcial="Sem estoque",
+                    )
+                ],
+                stock=stub,
+            )
+
+        assert len(stub.reservas_aplicadas) == 0
+
+    def test_falha_no_port_reverte_transicao_autorizacao(self):
+        from apps.requisitions.models import EventoTimeline
+
+        setor = self._criar_setor("Port Rollback Auth", "PA020")
+        chefe = setor.chefe_responsavel
+        req_user = self._criar_usuario("PA021", "Solicitante Rollback", setor=setor)
+        material = self._criar_material("099.001.003")
+        req, item = self._criar_requisicao_aguardando(
+            criador=req_user, setor=setor, material=material, quantidade=Decimal("2")
+        )
+        timeline_antes = EventoTimeline.objects.filter(requisicao=req).count()
+        stub = StubStockPort()
+        stub.deve_falhar_em = "aplicar_reservas_autorizacao"
+
+        with pytest.raises(DomainConflict):
+            autorizar_requisicao(
+                requisicao=req,
+                ator=chefe,
+                itens=[ItemAutorizacaoData(item_id=item.id, quantidade_autorizada=Decimal("2"))],
+                stock=stub,
+            )
+
+        req.refresh_from_db()
+        item.refresh_from_db()
+        assert req.status == StatusRequisicao.AGUARDANDO_AUTORIZACAO
+        assert req.data_autorizacao_ou_recusa is None
+        assert item.quantidade_autorizada == Decimal("0")
+        assert EventoTimeline.objects.filter(requisicao=req).count() == timeline_antes
+
+    def test_cancelar_autorizada_chama_port_liberar_reservas(self):
+        setor = self._criar_setor("Port Cancel", "PA030")
+        chefe = setor.chefe_responsavel
+        req_user = self._criar_usuario("PA031", "Solicitante Cancel", setor=setor)
+        material = self._criar_material("099.001.004")
+        req, _ = self._criar_requisicao_autorizada(
+            criador=req_user, setor=setor, chefe=chefe, material=material, quantidade=Decimal("2")
+        )
+        stub = StubStockPort()
+
+        cancelar_requisicao(
+            requisicao=req,
+            ator=req_user,
+            motivo_cancelamento="Teste port",
+            stock=stub,
+        )
+
+        assert len(stub.cancelamentos_liberados) == 1
+        req_chamado, itens_chamados = stub.cancelamentos_liberados[0]
+        assert req_chamado.pk == req.pk
+        assert len(itens_chamados) == 1
+
+    def test_falha_no_port_reverte_cancelamento(self):
+        from apps.requisitions.models import EventoTimeline
+
+        setor = self._criar_setor("Port Rollback Cancel", "PA040")
+        chefe = setor.chefe_responsavel
+        req_user = self._criar_usuario("PA041", "Solicitante RB Cancel", setor=setor)
+        material = self._criar_material("099.001.005")
+        req, _ = self._criar_requisicao_autorizada(
+            criador=req_user, setor=setor, chefe=chefe, material=material, quantidade=Decimal("2")
+        )
+        timeline_antes = EventoTimeline.objects.filter(requisicao=req).count()
+        stub = StubStockPort()
+        stub.deve_falhar_em = "liberar_reservas_cancelamento"
+
+        with pytest.raises(DomainConflict):
+            cancelar_requisicao(
+                requisicao=req,
+                ator=req_user,
+                motivo_cancelamento="Rollback test",
+                stock=stub,
+            )
+
+        req.refresh_from_db()
+        assert req.status == StatusRequisicao.AUTORIZADA
+        assert req.motivo_cancelamento == ""
+        assert req.data_finalizacao is None
+        assert EventoTimeline.objects.filter(requisicao=req).count() == timeline_antes
+
+    def test_retirar_chama_port_saidas_e_liberacoes(self):
+        setor = self._criar_setor("Port Retirada", "PA050")
+        chefe = setor.chefe_responsavel
+        req_user = self._criar_usuario("PA051", "Solicitante Retirada", setor=setor)
+        atendente = User.objects.create(
+            matricula_funcional="PA052",
+            nome_completo="Atendente Port",
+            papel=PapelChoices.AUXILIAR_ALMOXARIFADO,
+            setor=setor,
+            is_active=True,
+        )
+        material = self._criar_material("099.001.006")
+        req, _ = self._criar_requisicao_pronta(
+            criador=req_user,
+            setor=setor,
+            chefe=chefe,
+            atendente=atendente,
+            material=material,
+            quantidade=Decimal("3"),
+        )
+        stub = StubStockPort()
+
+        retirar_requisicao(
+            requisicao=req,
+            ator=atendente,
+            retirante_fisico="Fulano",
+            stock=stub,
+        )
+
+        assert len(stub.retiradas_aplicadas) == 1
+        req_chamado, itens_chamados = stub.retiradas_aplicadas[0]
+        assert req_chamado.pk == req.pk
+        assert len(itens_chamados) == 1
+
+    def test_falha_no_port_reverte_retirada(self):
+        from apps.requisitions.models import EventoTimeline
+
+        setor = self._criar_setor("Port Rollback Retirada", "PA060")
+        chefe = setor.chefe_responsavel
+        req_user = self._criar_usuario("PA061", "Solicitante RB Retirada", setor=setor)
+        atendente = User.objects.create(
+            matricula_funcional="PA062",
+            nome_completo="Atendente RB",
+            papel=PapelChoices.AUXILIAR_ALMOXARIFADO,
+            setor=setor,
+            is_active=True,
+        )
+        material = self._criar_material("099.001.007")
+        req, _ = self._criar_requisicao_pronta(
+            criador=req_user,
+            setor=setor,
+            chefe=chefe,
+            atendente=atendente,
+            material=material,
+            quantidade=Decimal("3"),
+        )
+        timeline_antes = EventoTimeline.objects.filter(requisicao=req).count()
+        stub = StubStockPort()
+        stub.deve_falhar_em = "aplicar_saidas_e_liberacoes_retirada"
+
+        with pytest.raises(DomainConflict):
+            retirar_requisicao(
+                requisicao=req,
+                ator=atendente,
+                retirante_fisico="Fulano",
+                stock=stub,
+            )
+
+        req.refresh_from_db()
+        assert req.status == StatusRequisicao.PRONTA_PARA_RETIRADA
+        assert req.data_retirada is None
+        assert req.retirante_fisico == ""
+        assert EventoTimeline.objects.filter(requisicao=req).count() == timeline_antes

@@ -49,13 +49,15 @@ from apps.requisitions.policies import (
     queryset_fila_atendimento,
     queryset_fila_autorizacao,
 )
-from apps.stock.models import EstoqueMaterial
-from apps.stock.services import (
-    registrar_liberacao_reserva_por_atendimento,
-    registrar_reserva_por_autorizacao,
-    registrar_saida_por_atendimento,
-)
+from apps.requisitions.ports import StockPort
 from apps.users.models import PapelChoices, Setor
+
+
+def _get_default_stock() -> StockPort:
+    from apps.stock.adapters import StockAdapter
+
+    return StockAdapter()
+
 
 User = get_user_model()
 IDEMPOTENCY_ENDPOINT_FULFILL = "requisitions_fulfill"
@@ -111,38 +113,6 @@ def _validacao_payload_atendimento(message: str, *, item_ids: list[int] | None =
     return ValidationError(details)
 
 
-def _side_effect_reservar_itens_autorizados(
-    requisicao: Requisicao, payload: dict[str, object]
-) -> None:
-    # CONTRATO: payload precisa conter "itens_requisicao": list[ItemRequisicao]
-    # quando este side effect for registrado em TRANSICOES_REQUISICAO.
-    for item_requisicao in payload["itens_requisicao"]:
-        quantidade_autorizada = item_requisicao.quantidade_autorizada
-        if quantidade_autorizada <= 0:
-            continue
-        registrar_reserva_por_autorizacao(
-            requisicao=requisicao,
-            item=item_requisicao,
-            quantidade=quantidade_autorizada,
-        )
-
-
-def _side_effect_liberar_reservas_cancelamento(
-    requisicao: Requisicao, payload: dict[str, object]
-) -> None:
-    estoques_por_material_id = payload["estoques_por_material_id"]
-    for item_requisicao in payload["itens_requisicao"]:
-        quantidade_liberada = item_requisicao.quantidade_autorizada
-        if quantidade_liberada <= 0:
-            continue
-        registrar_liberacao_reserva_por_atendimento(
-            requisicao=requisicao,
-            item=item_requisicao,
-            quantidade=quantidade_liberada,
-            estoque_travado=estoques_por_material_id[item_requisicao.material_id],
-        )
-
-
 TRANSICOES_REQUISICAO: dict[str, dict[str, object]] = {
     "autorizar_total": {
         "from_status": (StatusRequisicao.AGUARDANDO_AUTORIZACAO,),
@@ -153,7 +123,7 @@ TRANSICOES_REQUISICAO: dict[str, dict[str, object]] = {
             "data_autorizacao_ou_recusa",
             "status",
         ),
-        "side_effects": (_side_effect_reservar_itens_autorizados,),
+        "side_effects": (),
         "notification_event": REQUISICAO_AUTORIZADA,
     },
     "autorizar_parcial": {
@@ -165,7 +135,7 @@ TRANSICOES_REQUISICAO: dict[str, dict[str, object]] = {
             "data_autorizacao_ou_recusa",
             "status",
         ),
-        "side_effects": (_side_effect_reservar_itens_autorizados,),
+        "side_effects": (),
         "notification_event": REQUISICAO_AUTORIZADA,
     },
     "recusar": {
@@ -232,7 +202,7 @@ TRANSICOES_REQUISICAO: dict[str, dict[str, object]] = {
             "motivo_cancelamento",
             "status",
         ),
-        "side_effects": (_side_effect_liberar_reservas_cancelamento,),
+        "side_effects": (),
         "notification_event": REQUISICAO_CANCELADA,
     },
     "cancelar_pre_autorizacao": {
@@ -359,26 +329,6 @@ def _recarregar_requisicao_detalhe(requisicao_id: int) -> Requisicao:
         .prefetch_related("itens__material__estoque", "eventos__usuario")
         .get(pk=requisicao_id)
     )
-
-
-def _travar_estoques_dos_itens(
-    itens_requisicao: list[ItemRequisicao],
-) -> dict[int, EstoqueMaterial]:
-    material_ids = sorted({item.material_id for item in itens_requisicao})
-    estoques = list(
-        EstoqueMaterial.objects.select_for_update()
-        .select_related("material")
-        .filter(material_id__in=material_ids)
-        .order_by("material_id")
-    )
-    estoques_por_material_id = {estoque.material_id: estoque for estoque in estoques}
-    material_ids_sem_estoque = set(material_ids) - set(estoques_por_material_id)
-    if material_ids_sem_estoque:
-        raise DomainConflict(
-            "Material autorizado não possui estoque cadastrado.",
-            details={"material_ids": sorted(material_ids_sem_estoque)},
-        )
-    return estoques_por_material_id
 
 
 def _gerar_numero_publico(*, ano: int | None = None) -> str:
@@ -696,7 +646,7 @@ def _cancelar_pre_autorizacao(*, requisicao: Requisicao, ator: User) -> Requisic
 
 
 def _cancelar_autorizada_sem_saldo(
-    *, requisicao: Requisicao, ator: User, motivo_cancelamento: str
+    *, requisicao: Requisicao, ator: User, motivo_cancelamento: str, stock: StockPort
 ) -> Requisicao:
     motivo_cancelamento = motivo_cancelamento.strip()
     if not motivo_cancelamento:
@@ -718,19 +668,7 @@ def _cancelar_autorizada_sem_saldo(
             details={"requisicao_id": requisicao.id},
         )
 
-    estoques_por_material_id = _travar_estoques_dos_itens(itens_autorizados)
-    itens_com_saldo_fisico = [
-        item.id
-        for item in itens_autorizados
-        if estoques_por_material_id[item.material_id].saldo_fisico > 0
-    ]
-    if itens_com_saldo_fisico:
-        raise DomainConflict(
-            "Ainda há saldo físico para atendimento parcial da requisição.",
-            details={"item_ids": itens_com_saldo_fisico},
-        )
-
-    return _apply_requisicao_transition(
+    _apply_requisicao_transition(
         requisicao=requisicao,
         transition_name="cancelar_pos_autorizacao_sem_saldo",
         actor=ator,
@@ -738,15 +676,23 @@ def _cancelar_autorizada_sem_saldo(
             "responsavel_atendimento": ator,
             "data_finalizacao": timezone.now(),
             "motivo_cancelamento": motivo_cancelamento,
-            "itens_requisicao": itens_autorizados,
-            "estoques_por_material_id": estoques_por_material_id,
         },
     )
 
+    stock.liberar_reservas_cancelamento(requisicao, itens_autorizados)
+
+    return requisicao
+
 
 def cancelar_requisicao(
-    *, requisicao: Requisicao, ator: User, motivo_cancelamento: str
+    *,
+    requisicao: Requisicao,
+    ator: User,
+    motivo_cancelamento: str,
+    stock: StockPort | None = None,
 ) -> Requisicao:
+    if stock is None:
+        stock = _get_default_stock()
     with transaction.atomic():
         requisicao = _recarregar_requisicao_para_atendimento(requisicao)
         if requisicao.status == StatusRequisicao.AUTORIZADA:
@@ -754,6 +700,7 @@ def cancelar_requisicao(
                 requisicao=requisicao,
                 ator=ator,
                 motivo_cancelamento=motivo_cancelamento,
+                stock=stock,
             )
         else:
             requisicao = _cancelar_pre_autorizacao(requisicao=requisicao, ator=ator)
@@ -772,8 +719,14 @@ def cancelar_requisicao(
 
 
 def autorizar_requisicao(
-    *, requisicao: Requisicao, ator: User, itens: list[ItemAutorizacaoData]
+    *,
+    requisicao: Requisicao,
+    ator: User,
+    itens: list[ItemAutorizacaoData],
+    stock: StockPort | None = None,
 ) -> Requisicao:
+    if stock is None:
+        stock = _get_default_stock()
     with transaction.atomic():
         requisicao = _recarregar_requisicao_para_autorizacao(requisicao)
         if not pode_autorizar_requisicao(ator, requisicao):
@@ -786,38 +739,10 @@ def autorizar_requisicao(
             .order_by("material_id", "id")
         )
         itens_por_id = _validar_itens_autorizacao(itens_requisicao=itens_requisicao, itens=itens)
-        estoque_por_material_id = {
-            estoque.material_id: estoque
-            for estoque in (
-                EstoqueMaterial.objects.select_for_update()
-                .select_related("material")
-                .filter(material_id__in=[item.material_id for item in itens_requisicao])
-                .order_by("material_id")
-            )
-        }
 
         for item_requisicao in itens_requisicao:
             item_autorizacao = itens_por_id[item_requisicao.id]
-            quantidade_autorizada = item_autorizacao.quantidade_autorizada
-
-            if quantidade_autorizada > 0:
-                estoque = estoque_por_material_id.get(item_requisicao.material_id)
-                if estoque is None:
-                    raise DomainConflict(
-                        "Material da requisição está sem estoque disponível.",
-                        details={"material_id": item_requisicao.material_id},
-                    )
-                if quantidade_autorizada > estoque.saldo_disponivel:
-                    raise DomainConflict(
-                        "Saldo disponível insuficiente no momento da autorização.",
-                        details={
-                            "item_id": item_requisicao.id,
-                            "saldo_disponivel": str(estoque.saldo_disponivel),
-                            "quantidade_autorizada": str(quantidade_autorizada),
-                        },
-                    )
-
-            item_requisicao.quantidade_autorizada = quantidade_autorizada
+            item_requisicao.quantidade_autorizada = item_autorizacao.quantidade_autorizada
             item_requisicao.justificativa_autorizacao_parcial = (
                 item_autorizacao.justificativa_autorizacao_parcial
             )
@@ -843,9 +768,12 @@ def autorizar_requisicao(
             payload={
                 "chefe_autorizador": ator,
                 "data_autorizacao_ou_recusa": timezone.now(),
-                "itens_requisicao": itens_requisicao,
             },
         )
+
+        itens_autorizados = [i for i in itens_requisicao if i.quantidade_autorizada > 0]
+        if itens_autorizados:
+            stock.aplicar_reservas_autorizacao(requisicao, itens_autorizados)
 
     return (
         Requisicao.objects.select_related(
@@ -1200,7 +1128,10 @@ def retirar_requisicao(
     requisicao: Requisicao,
     ator: User,
     retirante_fisico: str,
+    stock: StockPort | None = None,
 ) -> Requisicao:
+    if stock is None:
+        stock = _get_default_stock()
     with transaction.atomic():
         requisicao = (
             Requisicao.objects.select_for_update()
@@ -1241,26 +1172,6 @@ def retirar_requisicao(
                     },
                 )
 
-        itens_autorizados = [item for item in itens_requisicao if item.quantidade_autorizada > 0]
-        if itens_autorizados:
-            estoques_por_material_id = _travar_estoques_dos_itens(itens_autorizados)
-            for item in itens_autorizados:
-                if item.quantidade_entregue > 0:
-                    registrar_saida_por_atendimento(
-                        requisicao=requisicao,
-                        item=item,
-                        quantidade=item.quantidade_entregue,
-                        estoque_travado=estoques_por_material_id[item.material_id],
-                    )
-                quantidade_nao_entregue = item.quantidade_autorizada - item.quantidade_entregue
-                if quantidade_nao_entregue > 0:
-                    registrar_liberacao_reserva_por_atendimento(
-                        requisicao=requisicao,
-                        item=item,
-                        quantidade=quantidade_nao_entregue,
-                        estoque_travado=estoques_por_material_id[item.material_id],
-                    )
-
         _apply_requisicao_transition(
             requisicao=requisicao,
             transition_name="retirar",
@@ -1270,6 +1181,10 @@ def retirar_requisicao(
                 "data_retirada": timezone.now(),
             },
         )
+
+        itens_autorizados = [item for item in itens_requisicao if item.quantidade_autorizada > 0]
+        if itens_autorizados:
+            stock.aplicar_saidas_e_liberacoes_retirada(requisicao, itens_autorizados)
 
     return _recarregar_requisicao_detalhe(requisicao.pk)
 

@@ -1,7 +1,38 @@
 from decimal import Decimal
 
+from apps.core.api.exceptions import DomainConflict
 from apps.materials.models import GrupoMaterial, Material, SubgrupoMaterial
+from apps.requisitions.models import ItemRequisicao, Requisicao
 from apps.stock.models import EstoqueMaterial
+
+
+class StubStockPort:
+    def __init__(self) -> None:
+        self.reservas_aplicadas: list[tuple[Requisicao, list[ItemRequisicao]]] = []
+        self.cancelamentos_liberados: list[tuple[Requisicao, list[ItemRequisicao]]] = []
+        self.retiradas_aplicadas: list[tuple[Requisicao, list[ItemRequisicao]]] = []
+        self.deve_falhar_em: str | None = None
+
+    def aplicar_reservas_autorizacao(
+        self, requisicao: Requisicao, itens_autorizados: list[ItemRequisicao]
+    ) -> None:
+        if self.deve_falhar_em == "aplicar_reservas_autorizacao":
+            raise DomainConflict("stub: falha simulada")
+        self.reservas_aplicadas.append((requisicao, list(itens_autorizados)))
+
+    def liberar_reservas_cancelamento(
+        self, requisicao: Requisicao, itens_autorizados: list[ItemRequisicao]
+    ) -> None:
+        if self.deve_falhar_em == "liberar_reservas_cancelamento":
+            raise DomainConflict("stub: falha simulada")
+        self.cancelamentos_liberados.append((requisicao, list(itens_autorizados)))
+
+    def aplicar_saidas_e_liberacoes_retirada(
+        self, requisicao: Requisicao, itens_autorizados: list[ItemRequisicao]
+    ) -> None:
+        if self.deve_falhar_em == "aplicar_saidas_e_liberacoes_retirada":
+            raise DomainConflict("stub: falha simulada")
+        self.retiradas_aplicadas.append((requisicao, list(itens_autorizados)))
 
 
 def criar_material(
