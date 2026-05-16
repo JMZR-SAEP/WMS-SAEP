@@ -8,6 +8,7 @@ from django.utils import timezone
 from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 
 from apps.core.api.exceptions import DomainConflict
+from apps.requisitions import queries
 from apps.requisitions.domain.state_machine import apply_transition
 from apps.requisitions.domain.types import (
     ItemAtendimentoData,
@@ -101,38 +102,6 @@ def _validacao_payload_atendimento(message: str, *, item_ids: list[int] | None =
     if item_ids is not None:
         details["item_ids"] = item_ids
     return ValidationError(details)
-
-
-def _recarregar_requisicao_para_autorizacao(requisicao: Requisicao) -> Requisicao:
-    return (
-        Requisicao.objects.select_for_update()
-        .select_related("criador", "beneficiario", "setor_beneficiario")
-        .prefetch_related("itens__material__estoque", "eventos__usuario")
-        .get(pk=requisicao.pk)
-    )
-
-
-def _recarregar_requisicao_para_atendimento(requisicao: Requisicao) -> Requisicao:
-    return (
-        Requisicao.objects.select_for_update()
-        .select_related("criador", "beneficiario", "setor_beneficiario")
-        .prefetch_related("itens__material__estoque", "eventos__usuario")
-        .get(pk=requisicao.pk)
-    )
-
-
-def _recarregar_requisicao_detalhe(requisicao_id: int) -> Requisicao:
-    return (
-        Requisicao.objects.select_related(
-            "criador",
-            "beneficiario",
-            "setor_beneficiario",
-            "chefe_autorizador",
-            "responsavel_atendimento",
-        )
-        .prefetch_related("itens__material__estoque", "eventos__usuario")
-        .get(pk=requisicao_id)
-    )
 
 
 def criar_rascunho_requisicao(
@@ -477,7 +446,7 @@ def cancelar_requisicao(
     if stock is None:
         stock = _get_default_stock()
     with transaction.atomic():
-        requisicao = _recarregar_requisicao_para_atendimento(requisicao)
+        requisicao = queries.recarregar_para_atendimento(requisicao)
         if requisicao.status == StatusRequisicao.AUTORIZADA:
             requisicao = _cancelar_autorizada_sem_saldo(
                 requisicao=requisicao,
@@ -511,7 +480,7 @@ def autorizar_requisicao(
     if stock is None:
         stock = _get_default_stock()
     with transaction.atomic():
-        requisicao = _recarregar_requisicao_para_autorizacao(requisicao)
+        requisicao = queries.recarregar_para_autorizacao(requisicao)
         if not pode_autorizar_requisicao(ator, requisicao):
             raise PermissionDenied("Usuário sem permissão para autorizar esta requisição.")
 
@@ -576,7 +545,7 @@ def recusar_requisicao(*, requisicao: Requisicao, ator: User, motivo_recusa: str
         raise ValidationError({"motivo_recusa": ["Motivo da recusa é obrigatório."]})
 
     with transaction.atomic():
-        requisicao = _recarregar_requisicao_para_autorizacao(requisicao)
+        requisicao = queries.recarregar_para_autorizacao(requisicao)
         if not pode_autorizar_requisicao(ator, requisicao):
             raise PermissionDenied("Usuário sem permissão para recusar esta requisição.")
 
@@ -695,7 +664,7 @@ def atender_requisicao_idempotente(
                     },
                 )
             if registro.status == StatusIdempotencia.COMPLETED:
-                return _recarregar_requisicao_detalhe(requisicao.id)
+                return queries.recarregar_detalhe(requisicao.id)
             raise DomainConflict(
                 "Atendimento com esta chave de idempotência ainda está em processamento.",
                 details={
@@ -722,7 +691,7 @@ def atender_requisicao_completa(
     observacao_atendimento: str = "",
 ) -> Requisicao:
     with transaction.atomic():
-        requisicao = _recarregar_requisicao_para_atendimento(requisicao)
+        requisicao = queries.recarregar_para_atendimento(requisicao)
         if not pode_atender_requisicao(ator, requisicao):
             raise PermissionDenied("Usuário sem permissão para atender esta requisição.")
 
@@ -783,7 +752,7 @@ def atender_requisicao_com_itens(
     observacao_atendimento: str = "",
 ) -> Requisicao:
     with transaction.atomic():
-        requisicao = _recarregar_requisicao_para_atendimento(requisicao)
+        requisicao = queries.recarregar_para_atendimento(requisicao)
         if not pode_atender_requisicao(ator, requisicao):
             raise PermissionDenied("Usuário sem permissão para atender esta requisição.")
 
@@ -969,7 +938,7 @@ def retirar_requisicao(
         if itens_autorizados:
             stock.aplicar_saidas_e_liberacoes_retirada(requisicao, itens_autorizados)
 
-    return _recarregar_requisicao_detalhe(requisicao.pk)
+    return queries.recarregar_detalhe(requisicao.pk)
 
 
 def retirar_requisicao_idempotente(
@@ -1002,7 +971,7 @@ def retirar_requisicao_idempotente(
                     },
                 )
             if registro.status == StatusIdempotencia.COMPLETED:
-                return _recarregar_requisicao_detalhe(requisicao.id)
+                return queries.recarregar_detalhe(requisicao.id)
             raise DomainConflict(
                 "Retirada com esta chave de idempotência ainda está em processamento.",
                 details={
