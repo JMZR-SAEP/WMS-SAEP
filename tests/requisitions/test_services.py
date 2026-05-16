@@ -2294,6 +2294,8 @@ class TestPortAdapterStock:
         assert len(stub.reservas_aplicadas) == 0
 
     def test_falha_no_port_reverte_transicao_autorizacao(self):
+        from apps.requisitions.models import EventoTimeline
+
         setor = self._criar_setor("Port Rollback Auth", "PA020")
         chefe = setor.chefe_responsavel
         req_user = self._criar_usuario("PA021", "Solicitante Rollback", setor=setor)
@@ -2301,6 +2303,7 @@ class TestPortAdapterStock:
         req, item = self._criar_requisicao_aguardando(
             criador=req_user, setor=setor, material=material, quantidade=Decimal("2")
         )
+        timeline_antes = EventoTimeline.objects.filter(requisicao=req).count()
         stub = StubStockPort()
         stub.deve_falhar_em = "aplicar_reservas_autorizacao"
 
@@ -2313,7 +2316,11 @@ class TestPortAdapterStock:
             )
 
         req.refresh_from_db()
+        item.refresh_from_db()
         assert req.status == StatusRequisicao.AGUARDANDO_AUTORIZACAO
+        assert req.data_autorizacao_ou_recusa is None
+        assert item.quantidade_autorizada == Decimal("0")
+        assert EventoTimeline.objects.filter(requisicao=req).count() == timeline_antes
 
     def test_cancelar_autorizada_chama_port_liberar_reservas(self):
         setor = self._criar_setor("Port Cancel", "PA030")
@@ -2338,6 +2345,8 @@ class TestPortAdapterStock:
         assert len(itens_chamados) == 1
 
     def test_falha_no_port_reverte_cancelamento(self):
+        from apps.requisitions.models import EventoTimeline
+
         setor = self._criar_setor("Port Rollback Cancel", "PA040")
         chefe = setor.chefe_responsavel
         req_user = self._criar_usuario("PA041", "Solicitante RB Cancel", setor=setor)
@@ -2345,6 +2354,7 @@ class TestPortAdapterStock:
         req, _ = self._criar_requisicao_autorizada(
             criador=req_user, setor=setor, chefe=chefe, material=material, quantidade=Decimal("2")
         )
+        timeline_antes = EventoTimeline.objects.filter(requisicao=req).count()
         stub = StubStockPort()
         stub.deve_falhar_em = "liberar_reservas_cancelamento"
 
@@ -2358,6 +2368,9 @@ class TestPortAdapterStock:
 
         req.refresh_from_db()
         assert req.status == StatusRequisicao.AUTORIZADA
+        assert req.motivo_cancelamento == ""
+        assert req.data_finalizacao is None
+        assert EventoTimeline.objects.filter(requisicao=req).count() == timeline_antes
 
     def test_retirar_chama_port_saidas_e_liberacoes(self):
         setor = self._criar_setor("Port Retirada", "PA050")
@@ -2394,6 +2407,8 @@ class TestPortAdapterStock:
         assert len(itens_chamados) == 1
 
     def test_falha_no_port_reverte_retirada(self):
+        from apps.requisitions.models import EventoTimeline
+
         setor = self._criar_setor("Port Rollback Retirada", "PA060")
         chefe = setor.chefe_responsavel
         req_user = self._criar_usuario("PA061", "Solicitante RB Retirada", setor=setor)
@@ -2413,6 +2428,7 @@ class TestPortAdapterStock:
             material=material,
             quantidade=Decimal("3"),
         )
+        timeline_antes = EventoTimeline.objects.filter(requisicao=req).count()
         stub = StubStockPort()
         stub.deve_falhar_em = "aplicar_saidas_e_liberacoes_retirada"
 
@@ -2426,3 +2442,6 @@ class TestPortAdapterStock:
 
         req.refresh_from_db()
         assert req.status == StatusRequisicao.PRONTA_PARA_RETIRADA
+        assert req.data_retirada is None
+        assert req.retirante_fisico == ""
+        assert EventoTimeline.objects.filter(requisicao=req).count() == timeline_antes

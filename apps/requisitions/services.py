@@ -50,10 +50,14 @@ from apps.requisitions.policies import (
     queryset_fila_autorizacao,
 )
 from apps.requisitions.ports import StockPort
-from apps.stock.adapters import StockAdapter
 from apps.users.models import PapelChoices, Setor
 
-_default_stock: StockPort = StockAdapter()
+
+def _get_default_stock() -> StockPort:
+    from apps.stock.adapters import StockAdapter
+
+    return StockAdapter()
+
 
 User = get_user_model()
 IDEMPOTENCY_ENDPOINT_FULFILL = "requisitions_fulfill"
@@ -685,8 +689,10 @@ def cancelar_requisicao(
     requisicao: Requisicao,
     ator: User,
     motivo_cancelamento: str,
-    stock: StockPort = _default_stock,
+    stock: StockPort | None = None,
 ) -> Requisicao:
+    if stock is None:
+        stock = _get_default_stock()
     with transaction.atomic():
         requisicao = _recarregar_requisicao_para_atendimento(requisicao)
         if requisicao.status == StatusRequisicao.AUTORIZADA:
@@ -717,8 +723,10 @@ def autorizar_requisicao(
     requisicao: Requisicao,
     ator: User,
     itens: list[ItemAutorizacaoData],
-    stock: StockPort = _default_stock,
+    stock: StockPort | None = None,
 ) -> Requisicao:
+    if stock is None:
+        stock = _get_default_stock()
     with transaction.atomic():
         requisicao = _recarregar_requisicao_para_autorizacao(requisicao)
         if not pode_autorizar_requisicao(ator, requisicao):
@@ -1120,8 +1128,10 @@ def retirar_requisicao(
     requisicao: Requisicao,
     ator: User,
     retirante_fisico: str,
-    stock: StockPort = _default_stock,
+    stock: StockPort | None = None,
 ) -> Requisicao:
+    if stock is None:
+        stock = _get_default_stock()
     with transaction.atomic():
         requisicao = (
             Requisicao.objects.select_for_update()
