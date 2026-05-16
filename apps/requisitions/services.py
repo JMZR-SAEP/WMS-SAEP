@@ -41,8 +41,10 @@ from apps.requisitions.policies import (
     pode_atender_requisicao,
     pode_autorizar_requisicao,
     pode_cancelar_autorizada,
+    pode_criar_requisicao_para,
     pode_manipular_pre_autorizacao,
     pode_retirar_requisicao,
+    pode_ver_fila_atendimento,
     pode_visualizar_requisicao,
     queryset_fila_atendimento,
     queryset_fila_autorizacao,
@@ -54,10 +56,6 @@ from apps.stock.services import (
     registrar_saida_por_atendimento,
 )
 from apps.users.models import PapelChoices, Setor
-from apps.users.policies import (
-    pode_criar_requisicao_para,
-    pode_ver_fila_atendimento,
-)
 
 User = get_user_model()
 IDEMPOTENCY_ENDPOINT_FULFILL = "requisitions_fulfill"
