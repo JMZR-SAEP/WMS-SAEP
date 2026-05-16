@@ -20,51 +20,28 @@ API response invariant:
 
 Stock invariants:
 - `MovimentacaoEstoque` is immutable. Do not update/delete/overwrite movements; corrections must be modeled as new movements when new movement types are introduced.
-- The currently implemented movement types are `SALDO_INICIAL` for SCPI bootstrap load, `RESERVA_POR_AUTORIZACAO` for approved requisition reservation, `SAIDA_POR_ATENDIMENTO` for delivered fulfillment quantities, and `LIBERACAO_RESERVA_ATENDIMENTO` for authorized quantities not delivered during partial fulfillment.
-- Any operation altering stock uses `transaction.atomic()` and row locking such as `select_for_update()` on stock rows.
-- Keep `EstoqueMaterial.saldo_fisico`, `saldo_reservado`, `saldo_disponivel`, and movement balances consistent.
-- Avoid double increment/decrement, unauthorized negative stock, race conditions, and movement/balance divergence.
-- The stock reservation write path must reject `quantidade <= 0` and must revalidate available balance inside the locked stock service itself, even if the caller already checked before.
-- The fulfillment stock exit write path must reject `quantidade <= 0`, revalidate both `saldo_fisico` and `saldo_reservado` after locking stock, decrement both balances, and record immutable `SAIDA_POR_ATENDIMENTO`.
-- The fulfillment reserve-release write path must reject `quantidade <= 0`, revalidate reserved balance under an active transaction, preserve `saldo_fisico`, prevent `saldo_fisico < saldo_reservado_posterior`, decrement only `saldo_reservado`, and record immutable `LIBERACAO_RESERVA_ATENDIMENTO`.
-- Stock service shortcuts that receive an already locked `EstoqueMaterial` through `estoque_travado` must only run inside an active `transaction.atomic()` block; callers outside an orchestrating transaction must let the stock service acquire the lock itself.
-- `MovimentacaoEstoque.save()` calls `full_clean()`, and manager-level bulk paths must not bypass critical invariants; `bulk_create()` is now expected to validate each object before insert.
-- Current cross-field consistency between `requisicao`, `item_requisicao`, and `material` for operational stock movements is enforced at the ORM/model level with `clean()/full_clean()` plus regression tests; if durable DB-level enforcement becomes required later, add it explicitly and document the migration decision.
+- Currently implemented movement types: `SALDO_INICIAL` (SCPI bootstrap), `RESERVA_POR_AUTORIZACAO` (approved requisition reservation), `SAIDA_POR_ATENDIMENTO` (delivered fulfillment), and `LIBERACAO_RESERVA_ATENDIMENTO` (authorized qty not delivered in partial fulfillment).
+- Stock writes use `transaction.atomic()` + `select_for_update()` for row locking. Always lock inside transaction; never pass unlocked row to service outside tx context.
+- Keep `EstoqueMaterial.saldo_fisico`, `saldo_reservado`, `saldo_disponivel` consistent and prevent race conditions.
+- Reservation rejects `quantidade <= 0`, revalidates available balance inside locked stock service.
+- Fulfillment exit rejects `quantidade <= 0`, revalidates both balances after lock, decrements both, records `SAIDA_POR_ATENDIMENTO`.
+- Partial fulfillment release rejects `quantidade <= 0`, revalidates reserved balance, preserves `saldo_fisico`, prevents `saldo_fisico < saldo_reservado_posterior`.
+- Stock service shortcuts receiving locked `EstoqueMaterial` via `estoque_travado` must run inside `transaction.atomic()` block only.
 
-Technical debt to revisit before adding new stock writers:
-- PR #26 established the current fulfillment lock order: lock `Requisicao`, then authorized `ItemRequisicao` rows ordered by `material_id, id`, then all related `EstoqueMaterial` rows in deterministic `material_id` order before calling stock writers with `estoque_travado`. Future flows such as exceptional exits, reversals, returns, or cancellation release must reuse a canonical lock order and add PostgreSQL concurrency coverage rather than introducing a parallel sequence.
+**Acoplamento: Port/Adapter pattern (ADR 0002)**
+- `requisitions` defines `StockPort` (Protocol) in `apps/requisitions/ports.py`; `stock` implements `StockAdapter` in `apps/stock/adapters.py`.
+- Three coarse-grained port methods: `aplicar_reservas_autorizacao`, `liberar_reservas_cancelamento`, `aplicar_saidas_e_liberacoes_retirada`.
+- No domain objects (`EstoqueMaterial`, movement types) leak from stock to requisitions via port.
+- Side effects removed from `TRANSICOES_REQUISICAO` table; stock calls now explicit in service functions after `_apply_requisicao_transition`.
+- Dependency direction: requisitions → port/interface ← stock implements. No circular import, no bidirectional coupling.
 
-Request/requisition invariants:
-- `Requisicao.setor_beneficiario` is a historical snapshot and must not be recalculated from `beneficiario.setor` after creation.
-- Draft requisitions are creator-owned: while `status=rascunho`, only the creator may view or manipulate the request; beneficiary visibility starts only after the request leaves draft and is revoked again if it returns to draft.
-- Request status transitions must follow the declarative state machine documented in domain/process docs and existing services when present.
-- Do not scatter status transitions through ad hoc `if/elif` logic.
-- Preserve consistency between requisition, requisition items, stock reservation, stock decrement, delivery, and audit trail.
-- Authorization rules are service-level domain rules, not serializer-only rules: payload-level guards in DRF are welcome, but critical checks must also exist in `apps/requisitions/services.py`.
-- Authorization payload must not repeat `item_id`.
-- Partial or zero authorization requires a non-blank trimmed justification.
-- At least one item must remain with `quantidade_autorizada > 0` for an authorization to succeed.
-- Authorization records either `AUTORIZACAO_TOTAL` or `AUTORIZACAO_PARCIAL`, persists authorized quantities on items, and reserves stock without changing physical balance.
-- Refusal requires non-blank trimmed `motivo_recusa`, records `RECUSA`, and must not reserve stock.
-- The fulfillment queue is global for Almoxarifado roles by design: `docs/design-acesso-rapido/matriz-permissoes.md` says Almoxarifado sees requests from all sectors and the fulfillment queue.
-- Full fulfillment transitions `autorizada` to `atendida`, sets delivered quantity equal to authorized quantity for positive authorized items, records `ATENDIMENTO`, consumes reservation, decrements physical stock, and stores fulfillment metadata.
-- Partial fulfillment transitions `autorizada` to `atendida_parcialmente`, requires the payload to cover every authorized item exactly once, requires a non-blank justification for every item delivered below the authorized quantity including zero, requires at least one delivered quantity greater than zero, records `ATENDIMENTO_PARCIAL`, decrements stock only for delivered quantities, and releases the reservation for undelivered quantities.
-- Fulfillment payload coherence errors such as duplicated, unknown, or omitted `item_id` are `ValidationError` / HTTP `400 validation_error`; domain state/rule conflicts such as all delivered quantities equal to zero, delivery above authorized quantity, insufficient physical/reserved stock, or invalid status remain `409 domain_conflict`.
-- Fulfillment writes must revalidate object-aware permission in services against the `select_for_update()`-locked requisition through `pode_atender_requisicao`; global role checks alone are insufficient for writes.
-
-Notifications:
-- Notifications are side effects, never source of truth and never precondition for domain success.
-- Domain apps communicate with notifications via `core/events.py` in-process pub/sub: `subscribe()` and `publish_on_commit()`.
-- Requisition notification events must be registered while an active `transaction.atomic()` block is open; `apps/requisitions/services.py` enforces this before calling `publish_on_commit()`.
-- `apps/core/events.publish()` catches/logs subscriber failures so notification failures do not rollback successful domain operations.
-- `apps/core/events.clear_subscribers()` exists for controlled test fixture cleanup when tests monkeypatch subscribers.
-- Notification admin visibility is scoped: superuser sees all; non-superuser staff sees only notifications addressed directly to them or to their own `papel`.
-- Role-targeted notifications currently do not have per-user read state; `marcar_notificacao_como_lida()` rejects notifications without an individual `destinatario` until a dedicated per-user read model/API is introduced.
-- Avoid direct imports from domain apps into `notifications` that create coupling.
-
-Audit/rastreability:
-- Relevant actions must be auditable: creation, approval, rejection, return to draft, cancellation, delivery, adjustment, reversal.
-- Audit/history is expected through `django-simple-history` (`HistoricalRecords`) for domain models, not manual logging/signals.
+**Requisitions module structure (recent refactoring)**
+- `domain/state_machine.py`: declarative state machine with transition table and single applier function.
+- `queries.py`: query helpers (load, lock, validate before mutation).
+- `sequences.py`: sequence generators for public numbers, IDs.
+- `idempotency.py`: payload idempotency pattern with cached result.
+- `services.py`: now focused on business orchestration; domain rules remain here, infrastructure extraction complete.
+- `policies.py`: centralized contextual authorization checks.
 
 Dependency direction:
 `apps/core/` is technical infrastructure only and must not depend on domain apps. Domain app dependencies should remain explicit and acyclic as apps are introduced by the backlog. Notifications and other side effects must be reached by post-commit events instead of direct domain coupling.

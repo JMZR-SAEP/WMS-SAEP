@@ -37,13 +37,34 @@ Materialization baseline:
 - Django materialization is complete and no longer tracked in a separate backlog file.
 - Functional pilot slices now landed through `PIL-BE-ACE-005`, `PIL-BE-MAT-002`, `PIL-BE-EST-001`, `PIL-BE-MAT-003`, `PIL-BE-IMP-001`, `PIL-BE-IMP-002`, and `PIL-BE-REQ-001`.
 
-Current state: Django project initialized with technical infrastructure plus active domain apps `users`, `materials`, and `stock`.
-- `config/` owns settings, URLs, ASGI/WSGI, and project bootstrap.
-- `apps/core/` is technical API infrastructure only; it hosts pagination, error envelope, schema helpers, and non-domain API utilities.
-- `apps/users/` provides the custom user, sectors, role/policy foundation, and third-party request creation permission baseline.
-- `apps/materials/` now contains `GrupoMaterial`, `SubgrupoMaterial`, `Material`, material list/search API, SCPI CSV parsing/normalization, and import orchestration services.
-- `apps/stock/` now contains `EstoqueMaterial`, immutable `MovimentacaoEstoque`, stock admin protections, and `registrar_saldo_inicial()` for import bootstrap.
-- Initial settings are `config.settings.base`, `config.settings.dev`, and `config.settings.test`; do not create a separate `test_postgres` settings module.
+Current state: Django project initialized with technical infrastructure plus active domain apps `users`, `materials`, `stock`, and `requisitions`.
+
+**Backend module structure** (after requisitions refactoring PR #22):
+- `config/` → settings, URLs, ASGI/WSGI, bootstrap.
+- `apps/core/` → API infrastructure, pagination, error envelope, schema helpers.
+- `apps/users/` → custom user, sectors, role/policy foundation.
+- `apps/materials/` → `GrupoMaterial`, `SubgrupoMaterial`, `Material`, list/search API, SCPI CSV parsing.
+- `apps/stock/` → `EstoqueMaterial`, immutable `MovimentacaoEstoque`, stock admin, initial-balance bootstrap, `StockAdapter` (implements `StockPort` from requisitions).
+- `apps/requisitions/` (refactored):
+  - `models.py` → `Requisicao`, `ItemRequisicao`, `HistoricalRecord` (via django-simple-history).
+  - `domain/state_machine.py` → declarative state machine with transition table.
+  - `policies.py` → centralized authorization checks (contextual: object-aware, scope-aware).
+  - `services.py` → business orchestration and domain rules (reduced scope after module extraction).
+  - `queries.py` → query helpers (load, lock, validate patterns).
+  - `sequences.py` → public number and ID generation.
+  - `idempotency.py` → payload idempotency with cached result.
+  - `ports.py` → `StockPort` interface (Protocol) for decoupled stock operations.
+  - `serializers.py` → DRF serializers for API input/output.
+  - `views.py` → thin APIViews/ViewSets.
+- `apps/notifications/` → in-process pub/sub event bus (`core/events.py`), notification models, domain event subscribers.
+
+**Port/Adapter pattern** (ADR 0002 — Accepted):
+- `StockPort` (Protocol): `apps/requisitions/ports.py`.
+- `StockAdapter` (implementation): `apps/stock/adapters.py`.
+- Prevents circular coupling; requires no direct import of requisitions in stock.
+- Port methods: `aplicar_reservas_autorizacao`, `liberar_reservas_cancelamento`, `aplicar_saidas_e_liberacoes_retirada`.
+
+Initial settings are `config.settings.base`, `config.settings.dev`, and `config.settings.test`; do not create a separate `test_postgres` settings module.
 - PostgreSQL is configured through `DATABASE_URL`; no Docker Compose or production settings are part of the active baseline.
 - `frontend/` is now materialized with Vite, Tailwind CSS, TanStack Router file-based routing, TanStack Query provider wiring, `openapi-fetch` client bootstrap, Vitest smoke tests, and Playwright smoke E2E.
 
