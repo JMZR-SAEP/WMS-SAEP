@@ -57,7 +57,7 @@ def recarregar_detalhe(requisicao_id: int) -> Requisicao:
 
 def recarregar_para_autorizacao(requisicao: Requisicao) -> Requisicao:
     return (
-        Requisicao.objects.select_for_update()
+        Requisicao.objects.select_for_update(of=("self",))
         .select_related("criador", "beneficiario", "setor_beneficiario")
         .prefetch_related("itens__material__estoque", "eventos__usuario")
         .get(pk=requisicao.pk)
@@ -66,7 +66,7 @@ def recarregar_para_autorizacao(requisicao: Requisicao) -> Requisicao:
 
 def recarregar_para_atendimento(requisicao: Requisicao) -> Requisicao:
     return (
-        Requisicao.objects.select_for_update()
+        Requisicao.objects.select_for_update(of=("self",))
         .select_related("criador", "beneficiario", "setor_beneficiario")
         .prefetch_related("itens__material__estoque", "eventos__usuario")
         .get(pk=requisicao.pk)
@@ -77,7 +77,7 @@ def carregar_rascunho_bloqueado(requisicao_id: int) -> Requisicao:
     try:
         return (
             Requisicao.objects.select_related("criador", "beneficiario", "setor_beneficiario")
-            .select_for_update()
+            .select_for_update(of=("self",))
             .prefetch_related("itens__material", "eventos__usuario")
             .get(pk=requisicao_id)
         )
@@ -101,7 +101,7 @@ def carregar_beneficiario_e_setor(beneficiario_id: int) -> tuple[User, Setor]:
 
 def carregar_itens_bloqueados(requisicao: Requisicao) -> list[ItemRequisicao]:
     return list(
-        ItemRequisicao.objects.select_for_update()
+        ItemRequisicao.objects.select_for_update(of=("self",))
         .select_related("material")
         .filter(requisicao=requisicao)
         .order_by("material_id", "id")
