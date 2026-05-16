@@ -8,15 +8,7 @@ from django.utils import timezone
 from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 
 from apps.core.api.exceptions import DomainConflict
-from apps.core.events import (
-    REQUISICAO_AUTORIZADA,
-    REQUISICAO_CANCELADA,
-    REQUISICAO_ENVIADA_AUTORIZACAO,
-    REQUISICAO_PRONTA_PARA_RETIRADA,
-    REQUISICAO_RECUSADA,
-    REQUISICAO_RETIRADA,
-    publish_on_commit,
-)
+from apps.requisitions.domain.state_machine import apply_transition
 from apps.requisitions.domain.types import (
     ItemAtendimentoData,
     ItemAutorizacaoData,
@@ -29,13 +21,11 @@ from apps.requisitions.domain.validation import (
 )
 from apps.requisitions.idempotency import get_or_create_idempotency_record
 from apps.requisitions.models import (
-    EventoTimeline,
     ItemRequisicao,
     Requisicao,
     SequenciaNumeroRequisicao,
     StatusIdempotencia,
     StatusRequisicao,
-    TipoEvento,
 )
 from apps.requisitions.policies import (
     pode_atender_requisicao,
@@ -111,192 +101,6 @@ def _validacao_payload_atendimento(message: str, *, item_ids: list[int] | None =
     if item_ids is not None:
         details["item_ids"] = item_ids
     return ValidationError(details)
-
-
-TRANSICOES_REQUISICAO: dict[str, dict[str, object]] = {
-    "autorizar_total": {
-        "from_status": (StatusRequisicao.AGUARDANDO_AUTORIZACAO,),
-        "to_status": StatusRequisicao.AUTORIZADA,
-        "timeline_event_type": TipoEvento.AUTORIZACAO_TOTAL,
-        "audit_fields_to_set": (
-            "chefe_autorizador",
-            "data_autorizacao_ou_recusa",
-            "status",
-        ),
-        "side_effects": (),
-        "notification_event": REQUISICAO_AUTORIZADA,
-    },
-    "autorizar_parcial": {
-        "from_status": (StatusRequisicao.AGUARDANDO_AUTORIZACAO,),
-        "to_status": StatusRequisicao.AUTORIZADA,
-        "timeline_event_type": TipoEvento.AUTORIZACAO_PARCIAL,
-        "audit_fields_to_set": (
-            "chefe_autorizador",
-            "data_autorizacao_ou_recusa",
-            "status",
-        ),
-        "side_effects": (),
-        "notification_event": REQUISICAO_AUTORIZADA,
-    },
-    "recusar": {
-        "from_status": (StatusRequisicao.AGUARDANDO_AUTORIZACAO,),
-        "to_status": StatusRequisicao.RECUSADA,
-        "timeline_event_type": TipoEvento.RECUSA,
-        "audit_fields_to_set": (
-            "chefe_autorizador",
-            "data_autorizacao_ou_recusa",
-            "motivo_recusa",
-            "status",
-        ),
-        "side_effects": (),
-        "notification_event": REQUISICAO_RECUSADA,
-    },
-    "atender_total": {
-        "from_status": (StatusRequisicao.AUTORIZADA,),
-        "to_status": StatusRequisicao.PRONTA_PARA_RETIRADA,
-        "timeline_event_type": TipoEvento.ATENDIMENTO,
-        "audit_fields_to_set": (
-            "responsavel_atendimento",
-            "data_finalizacao",
-            "observacao_atendimento",
-            "status",
-        ),
-        "side_effects": (),
-        "notification_event": REQUISICAO_PRONTA_PARA_RETIRADA,
-    },
-    "atender_parcial": {
-        "from_status": (StatusRequisicao.AUTORIZADA,),
-        "to_status": StatusRequisicao.PRONTA_PARA_RETIRADA_PARCIAL,
-        "timeline_event_type": TipoEvento.ATENDIMENTO_PARCIAL,
-        "audit_fields_to_set": (
-            "responsavel_atendimento",
-            "data_finalizacao",
-            "observacao_atendimento",
-            "status",
-        ),
-        "side_effects": (),
-        "notification_event": REQUISICAO_PRONTA_PARA_RETIRADA,
-    },
-    "retirar": {
-        "from_status": (
-            StatusRequisicao.PRONTA_PARA_RETIRADA,
-            StatusRequisicao.PRONTA_PARA_RETIRADA_PARCIAL,
-        ),
-        "to_status": StatusRequisicao.RETIRADA,
-        "timeline_event_type": TipoEvento.RETIRADA,
-        "audit_fields_to_set": (
-            "retirante_fisico",
-            "data_retirada",
-            "status",
-        ),
-        "side_effects": (),
-        "notification_event": REQUISICAO_RETIRADA,
-    },
-    "cancelar_pos_autorizacao_sem_saldo": {
-        "from_status": (StatusRequisicao.AUTORIZADA,),
-        "to_status": StatusRequisicao.CANCELADA,
-        "timeline_event_type": TipoEvento.CANCELAMENTO,
-        "audit_fields_to_set": (
-            "responsavel_atendimento",
-            "data_finalizacao",
-            "motivo_cancelamento",
-            "status",
-        ),
-        "side_effects": (),
-        "notification_event": REQUISICAO_CANCELADA,
-    },
-    "cancelar_pre_autorizacao": {
-        "from_status": (
-            StatusRequisicao.RASCUNHO,
-            StatusRequisicao.AGUARDANDO_AUTORIZACAO,
-        ),
-        "to_status": StatusRequisicao.CANCELADA,
-        "timeline_event_type": TipoEvento.CANCELAMENTO,
-        "audit_fields_to_set": (
-            "data_finalizacao",
-            "status",
-        ),
-        "side_effects": (),
-        "notification_event": REQUISICAO_CANCELADA,
-    },
-    "enviar_para_autorizacao": {
-        "from_status": (StatusRequisicao.RASCUNHO,),
-        "to_status": StatusRequisicao.AGUARDANDO_AUTORIZACAO,
-        "timeline_event_type": TipoEvento.ENVIO_AUTORIZACAO,
-        "audit_fields_to_set": ("numero_publico", "data_envio_autorizacao", "status"),
-        "side_effects": (),
-        "notification_event": REQUISICAO_ENVIADA_AUTORIZACAO,
-    },
-    "reenviar_para_autorizacao": {
-        "from_status": (StatusRequisicao.RASCUNHO,),
-        "to_status": StatusRequisicao.AGUARDANDO_AUTORIZACAO,
-        "timeline_event_type": TipoEvento.REENVIO_AUTORIZACAO,
-        "audit_fields_to_set": ("status",),
-        "side_effects": (),
-        "notification_event": REQUISICAO_ENVIADA_AUTORIZACAO,
-    },
-    "retornar_para_rascunho": {
-        "from_status": (StatusRequisicao.AGUARDANDO_AUTORIZACAO,),
-        "to_status": StatusRequisicao.RASCUNHO,
-        "timeline_event_type": TipoEvento.RETORNO_RASCUNHO,
-        "audit_fields_to_set": ("status",),
-        "side_effects": (),
-        "notification_event": None,
-    },
-}
-
-
-def _apply_requisicao_transition(
-    requisicao: Requisicao,
-    transition_name: str,
-    actor: User,
-    *,
-    payload: dict[str, object],
-) -> Requisicao:
-    config = TRANSICOES_REQUISICAO[transition_name]
-
-    if requisicao.status not in config["from_status"]:
-        raise DomainConflict(
-            "Transição inválida para o status atual da requisição.",
-            details={"status_atual": requisicao.status, "transicao": transition_name},
-        )
-
-    for field_name in config["audit_fields_to_set"]:
-        if field_name == "status":
-            setattr(requisicao, field_name, config["to_status"])
-            continue
-        setattr(requisicao, field_name, payload[field_name])
-
-    requisicao.full_clean()
-    requisicao.save(
-        update_fields=[
-            *config["audit_fields_to_set"],
-            "updated_at",
-        ]
-    )
-    EventoTimeline.objects.create(
-        requisicao=requisicao,
-        tipo_evento=config["timeline_event_type"],
-        usuario=actor,
-    )
-
-    for side_effect in config["side_effects"]:
-        side_effect(requisicao, payload)
-
-    notification_event = config.get("notification_event")
-    if notification_event:
-        _publish_notification_event_on_commit(notification_event, requisicao)
-
-    return requisicao
-
-
-def _publish_notification_event_on_commit(event_name: str, requisicao: Requisicao) -> None:
-    if not transaction.get_connection().in_atomic_block:
-        raise DomainConflict(
-            "Publicação de notificação de requisição exige transação ativa.",
-            details={"requisicao_id": requisicao.pk, "event_name": event_name},
-        )
-    publish_on_commit(event_name, {"requisicao_id": requisicao.pk})
 
 
 def _recarregar_requisicao_para_autorizacao(requisicao: Requisicao) -> Requisicao:
@@ -545,7 +349,7 @@ def enviar_para_autorizacao(*, requisicao: Requisicao, ator: User) -> Requisicao
             transicao = "reenviar_para_autorizacao"
             payload = {}
 
-        _apply_requisicao_transition(
+        apply_transition(
             requisicao=requisicao,
             transition_name=transicao,
             actor=ator,
@@ -575,7 +379,7 @@ def retornar_para_rascunho(*, requisicao: Requisicao, ator: User) -> Requisicao:
         if not pode_manipular_pre_autorizacao(ator, requisicao):
             raise PermissionDenied("Apenas criador ou beneficiário podem retornar a requisição.")
 
-        _apply_requisicao_transition(
+        apply_transition(
             requisicao=requisicao,
             transition_name="retornar_para_rascunho",
             actor=ator,
@@ -635,7 +439,7 @@ def _cancelar_pre_autorizacao(*, requisicao: Requisicao, ator: User) -> Requisic
             details={"status_atual": requisicao.status},
         )
 
-    return _apply_requisicao_transition(
+    return apply_transition(
         requisicao=requisicao,
         transition_name="cancelar_pre_autorizacao",
         actor=ator,
@@ -668,7 +472,7 @@ def _cancelar_autorizada_sem_saldo(
             details={"requisicao_id": requisicao.id},
         )
 
-    _apply_requisicao_transition(
+    apply_transition(
         requisicao=requisicao,
         transition_name="cancelar_pos_autorizacao_sem_saldo",
         actor=ator,
@@ -761,7 +565,7 @@ def autorizar_requisicao(
         ):
             transicao = "autorizar_parcial"
 
-        _apply_requisicao_transition(
+        apply_transition(
             requisicao=requisicao,
             transition_name=transicao,
             actor=ator,
@@ -797,7 +601,7 @@ def recusar_requisicao(*, requisicao: Requisicao, ator: User, motivo_recusa: str
         if not pode_autorizar_requisicao(ator, requisicao):
             raise PermissionDenied("Usuário sem permissão para recusar esta requisição.")
 
-        _apply_requisicao_transition(
+        apply_transition(
             requisicao=requisicao,
             transition_name="recusar",
             actor=ator,
@@ -968,7 +772,7 @@ def atender_requisicao_completa(
                 ]
             )
 
-        _apply_requisicao_transition(
+        apply_transition(
             requisicao=requisicao,
             transition_name="atender_total",
             actor=ator,
@@ -1099,7 +903,7 @@ def atender_requisicao_com_itens(
                 ]
             )
 
-        _apply_requisicao_transition(
+        apply_transition(
             requisicao=requisicao,
             transition_name="atender_parcial" if atendimento_parcial else "atender_total",
             actor=ator,
@@ -1172,7 +976,7 @@ def retirar_requisicao(
                     },
                 )
 
-        _apply_requisicao_transition(
+        apply_transition(
             requisicao=requisicao,
             transition_name="retirar",
             actor=ator,
