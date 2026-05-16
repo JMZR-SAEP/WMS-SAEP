@@ -4,6 +4,7 @@ from apps.requisitions.models import Requisicao, StatusRequisicao
 from apps.users.models import PapelChoices
 from apps.users.policies import (
     pode_autorizar_setor,
+    pode_criar_requisicao_para,  # noqa: F401 — re-export: interface exclusiva de autorização
     pode_operar_estoque,
     pode_ver_fila_atendimento,
     setor_responsavel_chefia,
