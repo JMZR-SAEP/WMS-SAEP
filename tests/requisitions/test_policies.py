@@ -410,6 +410,18 @@ class TestQuerysetFilaAutorizacao:
 
         assert queryset_fila_autorizacao(chefe).count() == 0
 
+    def test_chefe_inativo_recebe_queryset_vazio(self):
+        chefe = _user("Q009", PapelChoices.CHEFE_SETOR)
+        setor = _setor("Transporte", chefe)
+        chefe.setor = setor
+        chefe.save(update_fields=["setor"])
+        criador = _user("Q010", setor=setor)
+        _requisicao(criador, criador, setor, StatusRequisicao.AGUARDANDO_AUTORIZACAO)
+        assert queryset_fila_autorizacao(chefe).count() == 1
+        chefe.is_active = False
+        chefe.save(update_fields=["is_active"])
+        assert queryset_fila_autorizacao(chefe).count() == 0
+
 
 # ---------------------------------------------------------------------------
 # 8. queryset_fila_atendimento
@@ -453,3 +465,9 @@ class TestQuerysetFilaAtendimento:
 
     def test_solicitante_recebe_queryset_vazio(self):
         assert queryset_fila_atendimento(self.solicitante).count() == 0
+
+    def test_almoxarifado_inativo_recebe_queryset_vazio(self):
+        assert queryset_fila_atendimento(self.aux_alm).count() > 0
+        self.aux_alm.is_active = False
+        self.aux_alm.save(update_fields=["is_active"])
+        assert queryset_fila_atendimento(self.aux_alm).count() == 0
