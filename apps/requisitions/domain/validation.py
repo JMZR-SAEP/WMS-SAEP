@@ -138,3 +138,12 @@ def _validar_itens_autorizacao(
         )
 
     return itens_por_id
+
+
+def validacao_payload_atendimento(message: str, *, item_ids: list[int] | None = None):
+    from rest_framework.exceptions import ValidationError
+
+    details: dict[str, object] = {"itens": [message]}
+    if item_ids is not None:
+        details["item_ids"] = item_ids
+    return ValidationError(details)
