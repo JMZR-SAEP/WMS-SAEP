@@ -62,10 +62,10 @@ Valores: **Sim**, **Não**, **Apenas próprio setor**, **Qualquer setor**, **Ape
 | Autorizar parcialmente | Não | Não | Apenas próprio setor | Não | Apenas setor Almoxarifado | Não | Justificativa por item parcial/zero. |
 | Recusar | Não | Não | Apenas próprio setor | Não | Apenas setor Almoxarifado | Não | Recusa inteira; motivo obrigatório. |
 | Autorizar outro setor | Não | Não | Não | Não | Não | Não | Almoxarifado não autoriza outros setores. |
-| Ver fila de atendimento | Não | Não | Não | Sim | Sim | Apenas suporte/admin | Requisições `autorizada`. |
-| Registrar atendimento total | Não | Não | Não | Sim | Sim | Não | Baixa físico e consome reserva. |
-| Registrar atendimento parcial | Não | Não | Não | Sim | Sim | Não | Justificativa; libera não entregue. |
-| Informar retirante físico | Não | Não | Não | Sim | Sim | Não | Campo opcional se diferente do beneficiário. |
+| Ver fila de atendimento | Não | Não | Não | Sim | Sim | Apenas suporte/admin | Requisições nos estados `autorizada`, `pronta_para_retirada` e `pronta_para_retirada_parcial`. |
+| Registrar atendimento total | Não | Não | Não | Sim | Sim | Não | Transiciona para `pronta_para_retirada`; efeitos de estoque ocorrem na retirada. |
+| Registrar atendimento parcial | Não | Não | Não | Sim | Sim | Não | Justificativa; transiciona para `pronta_para_retirada_parcial`; estoque ajustado na retirada. |
+| Registrar retirada (pickup) | Não | Não | Não | Sim | Sim | Não | Endpoint `POST /pickup/`; exige `Idempotency-Key`; registra retirante físico; transiciona para `retirada`; baixa físico e consome/libera reserva. |
 | Cancelar autorizada por falta operacional | Não | Não | Não | Sim | Sim | Não | Também possível ao criador/beneficiário. |
 | Liberar reserva não entregue | Não | Não | Não | Sim | Sim | Não | Efeito de atendimento parcial/cancelamento. |
 | Buscar materiais para requisição | Sim | Sim | Sim | Sim | Sim | Apenas suporte/admin | Seleção bloqueia inativo, sem saldo ou divergente. |
@@ -99,7 +99,7 @@ Valores: **Sim**, **Não**, **Apenas próprio setor**, **Qualquer setor**, **Ape
 - Rascunho é visível e manipulável apenas pelo criador; ao sair de `rascunho`, o beneficiário passa a poder ver a requisição e perde esse acesso se ela voltar para `rascunho`.
 - Fora de `rascunho`, criador e beneficiário veem a própria requisição e timeline completa.
 - Chefe de setor vê requisições do setor sob sua responsabilidade, exceto rascunhos de terceiros.
-- Almoxarifado vê requisições de todos os setores fora de rascunhos de terceiros e vê a fila de atendimento.
+- Almoxarifado vê requisições de todos os setores fora de rascunhos de terceiros e vê a fila de atendimento (estados `autorizada`, `pronta_para_retirada` e `pronta_para_retirada_parcial`).
 - Chefe de setor vê fila de autorização do próprio setor; chefe de Almoxarifado vê apenas setor Almoxarifado.
 - Superusuário vê para suporte/administração, sem ações operacionais de estoque.
 - Relatórios gerais: Almoxarifado e suporte/admin. Chefe de setor: apenas relatórios do próprio setor.
