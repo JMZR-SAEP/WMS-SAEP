@@ -22,6 +22,8 @@ from apps.requisitions.policies import (
     pode_manipular_pre_autorizacao,
     pode_retirar_requisicao,
     pode_visualizar_requisicao,
+    queryset_fila_atendimento,
+    queryset_fila_autorizacao,
 )
 from apps.users.models import PapelChoices, Setor, User
 
@@ -60,7 +62,7 @@ def _requisicao(criador, beneficiario, setor_beneficiario, status=StatusRequisic
 
 
 @pytest.mark.django_db
-class TestPodeCriarRequisicaoParaViaRequisitionsPolcies:
+class TestPodeCriarRequisicaoParaViaRequisitionsPolicies:
     """Garante que pode_criar_requisicao_para é acessível via requisitions.policies."""
 
     def test_solicitante_pode_criar_para_si(self):
@@ -335,3 +337,94 @@ class TestPodeAtenderERetirarRequisicao:
 
     def test_solicitante_nao_pode_retirar(self):
         assert pode_retirar_requisicao(self.solicitante, self.req_pronta) is False
+
+
+# ---------------------------------------------------------------------------
+# 7. queryset_fila_autorizacao
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestQuerysetFilaAutorizacao:
+    def test_chefe_setor_ve_fila_do_proprio_setor(self):
+        chefe = _user("Q001", PapelChoices.CHEFE_SETOR)
+        setor = _setor("Planejamento", chefe)
+        chefe.setor = setor
+        chefe.save(update_fields=["setor"])
+        criador = _user("Q002", setor=setor)
+        _requisicao(criador, criador, setor, StatusRequisicao.AGUARDANDO_AUTORIZACAO)
+
+        qs = queryset_fila_autorizacao(chefe)
+        assert qs.count() == 1
+
+    def test_chefe_setor_nao_ve_fila_de_outro_setor(self):
+        chefe_a = _user("Q003", PapelChoices.CHEFE_SETOR)
+        setor_a = _setor("Contabilidade", chefe_a)
+        chefe_a.setor = setor_a
+        chefe_a.save(update_fields=["setor"])
+
+        chefe_b = _user("Q004", PapelChoices.CHEFE_SETOR)
+        setor_b = _setor("Juridico", chefe_b)
+        criador = _user("Q005", setor=setor_b)
+        _requisicao(criador, criador, setor_b, StatusRequisicao.AGUARDANDO_AUTORIZACAO)
+
+        qs = queryset_fila_autorizacao(chefe_a)
+        assert qs.count() == 0
+
+    def test_solicitante_recebe_queryset_vazio(self):
+        user = _user("Q006")
+        assert queryset_fila_autorizacao(user).count() == 0
+
+    def test_requisicao_em_outro_status_nao_aparece_na_fila(self):
+        chefe = _user("Q007", PapelChoices.CHEFE_SETOR)
+        setor = _setor("Obras", chefe)
+        chefe.setor = setor
+        chefe.save(update_fields=["setor"])
+        criador = _user("Q008", setor=setor)
+        _requisicao(criador, criador, setor, StatusRequisicao.AUTORIZADA)
+
+        assert queryset_fila_autorizacao(chefe).count() == 0
+
+
+# ---------------------------------------------------------------------------
+# 8. queryset_fila_atendimento
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestQuerysetFilaAtendimento:
+    def setup_method(self):
+        chefe_alm = _user("QA001", PapelChoices.CHEFE_ALMOXARIFADO)
+        setor_alm = _setor("Almoxarifado", chefe_alm)
+        chefe_alm.setor = setor_alm
+        chefe_alm.save(update_fields=["setor"])
+        self.aux_alm = _user("QA002", PapelChoices.AUXILIAR_ALMOXARIFADO, setor=setor_alm)
+        self.solicitante = _user("QA003")
+
+        chefe = _user("QA004", PapelChoices.CHEFE_SETOR)
+        setor = _setor("RH", chefe)
+        criador = _user("QA005", setor=setor)
+
+        self.req_autorizada = _requisicao(criador, criador, setor, StatusRequisicao.AUTORIZADA)
+        self.req_pronta = _requisicao(
+            criador, criador, setor, StatusRequisicao.PRONTA_PARA_RETIRADA
+        )
+        self.req_pronta_parcial = _requisicao(
+            criador, criador, setor, StatusRequisicao.PRONTA_PARA_RETIRADA_PARCIAL
+        )
+        self.req_rascunho = _requisicao(criador, criador, setor)
+
+    def test_almoxarifado_ve_todos_os_estados_da_fila(self):
+        qs = queryset_fila_atendimento(self.aux_alm)
+        ids = set(qs.values_list("id", flat=True))
+        assert self.req_autorizada.id in ids
+        assert self.req_pronta.id in ids
+        assert self.req_pronta_parcial.id in ids
+
+    def test_rascunho_nao_aparece_na_fila(self):
+        qs = queryset_fila_atendimento(self.aux_alm)
+        ids = set(qs.values_list("id", flat=True))
+        assert self.req_rascunho.id not in ids
+
+    def test_solicitante_recebe_queryset_vazio(self):
+        assert queryset_fila_atendimento(self.solicitante).count() == 0
