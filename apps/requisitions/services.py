@@ -1,27 +1,18 @@
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils import timezone
-from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
+from rest_framework.exceptions import NotFound, PermissionDenied
 
-from apps.core.api.exceptions import DomainConflict
 from apps.requisitions import idempotency, queries
+from apps.requisitions.domain import validation
 from apps.requisitions.domain.state_machine import apply_transition
 from apps.requisitions.domain.types import (
     ItemAtendimentoData,
     ItemAutorizacaoData,
     ItemRascunhoData,
 )
-from apps.requisitions.domain.validation import (
-    _material_e_estoque_validos,
-    _validar_itens_autorizacao,
-    _validar_itens_rascunho,
-)
-from apps.requisitions.domain.validation import (
-    validacao_payload_atendimento as _validacao_payload_atendimento,
-)
 from apps.requisitions.idempotency import get_or_create_idempotency_record, handle_idempotency
 from apps.requisitions.models import (
-    ItemRequisicao,
     Requisicao,
     StatusIdempotencia,
     StatusRequisicao,
@@ -40,21 +31,19 @@ from apps.requisitions.policies import (
 )
 from apps.requisitions.ports import StockPort
 from apps.requisitions.sequences import gerar_numero_publico
-from apps.users.models import PapelChoices, Setor
+from apps.users.models import PapelChoices
+
+User = get_user_model()
+IDEMPOTENCY_ENDPOINT_FULFILL = "requisitions_fulfill"
+IDEMPOTENCY_ENDPOINT_PICKUP = "requisitions_pickup"
+
+ItemAtendimentoPayload = ItemAtendimentoData | dict[str, object]
 
 
 def _get_default_stock() -> StockPort:
     from apps.stock.adapters import StockAdapter
 
     return StockAdapter()
-
-
-User = get_user_model()
-IDEMPOTENCY_ENDPOINT_FULFILL = "requisitions_fulfill"
-IDEMPOTENCY_ENDPOINT_PICKUP = "requisitions_pickup"
-
-
-ItemAtendimentoPayload = ItemAtendimentoData | dict[str, object]
 
 
 def criar_rascunho_requisicao(
@@ -68,49 +57,14 @@ def criar_rascunho_requisicao(
         raise PermissionDenied(
             "Usuário sem permissão para criar requisição para este beneficiário."
         )
-
-    if beneficiario.setor_id is None:
-        raise ValidationError(
-            {"beneficiario_id": ["Beneficiário deve possuir setor para criar a requisição."]}
-        )
-
-    if not beneficiario.setor.is_active:
-        raise DomainConflict(
-            "Setor do beneficiário está inativo.",
-            details={"beneficiario_id": f"Setor '{beneficiario.setor.nome}' está inativo."},
-        )
-
-    materiais = _validar_itens_rascunho(itens)
-
+    validation.validar_beneficiario_setor(beneficiario)
+    materiais = validation._validar_itens_rascunho(itens)
     with transaction.atomic():
         requisicao = Requisicao.objects.create(
-            criador=criador,
-            beneficiario=beneficiario,
-            observacao=observacao,
+            criador=criador, beneficiario=beneficiario, observacao=observacao
         )
-        materiais_por_id = {material.pk: material for material in materiais}
-        ItemRequisicao.objects.bulk_create(
-            [
-                ItemRequisicao(
-                    requisicao=requisicao,
-                    material=materiais_por_id[item.material_id],
-                    unidade_medida=materiais_por_id[item.material_id].unidade_medida,
-                    quantidade_solicitada=item.quantidade_solicitada,
-                    observacao=item.observacao,
-                )
-                for item in itens
-            ]
-        )
-
-    return (
-        Requisicao.objects.select_related(
-            "criador",
-            "beneficiario",
-            "setor_beneficiario",
-        )
-        .prefetch_related("itens__material", "eventos__usuario")
-        .get(pk=requisicao.pk)
-    )
+        queries.bulk_create_itens(requisicao, itens, materiais)
+    return queries.recarregar_rascunho(requisicao.pk)
 
 
 def atualizar_rascunho_requisicao(
@@ -122,123 +76,31 @@ def atualizar_rascunho_requisicao(
     itens: list[ItemRascunhoData],
 ) -> Requisicao:
     with transaction.atomic():
-        try:
-            requisicao_locked = (
-                Requisicao.objects.select_related(
-                    "criador",
-                    "beneficiario",
-                    "setor_beneficiario",
-                )
-                .select_for_update()
-                .prefetch_related("itens__material", "eventos__usuario")
-                .get(pk=requisicao_id)
-            )
-        except Requisicao.DoesNotExist as exc:
-            raise NotFound("Requisição não encontrada.") from exc
-
-        if not pode_visualizar_requisicao(ator, requisicao_locked):
+        requisicao = queries.carregar_rascunho_bloqueado(requisicao_id)
+        if not pode_visualizar_requisicao(ator, requisicao):
             raise NotFound("Requisição não encontrada.")
-
-        if not pode_manipular_pre_autorizacao(ator, requisicao_locked):
+        if not pode_manipular_pre_autorizacao(ator, requisicao):
             raise PermissionDenied("Apenas criador pode editar a requisição.")
-
-        if requisicao_locked.status != StatusRequisicao.RASCUNHO:
-            raise DomainConflict(
-                "Somente requisições em rascunho podem ser editadas.",
-                details={"status_atual": requisicao_locked.status},
-            )
-
-        try:
-            beneficiario_locked = User.objects.select_for_update().get(pk=beneficiario_id)
-        except User.DoesNotExist as exc:
-            raise NotFound("Beneficiário não encontrado.") from exc
-
-        if beneficiario_locked.setor_id is None:
-            raise ValidationError({"beneficiario_id": ["Beneficiário deve possuir setor válido."]})
-
-        setor_beneficiario_locked = Setor.objects.select_for_update().get(
-            pk=beneficiario_locked.setor_id
-        )
-
-        if not setor_beneficiario_locked.is_active:
-            raise DomainConflict(
-                "Setor do beneficiário está inativo.",
-                details={
-                    "beneficiario_id": f"Setor '{setor_beneficiario_locked.nome}' está inativo."
-                },
-            )
-
-        if not pode_criar_requisicao_para(ator, beneficiario_locked):
+        validation.validar_status_rascunho_para_edicao(requisicao)
+        beneficiario, setor = queries.carregar_beneficiario_e_setor(beneficiario_id)
+        validation.validar_beneficiario_setor_ativo(beneficiario, setor)
+        if not pode_criar_requisicao_para(ator, beneficiario):
             raise PermissionDenied(
                 "Usuário sem permissão para criar requisição para este beneficiário."
             )
-
-        materiais = _validar_itens_rascunho(itens)
-
-        requisicao_locked.beneficiario = beneficiario_locked
-        requisicao_locked.setor_beneficiario = setor_beneficiario_locked
-        requisicao_locked.observacao = observacao
-        requisicao_locked.full_clean()
-        requisicao_locked.save(
-            update_fields=[
-                "beneficiario",
-                "setor_beneficiario",
-                "observacao",
-                "updated_at",
-            ]
+        materiais = validation._validar_itens_rascunho(itens)
+        queries.aplicar_edicao_rascunho(
+            requisicao, beneficiario, setor, observacao, itens, materiais
         )
-
-        requisicao_locked.itens.all().delete()
-        materiais_por_id = {material.pk: material for material in materiais}
-        ItemRequisicao.objects.bulk_create(
-            [
-                ItemRequisicao(
-                    requisicao=requisicao_locked,
-                    material=materiais_por_id[item.material_id],
-                    unidade_medida=materiais_por_id[item.material_id].unidade_medida,
-                    quantidade_solicitada=item.quantidade_solicitada,
-                    observacao=item.observacao,
-                )
-                for item in itens
-            ]
-        )
-
-    return (
-        Requisicao.objects.select_related(
-            "criador",
-            "beneficiario",
-            "setor_beneficiario",
-        )
-        .prefetch_related("itens__material", "eventos__usuario")
-        .get(pk=requisicao_id)
-    )
+    return queries.recarregar_rascunho(requisicao_id)
 
 
 def enviar_para_autorizacao(*, requisicao: Requisicao, ator: User) -> Requisicao:
     with transaction.atomic():
-        requisicao = (
-            Requisicao.objects.select_for_update()
-            .select_related("criador", "beneficiario", "setor_beneficiario")
-            .prefetch_related("itens__material__estoque", "eventos__usuario")
-            .get(pk=requisicao.pk)
-        )
-
+        requisicao = queries.recarregar_para_autorizacao(requisicao)
         if not pode_manipular_pre_autorizacao(ator, requisicao):
             raise PermissionDenied("Apenas criador pode enviar a requisição.")
-
-        itens = list(requisicao.itens.all())
-        if not itens:
-            raise DomainConflict(
-                "Requisição sem itens não pode ser enviada.",
-                details={"itens": "Adicione ao menos um item válido antes do envio."},
-            )
-
-        for item in itens:
-            _material_e_estoque_validos(
-                material=item.material,
-                quantidade_solicitada=item.quantidade_solicitada,
-            )
-
+        validation.validar_envio_para_autorizacao(list(requisicao.itens.all()))
         is_primeiro_envio = not requisicao.numero_publico
         if is_primeiro_envio:
             transicao = "enviar_para_autorizacao"
@@ -249,53 +111,21 @@ def enviar_para_autorizacao(*, requisicao: Requisicao, ator: User) -> Requisicao
         else:
             transicao = "reenviar_para_autorizacao"
             payload = {}
-
         apply_transition(
-            requisicao=requisicao,
-            transition_name=transicao,
-            actor=ator,
-            payload=payload,
+            requisicao=requisicao, transition_name=transicao, actor=ator, payload=payload
         )
-
-    return (
-        Requisicao.objects.select_related(
-            "criador",
-            "beneficiario",
-            "setor_beneficiario",
-        )
-        .prefetch_related("itens__material", "eventos__usuario")
-        .get(pk=requisicao.pk)
-    )
+    return queries.recarregar_rascunho(requisicao.pk)
 
 
 def retornar_para_rascunho(*, requisicao: Requisicao, ator: User) -> Requisicao:
     with transaction.atomic():
-        requisicao = (
-            Requisicao.objects.select_for_update()
-            .select_related("criador", "beneficiario", "setor_beneficiario")
-            .prefetch_related("itens__material", "eventos__usuario")
-            .get(pk=requisicao.pk)
-        )
-
+        requisicao = queries.recarregar_para_atendimento(requisicao)
         if not pode_manipular_pre_autorizacao(ator, requisicao):
             raise PermissionDenied("Apenas criador ou beneficiário podem retornar a requisição.")
-
         apply_transition(
-            requisicao=requisicao,
-            transition_name="retornar_para_rascunho",
-            actor=ator,
-            payload={},
+            requisicao=requisicao, transition_name="retornar_para_rascunho", actor=ator, payload={}
         )
-
-    return (
-        Requisicao.objects.select_related(
-            "criador",
-            "beneficiario",
-            "setor_beneficiario",
-        )
-        .prefetch_related("itens__material", "eventos__usuario")
-        .get(pk=requisicao.pk)
-    )
+    return queries.recarregar_rascunho(requisicao.pk)
 
 
 def descartar_rascunho_nunca_enviado(*, requisicao: Requisicao, ator: User) -> None:
@@ -303,21 +133,9 @@ def descartar_rascunho_nunca_enviado(*, requisicao: Requisicao, ator: User) -> N
         requisicao = (
             Requisicao.objects.select_for_update().prefetch_related("itens").get(pk=requisicao.pk)
         )
-
         if not pode_manipular_pre_autorizacao(ator, requisicao):
             raise PermissionDenied("Apenas criador pode descartar a requisição.")
-
-        if requisicao.status != StatusRequisicao.RASCUNHO:
-            raise DomainConflict(
-                "Somente requisições em rascunho podem ser descartadas.",
-                details={"status_atual": requisicao.status},
-            )
-        if requisicao.numero_publico or requisicao.data_envio_autorizacao is not None:
-            raise DomainConflict(
-                "Rascunho já formalizado deve ser cancelado logicamente, não descartado.",
-                details={"numero_publico": requisicao.numero_publico},
-            )
-
+        validation.validar_descarte_rascunho(requisicao)
         requisicao.itens.all().delete()
         requisicao.delete()
 
@@ -327,52 +145,26 @@ def _cancelar_pre_autorizacao(*, requisicao: Requisicao, ator: User) -> Requisic
         if requisicao.status == StatusRequisicao.RASCUNHO:
             raise PermissionDenied("Apenas criador pode cancelar a requisição.")
         raise PermissionDenied("Apenas criador ou beneficiário podem cancelar a requisição.")
-
-    if requisicao.status == StatusRequisicao.RASCUNHO:
-        if not requisicao.numero_publico:
-            raise DomainConflict(
-                "Rascunho nunca enviado deve ser descartado, não cancelado logicamente.",
-                details={"status_atual": requisicao.status},
-            )
-    elif requisicao.status != StatusRequisicao.AGUARDANDO_AUTORIZACAO:
-        raise DomainConflict(
-            "Somente rascunhos já formalizados ou requisições aguardando autorização podem ser cancelados.",
-            details={"status_atual": requisicao.status},
-        )
-
+    validation.validar_status_cancelamento_pre(requisicao)
     return apply_transition(
         requisicao=requisicao,
         transition_name="cancelar_pre_autorizacao",
         actor=ator,
-        payload={
-            "data_finalizacao": timezone.now(),
-        },
+        payload={"data_finalizacao": timezone.now()},
     )
 
 
 def _cancelar_autorizada_sem_saldo(
     *, requisicao: Requisicao, ator: User, motivo_cancelamento: str, stock: StockPort
 ) -> Requisicao:
-    motivo_cancelamento = motivo_cancelamento.strip()
-    if not motivo_cancelamento:
-        raise ValidationError({"motivo_cancelamento": ["Motivo do cancelamento é obrigatório."]})
-
+    motivo_cancelamento = validation.validar_motivo(
+        motivo_cancelamento, "motivo_cancelamento", "Motivo do cancelamento é obrigatório."
+    )
     if not pode_cancelar_autorizada(ator, requisicao):
         raise PermissionDenied("Usuário sem permissão para cancelar esta requisição.")
-
-    itens_requisicao = list(
-        ItemRequisicao.objects.select_for_update()
-        .select_related("material")
-        .filter(requisicao=requisicao)
-        .order_by("material_id", "id")
-    )
-    itens_autorizados = [item for item in itens_requisicao if item.quantidade_autorizada > 0]
-    if not itens_autorizados:
-        raise DomainConflict(
-            "Requisição autorizada não possui itens com quantidade autorizada.",
-            details={"requisicao_id": requisicao.id},
-        )
-
+    itens_requisicao = queries.carregar_itens_bloqueados(requisicao)
+    itens_autorizados = [i for i in itens_requisicao if i.quantidade_autorizada > 0]
+    validation.validar_itens_autorizados_existem(itens_autorizados, requisicao)
     apply_transition(
         requisicao=requisicao,
         transition_name="cancelar_pos_autorizacao_sem_saldo",
@@ -383,9 +175,7 @@ def _cancelar_autorizada_sem_saldo(
             "motivo_cancelamento": motivo_cancelamento,
         },
     )
-
     stock.liberar_reservas_cancelamento(requisicao, itens_autorizados)
-
     return requisicao
 
 
@@ -409,18 +199,7 @@ def cancelar_requisicao(
             )
         else:
             requisicao = _cancelar_pre_autorizacao(requisicao=requisicao, ator=ator)
-
-    return (
-        Requisicao.objects.select_related(
-            "criador",
-            "beneficiario",
-            "setor_beneficiario",
-            "chefe_autorizador",
-            "responsavel_atendimento",
-        )
-        .prefetch_related("itens__material__estoque", "eventos__usuario")
-        .get(pk=requisicao.pk)
-    )
+    return queries.recarregar_atendido(requisicao.pk)
 
 
 def autorizar_requisicao(
@@ -436,72 +215,34 @@ def autorizar_requisicao(
         requisicao = queries.recarregar_para_autorizacao(requisicao)
         if not pode_autorizar_requisicao(ator, requisicao):
             raise PermissionDenied("Usuário sem permissão para autorizar esta requisição.")
-
-        itens_requisicao = list(
-            ItemRequisicao.objects.select_for_update()
-            .select_related("material")
-            .filter(requisicao=requisicao)
-            .order_by("material_id", "id")
+        itens_requisicao = queries.carregar_itens_bloqueados(requisicao)
+        itens_por_id = validation._validar_itens_autorizacao(
+            itens_requisicao=itens_requisicao, itens=itens
         )
-        itens_por_id = _validar_itens_autorizacao(itens_requisicao=itens_requisicao, itens=itens)
-
-        for item_requisicao in itens_requisicao:
-            item_autorizacao = itens_por_id[item_requisicao.id]
-            item_requisicao.quantidade_autorizada = item_autorizacao.quantidade_autorizada
-            item_requisicao.justificativa_autorizacao_parcial = (
-                item_autorizacao.justificativa_autorizacao_parcial
-            )
-            item_requisicao.full_clean()
-            item_requisicao.save(
-                update_fields=[
-                    "quantidade_autorizada",
-                    "justificativa_autorizacao_parcial",
-                    "updated_at",
-                ]
-            )
-
+        queries.aplicar_quantidades_autorizacao(itens_requisicao, itens_por_id)
         transicao = "autorizar_total"
-        if any(
-            item.quantidade_autorizada < item.quantidade_solicitada for item in itens_requisicao
-        ):
+        if any(i.quantidade_autorizada < i.quantidade_solicitada for i in itens_requisicao):
             transicao = "autorizar_parcial"
-
         apply_transition(
             requisicao=requisicao,
             transition_name=transicao,
             actor=ator,
-            payload={
-                "chefe_autorizador": ator,
-                "data_autorizacao_ou_recusa": timezone.now(),
-            },
+            payload={"chefe_autorizador": ator, "data_autorizacao_ou_recusa": timezone.now()},
         )
-
         itens_autorizados = [i for i in itens_requisicao if i.quantidade_autorizada > 0]
         if itens_autorizados:
             stock.aplicar_reservas_autorizacao(requisicao, itens_autorizados)
-
-    return (
-        Requisicao.objects.select_related(
-            "criador",
-            "beneficiario",
-            "setor_beneficiario",
-            "chefe_autorizador",
-        )
-        .prefetch_related("itens__material__estoque", "eventos__usuario")
-        .get(pk=requisicao.pk)
-    )
+    return queries.recarregar_autorizado(requisicao.pk)
 
 
 def recusar_requisicao(*, requisicao: Requisicao, ator: User, motivo_recusa: str) -> Requisicao:
-    motivo_recusa = motivo_recusa.strip()
-    if not motivo_recusa:
-        raise ValidationError({"motivo_recusa": ["Motivo da recusa é obrigatório."]})
-
+    motivo_recusa = validation.validar_motivo(
+        motivo_recusa, "motivo_recusa", "Motivo da recusa é obrigatório."
+    )
     with transaction.atomic():
         requisicao = queries.recarregar_para_autorizacao(requisicao)
         if not pode_autorizar_requisicao(ator, requisicao):
             raise PermissionDenied("Usuário sem permissão para recusar esta requisição.")
-
         apply_transition(
             requisicao=requisicao,
             transition_name="recusar",
@@ -512,17 +253,7 @@ def recusar_requisicao(*, requisicao: Requisicao, ator: User, motivo_recusa: str
                 "data_autorizacao_ou_recusa": timezone.now(),
             },
         )
-
-    return (
-        Requisicao.objects.select_related(
-            "criador",
-            "beneficiario",
-            "setor_beneficiario",
-            "chefe_autorizador",
-        )
-        .prefetch_related("itens__material__estoque", "eventos__usuario")
-        .get(pk=requisicao.pk)
-    )
+    return queries.recarregar_autorizado(requisicao.pk)
 
 
 def listar_fila_autorizacao(*, ator: User):
@@ -532,10 +263,9 @@ def listar_fila_autorizacao(*, ator: User):
         raise PermissionDenied("Usuário sem permissão para acessar a fila de autorizações.")
     if ator.papel not in (PapelChoices.CHEFE_SETOR, PapelChoices.CHEFE_ALMOXARIFADO):
         raise PermissionDenied("Usuário sem permissão para acessar a fila de autorizações.")
-
-    queryset = queryset_fila_autorizacao(ator)
     return (
-        queryset.filter(status=StatusRequisicao.AGUARDANDO_AUTORIZACAO)
+        queryset_fila_autorizacao(ator)
+        .filter(status=StatusRequisicao.AGUARDANDO_AUTORIZACAO)
         .select_related("criador", "beneficiario", "setor_beneficiario")
         .prefetch_related("itens__material")
         .order_by("data_envio_autorizacao", "id")
@@ -547,15 +277,9 @@ def listar_fila_atendimento(*, ator: User):
         raise PermissionDenied("Usuário precisa estar autenticado para ver a fila de atendimento.")
     if not pode_ver_fila_atendimento(ator):
         raise PermissionDenied("Usuário sem permissão para acessar a fila de atendimento.")
-
     return (
         queryset_fila_atendimento(ator)
-        .select_related(
-            "criador",
-            "beneficiario",
-            "setor_beneficiario",
-            "chefe_autorizador",
-        )
+        .select_related("criador", "beneficiario", "setor_beneficiario", "chefe_autorizador")
         .prefetch_related("itens__material")
         .order_by("data_autorizacao_ou_recusa", "id")
     )
@@ -568,18 +292,15 @@ def atender_requisicao(
     itens: list[ItemAtendimentoPayload] | None = None,
     observacao_atendimento: str = "",
 ) -> Requisicao:
-    itens_normalizados = idempotency.normalizar_itens(itens)
-    if itens_normalizados is None:
+    itens_norm = idempotency.normalizar_itens(itens)
+    if itens_norm is None:
         return atender_requisicao_completa(
-            requisicao=requisicao,
-            ator=ator,
-            observacao_atendimento=observacao_atendimento,
+            requisicao=requisicao, ator=ator, observacao_atendimento=observacao_atendimento
         )
-
     return atender_requisicao_com_itens(
         requisicao=requisicao,
         ator=ator,
-        itens=itens_normalizados,
+        itens=itens_norm,
         observacao_atendimento=observacao_atendimento,
     )
 
@@ -592,12 +313,10 @@ def atender_requisicao_idempotente(
     itens: list[ItemAtendimentoPayload] | None = None,
     observacao_atendimento: str = "",
 ) -> Requisicao:
-    itens_normalizados = idempotency.normalizar_itens(itens)
+    itens_norm = idempotency.normalizar_itens(itens)
     payload_hash = idempotency.hash_payload_atendimento(
-        itens=itens_normalizados,
-        observacao_atendimento=observacao_atendimento,
+        itens=itens_norm, observacao_atendimento=observacao_atendimento
     )
-
     with transaction.atomic():
         registro, criado = get_or_create_idempotency_record(
             usuario=ator,
@@ -620,7 +339,7 @@ def atender_requisicao_idempotente(
         resultado = atender_requisicao(
             requisicao=requisicao,
             ator=ator,
-            itens=itens_normalizados,
+            itens=itens_norm,
             observacao_atendimento=observacao_atendimento,
         )
         registro.status = StatusIdempotencia.COMPLETED
@@ -638,32 +357,10 @@ def atender_requisicao_completa(
         requisicao = queries.recarregar_para_atendimento(requisicao)
         if not pode_atender_requisicao(ator, requisicao):
             raise PermissionDenied("Usuário sem permissão para atender esta requisição.")
-
-        itens_requisicao = list(
-            ItemRequisicao.objects.select_for_update()
-            .select_related("material")
-            .filter(requisicao=requisicao)
-            .order_by("material_id", "id")
-        )
-        itens_autorizados = [item for item in itens_requisicao if item.quantidade_autorizada > 0]
-        if not itens_autorizados:
-            raise DomainConflict(
-                "Requisição autorizada não possui itens com quantidade autorizada.",
-                details={"requisicao_id": requisicao.id},
-            )
-        for item in itens_autorizados:
-            quantidade_entregue = item.quantidade_autorizada
-            item.quantidade_entregue = quantidade_entregue
-            item.justificativa_atendimento_parcial = ""
-            item.full_clean()
-            item.save(
-                update_fields=[
-                    "quantidade_entregue",
-                    "justificativa_atendimento_parcial",
-                    "updated_at",
-                ]
-            )
-
+        itens_requisicao = queries.carregar_itens_bloqueados(requisicao)
+        itens_autorizados = [i for i in itens_requisicao if i.quantidade_autorizada > 0]
+        validation.validar_itens_autorizados_existem(itens_autorizados, requisicao)
+        queries.aplicar_itens_atendimento_completo(itens_autorizados)
         apply_transition(
             requisicao=requisicao,
             transition_name="atender_total",
@@ -674,18 +371,7 @@ def atender_requisicao_completa(
                 "observacao_atendimento": observacao_atendimento.strip(),
             },
         )
-
-    return (
-        Requisicao.objects.select_related(
-            "criador",
-            "beneficiario",
-            "setor_beneficiario",
-            "chefe_autorizador",
-            "responsavel_atendimento",
-        )
-        .prefetch_related("itens__material__estoque", "eventos__usuario")
-        .get(pk=requisicao.pk)
-    )
+    return queries.recarregar_atendido(requisicao.pk)
 
 
 def atender_requisicao_com_itens(
@@ -699,102 +385,13 @@ def atender_requisicao_com_itens(
         requisicao = queries.recarregar_para_atendimento(requisicao)
         if not pode_atender_requisicao(ator, requisicao):
             raise PermissionDenied("Usuário sem permissão para atender esta requisição.")
-
-        itens_requisicao = list(
-            ItemRequisicao.objects.select_for_update()
-            .select_related("material")
-            .filter(requisicao=requisicao)
-            .order_by("material_id", "id")
+        itens_requisicao = queries.carregar_itens_bloqueados(requisicao)
+        itens_autorizados = [i for i in itens_requisicao if i.quantidade_autorizada > 0]
+        validation.validar_itens_autorizados_existem(itens_autorizados, requisicao)
+        dados_por_item_id, atendimento_parcial = validation.validar_itens_atendimento(
+            itens, itens_autorizados
         )
-        itens_autorizados = [item for item in itens_requisicao if item.quantidade_autorizada > 0]
-        if not itens_autorizados:
-            raise DomainConflict(
-                "Requisição autorizada não possui itens com quantidade autorizada.",
-                details={"requisicao_id": requisicao.id},
-            )
-
-        item_ids_recebidos = [item.item_id for item in itens]
-        item_ids_unicos = set(item_ids_recebidos)
-        if len(item_ids_unicos) != len(item_ids_recebidos):
-            item_ids_repetidos = sorted(
-                {item_id for item_id in item_ids_recebidos if item_ids_recebidos.count(item_id) > 1}
-            )
-            raise _validacao_payload_atendimento(
-                "Payload de atendimento não pode repetir item_id.",
-                item_ids=item_ids_repetidos,
-            )
-
-        item_ids_esperados = {item.id for item in itens_autorizados}
-        item_ids_desconhecidos = item_ids_unicos - item_ids_esperados
-        if item_ids_desconhecidos:
-            raise _validacao_payload_atendimento(
-                "Payload de atendimento contém item inválido para esta requisição.",
-                item_ids=sorted(item_ids_desconhecidos),
-            )
-
-        item_ids_omitidos = item_ids_esperados - item_ids_unicos
-        if item_ids_omitidos:
-            raise _validacao_payload_atendimento(
-                "Payload de atendimento deve informar todos os itens autorizados.",
-                item_ids=sorted(item_ids_omitidos),
-            )
-
-        dados_por_item_id = {item.item_id: item for item in itens}
-        possui_entrega = False
-        atendimento_parcial = False
-
-        for item in itens_autorizados:
-            item_data = dados_por_item_id[item.id]
-            quantidade_entregue = item_data.quantidade_entregue
-            quantidade_autorizada = item.quantidade_autorizada
-            justificativa = item_data.justificativa_atendimento_parcial.strip()
-
-            if quantidade_entregue < 0:
-                raise DomainConflict(
-                    "Quantidade entregue não pode ser negativa.",
-                    details={"item_id": item.id, "quantidade_entregue": str(quantidade_entregue)},
-                )
-            if quantidade_entregue > quantidade_autorizada:
-                raise DomainConflict(
-                    "Quantidade entregue não pode ser maior que a autorizada.",
-                    details={
-                        "item_id": item.id,
-                        "quantidade_entregue": str(quantidade_entregue),
-                        "quantidade_autorizada": str(quantidade_autorizada),
-                    },
-                )
-            if quantidade_entregue < quantidade_autorizada and not justificativa:
-                raise DomainConflict(
-                    "Justificativa é obrigatória para atendimento parcial ou zero.",
-                    details={"item_id": item.id},
-                )
-
-            possui_entrega = possui_entrega or quantidade_entregue > 0
-            atendimento_parcial = atendimento_parcial or quantidade_entregue < quantidade_autorizada
-
-        if not possui_entrega:
-            raise DomainConflict("Atendimento parcial deve entregar ao menos um item.")
-
-        for item in itens_autorizados:
-            item_data = dados_por_item_id[item.id]
-            quantidade_entregue = item_data.quantidade_entregue
-            quantidade_nao_entregue = item.quantidade_autorizada - quantidade_entregue
-
-            item.quantidade_entregue = quantidade_entregue
-            item.justificativa_atendimento_parcial = (
-                item_data.justificativa_atendimento_parcial.strip()
-                if quantidade_nao_entregue > 0
-                else ""
-            )
-            item.full_clean()
-            item.save(
-                update_fields=[
-                    "quantidade_entregue",
-                    "justificativa_atendimento_parcial",
-                    "updated_at",
-                ]
-            )
-
+        queries.aplicar_itens_atendimento_parcial(itens_autorizados, dados_por_item_id)
         apply_transition(
             requisicao=requisicao,
             transition_name="atender_parcial" if atendimento_parcial else "atender_total",
@@ -805,18 +402,7 @@ def atender_requisicao_com_itens(
                 "observacao_atendimento": observacao_atendimento.strip(),
             },
         )
-
-    return (
-        Requisicao.objects.select_related(
-            "criador",
-            "beneficiario",
-            "setor_beneficiario",
-            "chefe_autorizador",
-            "responsavel_atendimento",
-        )
-        .prefetch_related("itens__material__estoque", "eventos__usuario")
-        .get(pk=requisicao.pk)
-    )
+    return queries.recarregar_atendido(requisicao.pk)
 
 
 def retirar_requisicao(
@@ -840,34 +426,9 @@ def retirar_requisicao(
             raise PermissionDenied(
                 "Usuário sem permissão para registrar retirada desta requisição."
             )
-
-        retirante_fisico_normalizado = retirante_fisico.strip()
-        if not retirante_fisico_normalizado:
-            raise ValidationError({"retirante_fisico": ["Nome do retirante é obrigatório."]})
-
-        itens_requisicao = list(
-            ItemRequisicao.objects.select_for_update()
-            .select_related("material")
-            .filter(requisicao=requisicao)
-            .order_by("material_id", "id")
-        )
-
-        for item in itens_requisicao:
-            if (
-                item.quantidade_entregue < 0
-                or item.quantidade_entregue > item.quantidade_autorizada
-                or item.quantidade_autorizada > item.quantidade_solicitada
-            ):
-                raise DomainConflict(
-                    "Item em estado inconsistente para retirada.",
-                    details={
-                        "item_id": item.id,
-                        "quantidade_entregue": str(item.quantidade_entregue),
-                        "quantidade_autorizada": str(item.quantidade_autorizada),
-                        "quantidade_solicitada": str(item.quantidade_solicitada),
-                    },
-                )
-
+        retirante_fisico_normalizado = validation.validar_retirante(retirante_fisico)
+        itens_requisicao = queries.carregar_itens_bloqueados(requisicao)
+        validation.validar_consistencia_itens_retirada(itens_requisicao)
         apply_transition(
             requisicao=requisicao,
             transition_name="retirar",
@@ -877,11 +438,9 @@ def retirar_requisicao(
                 "data_retirada": timezone.now(),
             },
         )
-
-        itens_autorizados = [item for item in itens_requisicao if item.quantidade_autorizada > 0]
+        itens_autorizados = [i for i in itens_requisicao if i.quantidade_autorizada > 0]
         if itens_autorizados:
             stock.aplicar_saidas_e_liberacoes_retirada(requisicao, itens_autorizados)
-
     return queries.recarregar_detalhe(requisicao.pk)
 
 
