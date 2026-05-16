@@ -157,8 +157,10 @@ class TestPodeVisualizarRequisicao:
 
     def test_usuario_inativo_nao_ve_nada(self):
         req = _requisicao(self.criador, self.beneficiario, self.setor, StatusRequisicao.AUTORIZADA)
-        inativo = _user("V099", is_active=False)
-        assert pode_visualizar_requisicao(inativo, req) is False
+        assert pode_visualizar_requisicao(self.criador, req) is True
+        self.criador.is_active = False
+        self.criador.save(update_fields=["is_active"])
+        assert pode_visualizar_requisicao(self.criador, req) is False
 
 
 # ---------------------------------------------------------------------------
@@ -216,8 +218,10 @@ class TestPodeManipularPreAutorizacao:
 
     def test_usuario_inativo_nao_pode_manipular(self):
         req = _requisicao(self.criador, self.beneficiario, self.beneficiario.setor)
-        inativo = _user("M099", is_active=False)
-        assert pode_manipular_pre_autorizacao(inativo, req) is False
+        assert pode_manipular_pre_autorizacao(self.criador, req) is True
+        self.criador.is_active = False
+        self.criador.save(update_fields=["is_active"])
+        assert pode_manipular_pre_autorizacao(self.criador, req) is False
 
 
 # ---------------------------------------------------------------------------
@@ -253,8 +257,10 @@ class TestPodeCancelarAutorizada:
         assert pode_cancelar_autorizada(self.terceiro, self.req) is False
 
     def test_usuario_inativo_nao_pode_cancelar_autorizada(self):
-        inativo = _user("C099", is_active=False)
-        assert pode_cancelar_autorizada(inativo, self.req) is False
+        assert pode_cancelar_autorizada(self.criador, self.req) is True
+        self.criador.is_active = False
+        self.criador.save(update_fields=["is_active"])
+        assert pode_cancelar_autorizada(self.criador, self.req) is False
 
 
 # ---------------------------------------------------------------------------
@@ -298,8 +304,10 @@ class TestPodeAutorizarRequisicao:
         assert pode_autorizar_requisicao(self.solicitante, self.req) is False
 
     def test_usuario_inativo_nao_pode_autorizar(self):
-        inativo = _user("A099", PapelChoices.CHEFE_SETOR, is_active=False)
-        assert pode_autorizar_requisicao(inativo, self.req) is False
+        assert pode_autorizar_requisicao(self.chefe, self.req) is True
+        self.chefe.is_active = False
+        self.chefe.save(update_fields=["is_active"])
+        assert pode_autorizar_requisicao(self.chefe, self.req) is False
 
 
 # ---------------------------------------------------------------------------
