@@ -14,24 +14,6 @@ def recarregar_rascunho(pk: int) -> Requisicao:
     )
 
 
-def recarregar_para_autorizacao(requisicao: Requisicao) -> Requisicao:
-    return (
-        Requisicao.objects.select_for_update()
-        .select_related("criador", "beneficiario", "setor_beneficiario")
-        .prefetch_related("itens__material__estoque", "eventos__usuario")
-        .get(pk=requisicao.pk)
-    )
-
-
-def recarregar_para_atendimento(requisicao: Requisicao) -> Requisicao:
-    return (
-        Requisicao.objects.select_for_update()
-        .select_related("criador", "beneficiario", "setor_beneficiario")
-        .prefetch_related("itens__material__estoque", "eventos__usuario")
-        .get(pk=requisicao.pk)
-    )
-
-
 def recarregar_autorizado(pk: int) -> Requisicao:
     return (
         Requisicao.objects.select_related(
@@ -71,6 +53,24 @@ def recarregar_detalhe(requisicao_id: int) -> Requisicao:
 
 
 # --- Carregar com lock (dentro de transação) ---
+
+
+def recarregar_para_autorizacao(requisicao: Requisicao) -> Requisicao:
+    return (
+        Requisicao.objects.select_for_update()
+        .select_related("criador", "beneficiario", "setor_beneficiario")
+        .prefetch_related("itens__material__estoque", "eventos__usuario")
+        .get(pk=requisicao.pk)
+    )
+
+
+def recarregar_para_atendimento(requisicao: Requisicao) -> Requisicao:
+    return (
+        Requisicao.objects.select_for_update()
+        .select_related("criador", "beneficiario", "setor_beneficiario")
+        .prefetch_related("itens__material__estoque", "eventos__usuario")
+        .get(pk=requisicao.pk)
+    )
 
 
 def carregar_rascunho_bloqueado(requisicao_id: int) -> Requisicao:
