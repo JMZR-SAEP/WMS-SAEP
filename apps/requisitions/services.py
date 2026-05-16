@@ -3,7 +3,7 @@ import json
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
-from django.db import IntegrityError, transaction
+from django.db import transaction
 from django.utils import timezone
 from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 
@@ -23,7 +23,6 @@ from apps.requisitions.idempotency import get_or_create_idempotency_record
 from apps.requisitions.models import (
     ItemRequisicao,
     Requisicao,
-    SequenciaNumeroRequisicao,
     StatusIdempotencia,
     StatusRequisicao,
 )
@@ -40,6 +39,7 @@ from apps.requisitions.policies import (
     queryset_fila_autorizacao,
 )
 from apps.requisitions.ports import StockPort
+from apps.requisitions.sequences import gerar_numero_publico
 from apps.users.models import PapelChoices, Setor
 
 
@@ -133,27 +133,6 @@ def _recarregar_requisicao_detalhe(requisicao_id: int) -> Requisicao:
         .prefetch_related("itens__material__estoque", "eventos__usuario")
         .get(pk=requisicao_id)
     )
-
-
-def _gerar_numero_publico(*, ano: int | None = None) -> str:
-    ano = ano or timezone.localdate().year
-
-    with transaction.atomic():
-        try:
-            sequencia = SequenciaNumeroRequisicao.objects.select_for_update().get(ano=ano)
-        except SequenciaNumeroRequisicao.DoesNotExist:
-            try:
-                with transaction.atomic():
-                    sequencia = SequenciaNumeroRequisicao.objects.create(
-                        ano=ano,
-                        ultimo_numero=0,
-                    )
-            except IntegrityError:
-                sequencia = SequenciaNumeroRequisicao.objects.select_for_update().get(ano=ano)
-
-        sequencia.ultimo_numero += 1
-        sequencia.save(update_fields=["ultimo_numero", "updated_at"])
-        return f"REQ-{ano}-{sequencia.ultimo_numero:06d}"
 
 
 def criar_rascunho_requisicao(
@@ -342,7 +321,7 @@ def enviar_para_autorizacao(*, requisicao: Requisicao, ator: User) -> Requisicao
         if is_primeiro_envio:
             transicao = "enviar_para_autorizacao"
             payload = {
-                "numero_publico": _gerar_numero_publico(),
+                "numero_publico": gerar_numero_publico(),
                 "data_envio_autorizacao": timezone.now(),
             }
         else:
