@@ -252,6 +252,10 @@ class TestPodeCancelarAutorizada:
     def test_terceiro_nao_pode_cancelar_autorizada(self):
         assert pode_cancelar_autorizada(self.terceiro, self.req) is False
 
+    def test_usuario_inativo_nao_pode_cancelar_autorizada(self):
+        inativo = _user("C099", is_active=False)
+        assert pode_cancelar_autorizada(inativo, self.req) is False
+
 
 # ---------------------------------------------------------------------------
 # 5. pode_autorizar_requisicao
@@ -292,6 +296,10 @@ class TestPodeAutorizarRequisicao:
 
     def test_solicitante_nao_pode_autorizar(self):
         assert pode_autorizar_requisicao(self.solicitante, self.req) is False
+
+    def test_usuario_inativo_nao_pode_autorizar(self):
+        inativo = _user("A099", PapelChoices.CHEFE_SETOR, is_active=False)
+        assert pode_autorizar_requisicao(inativo, self.req) is False
 
 
 # ---------------------------------------------------------------------------
@@ -337,6 +345,11 @@ class TestPodeAtenderERetirarRequisicao:
 
     def test_solicitante_nao_pode_retirar(self):
         assert pode_retirar_requisicao(self.solicitante, self.req_pronta) is False
+
+    def test_usuario_inativo_nao_pode_atender_nem_retirar(self):
+        inativo = _user("AT099", PapelChoices.AUXILIAR_ALMOXARIFADO, is_active=False)
+        assert pode_atender_requisicao(inativo, self.req_autorizada) is False
+        assert pode_retirar_requisicao(inativo, self.req_pronta) is False
 
 
 # ---------------------------------------------------------------------------
