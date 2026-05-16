@@ -355,9 +355,13 @@ class TestPodeAtenderERetirarRequisicao:
         assert pode_retirar_requisicao(self.solicitante, self.req_pronta) is False
 
     def test_usuario_inativo_nao_pode_atender_nem_retirar(self):
-        inativo = _user("AT099", PapelChoices.AUXILIAR_ALMOXARIFADO, is_active=False)
-        assert pode_atender_requisicao(inativo, self.req_autorizada) is False
-        assert pode_retirar_requisicao(inativo, self.req_pronta) is False
+        operador = _user("AT099", PapelChoices.AUXILIAR_ALMOXARIFADO)
+        assert pode_atender_requisicao(operador, self.req_autorizada) is True
+        assert pode_retirar_requisicao(operador, self.req_pronta) is True
+        operador.is_active = False
+        operador.save(update_fields=["is_active"])
+        assert pode_atender_requisicao(operador, self.req_autorizada) is False
+        assert pode_retirar_requisicao(operador, self.req_pronta) is False
 
 
 # ---------------------------------------------------------------------------
