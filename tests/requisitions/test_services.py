@@ -16,8 +16,8 @@ from apps.requisitions.models import (
     StatusRequisicao,
     TipoEvento,
 )
+from apps.requisitions.sequences import gerar_numero_publico as _gerar_numero_publico
 from apps.requisitions.services import (
-    _gerar_numero_publico,
     atender_requisicao,
     atender_requisicao_com_itens,
     atender_requisicao_completa,
